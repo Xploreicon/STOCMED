@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { User, Pharmacy, LoginRequest, RegisterRequest, AuthResponse } from '../types/auth';
+import type { User, Pharmacy, LoginRequest, RegisterRequest } from '../types/auth';
+import { mockLogin, mockRegister } from '../services/mockApi';
 
 interface AuthStore {
   user: User | null;
@@ -60,23 +61,8 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
 
         try {
-          // TODO: Replace with actual API call
-          // Example: const response = await axios.post('/api/auth/login', credentials);
-
-          // Mock response for now
-          const mockResponse: AuthResponse = {
-            user: {
-              id: '1',
-              email: credentials.email,
-              full_name: 'Mock User',
-              phone: '1234567890',
-              role: 'patient',
-              location: 'New York',
-            },
-            token: 'mock.jwt.token',
-          };
-
-          const { user, pharmacy, token } = mockResponse;
+          const response = await mockLogin(credentials);
+          const { user, pharmacy, token } = response;
 
           set({
             user,
@@ -98,32 +84,8 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
 
         try {
-          // TODO: Replace with actual API call
-          // Example: const response = await axios.post('/api/auth/register', data);
-
-          // Mock response for now
-          const mockResponse: AuthResponse = {
-            user: {
-              id: '1',
-              email: data.email,
-              full_name: data.full_name,
-              phone: data.phone,
-              role: data.role,
-              location: data.location,
-            },
-            pharmacy: data.role === 'pharmacy' ? {
-              id: '1',
-              pharmacy_name: data.pharmacy_name || '',
-              license_number: data.license_number || '',
-              address: data.address || '',
-              city: data.city || '',
-              state: data.state || '',
-              phone: data.phone,
-            } : undefined,
-            token: 'mock.jwt.token',
-          };
-
-          const { user, pharmacy, token } = mockResponse;
+          const response = await mockRegister(data);
+          const { user, pharmacy, token } = response;
 
           set({
             user,
@@ -198,11 +160,11 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'auth-storage',
-      partialPersist: (config) => ({
-        user: config.user,
-        pharmacy: config.pharmacy,
-        token: config.token,
-        isAuthenticated: config.isAuthenticated,
+      partialize: (state) => ({
+        user: state.user,
+        pharmacy: state.pharmacy,
+        token: state.token,
+        isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {
         // Check token expiry on rehydration (page reload)

@@ -1,8 +1,5 @@
-'use client';
-
 import React from 'react';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
+import { useLocation, Link } from 'react-router-dom';
 import {
   Home,
   MessageSquare,
@@ -38,7 +35,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   className,
 }) => {
-  const pathname = usePathname();
+  const location = useLocation();
+  const pathname = location.pathname;
 
   const patientNavItems: NavItem[] = [
     {
@@ -113,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           return (
             <Link
               key={item.href}
-              href={item.disabled ? '#' : item.href}
+              to={item.disabled ? '#' : item.href}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isActive
@@ -123,7 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900',
                 isCollapsed && 'justify-center'
               )}
-              onClick={(e) => item.disabled && e.preventDefault()}
+              onClick={(e: React.MouseEvent) => item.disabled && e.preventDefault()}
             >
               <span className={cn('flex-shrink-0', isActive && 'text-blue-600')}>
                 {item.icon}

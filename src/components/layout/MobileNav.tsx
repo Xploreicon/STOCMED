@@ -1,8 +1,5 @@
-'use client';
-
 import React from 'react';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
+import { useLocation, Link } from 'react-router-dom';
 import {
   Home,
   Search,
@@ -27,7 +24,8 @@ interface NavItem {
 }
 
 export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => {
-  const pathname = usePathname();
+  const location = useLocation();
+  const pathname = location.pathname;
 
   const patientNavItems: NavItem[] = [
     {
@@ -91,7 +89,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
           return (
             <Link
               key={item.href}
-              href={item.href}
+              to={item.href}
               className={cn(
                 'flex flex-col items-center justify-center gap-1 transition-colors',
                 isActive
