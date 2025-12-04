@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Phone, MapPin, Clock, Package } from 'lucide-react';
-import { DrugAvailability } from '@/types/drug';
+import type { DrugAvailability } from '@/types/drug';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';

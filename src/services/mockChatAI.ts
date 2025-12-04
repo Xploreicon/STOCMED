@@ -1,4 +1,4 @@
-import { Message, SearchResult, DrugAvailability, Drug, Pharmacy } from '@/types/drug';
+import type { Message, SearchResult, DrugAvailability, Drug, Pharmacy } from '@/types/drug';
 
 // Known drugs for detection
 const KNOWN_DRUGS = [

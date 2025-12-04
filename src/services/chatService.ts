@@ -1,4 +1,4 @@
-import { Message, SearchResult } from '@/types/drug';
+import type { Message, SearchResult } from '@/types/drug';
 import { getMockAIResponse } from './mockChatAI';
 
 export interface ChatResponse {
