@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +25,7 @@ const LOCATIONS = ['Lagos', 'Abuja', 'Port Harcourt', 'Ibadan', 'Other'];
 
 export default function Signup() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const setUser = useAuthStore((state) => state.setUser);
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
@@ -48,6 +49,15 @@ export default function Signup() {
     city: '',
     state: '',
   });
+
+  // Check for role in URL parameters and preselect
+  useEffect(() => {
+    const roleParam = searchParams.get('role');
+    if (roleParam === 'patient' || roleParam === 'pharmacy') {
+      setSelectedRole(roleParam as Role);
+      setCurrentStep(2); // Skip to step 2 if role is preselected
+    }
+  }, [searchParams]);
 
   const validateStep1 = () => {
     if (!selectedRole) {
