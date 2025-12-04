@@ -5,7 +5,7 @@ import Signup from '@/pages/auth/Signup'
 import Dashboard from '@/pages/patient/Dashboard'
 import Chat from '@/pages/patient/Chat'
 import History from '@/pages/History'
-import PharmacyDashboard from '@/pages/PharmacyDashboard'
+import PharmacyDashboard from '@/pages/pharmacy/Dashboard'
 import PharmacyInventory from '@/pages/PharmacyInventory'
 import PharmacySettings from '@/pages/PharmacySettings'
 
