@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState } from 'react';
 import { Menu, X, Search, Bell, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
