@@ -7,23 +7,26 @@ import Chat from '@/pages/patient/Chat'
 import History from '@/pages/History'
 import PharmacyDashboard from '@/pages/pharmacy/Dashboard'
 import PharmacyInventory from '@/pages/PharmacyInventory'
-import PharmacySettings from '@/pages/PharmacySettings'
+import PharmacySettings from '@/pages/pharmacy/Settings'
+import { ToastProvider } from '@/components/ui/toast'
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/chat" element={<Chat />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/pharmacy/dashboard" element={<PharmacyDashboard />} />
-        <Route path="/pharmacy/inventory" element={<PharmacyInventory />} />
-        <Route path="/pharmacy/settings" element={<PharmacySettings />} />
-      </Routes>
-    </Router>
+    <ToastProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/chat" element={<Chat />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/pharmacy/dashboard" element={<PharmacyDashboard />} />
+          <Route path="/pharmacy/inventory" element={<PharmacyInventory />} />
+          <Route path="/pharmacy/settings" element={<PharmacySettings />} />
+        </Routes>
+      </Router>
+    </ToastProvider>
   )
 }
 
