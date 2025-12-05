@@ -276,7 +276,7 @@ export default function Signup() {
     <div className="min-h-screen bg-light-blue-bg flex items-center justify-center p-4">
       <Card className="w-full max-w-[500px]">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Create Account</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl font-bold text-center">Create Account</CardTitle>
           <CardDescription className="text-center">
             {currentStep === 1 ? 'Choose your account type' : 'Fill in your details'}
           </CardDescription>
@@ -417,7 +417,7 @@ export default function Signup() {
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="city">City</Label>
                       <Input

@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
 import { useSearchStore } from '@/store/searchStore';
+import { SearchHistory } from '@/types/search';
 import { Search, Clock, MapPin, Package } from 'lucide-react';
 
 const SUGGESTED_SEARCHES = [
@@ -30,7 +31,7 @@ export default function PatientDashboard() {
     navigate('/chat', { state: { prefillQuery: query } });
   };
 
-  const handleSearchAgain = (search: any) => {
+  const handleSearchAgain = (search: SearchHistory) => {
     navigate('/chat', { state: { prefillQuery: search.drug_name } });
   };
 
@@ -64,7 +65,7 @@ export default function PatientDashboard() {
       <div className="space-y-6 max-w-6xl mx-auto">
         {/* Welcome Message */}
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Hello, {user?.full_name || 'Patient'}!
           </h1>
           <p className="text-gray-600">
@@ -78,7 +79,7 @@ export default function PatientDashboard() {
             <div className="mx-auto w-16 h-16 bg-white/20 rounded-full flex items-center justify-center">
               <Search className="w-8 h-8 text-white" />
             </div>
-            <CardTitle className="text-2xl md:text-3xl font-bold text-white">
+            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-bold text-white">
               What medication are you looking for?
             </CardTitle>
             <CardDescription className="text-blue-100 text-base">
@@ -89,7 +90,7 @@ export default function PatientDashboard() {
             <Button
               size="lg"
               onClick={handleStartChat}
-              className="bg-white text-primary-blue hover:bg-gray-50 font-semibold px-8 py-6 text-lg h-auto shadow-md"
+              className="bg-white text-primary-blue hover:bg-gray-50 font-semibold px-6 py-4 sm:px-8 sm:py-6 text-base sm:text-lg h-auto shadow-md"
             >
               Start Chat Search
             </Button>
@@ -174,7 +175,7 @@ export default function PatientDashboard() {
               <button
                 key={suggestion}
                 onClick={() => handleSuggestedSearch(suggestion)}
-                className="flex-shrink-0 px-6 py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:border-primary-blue hover:text-primary-blue hover:bg-blue-50 transition-all duration-200 whitespace-nowrap shadow-sm"
+                className="flex-shrink-0 px-4 py-2 sm:px-6 sm:py-3 bg-white border-2 border-gray-200 rounded-full text-gray-700 font-medium hover:border-primary-blue hover:text-primary-blue hover:bg-blue-50 transition-all duration-200 whitespace-nowrap shadow-sm text-sm sm:text-base"
               >
                 {suggestion}
               </button>

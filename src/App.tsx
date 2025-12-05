@@ -12,6 +12,11 @@ import History from '@/pages/patient/History'
 import PharmacyDashboard from '@/pages/pharmacy/Dashboard'
 import PharmacyInventory from '@/pages/PharmacyInventory'
 import PharmacySettings from '@/pages/pharmacy/Settings'
+import Terms from '@/pages/Terms'
+import Privacy from '@/pages/Privacy'
+import About from '@/pages/About'
+import Contact from '@/pages/Contact'
+import ForgotPassword from '@/pages/ForgotPassword'
 import NotFound from '@/pages/NotFound'
 
 // Component to handle landing page redirect
@@ -35,6 +40,11 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
 
           {/* Patient routes - protected */}
           <Route

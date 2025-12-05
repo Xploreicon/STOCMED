@@ -36,17 +36,12 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
     {
       label: 'Search',
       icon: <Search className="h-6 w-6" />,
-      href: '/chat-search',
+      href: '/chat',
     },
     {
       label: 'History',
       icon: <History className="h-6 w-6" />,
-      href: '/search-history',
-    },
-    {
-      label: 'Profile',
-      icon: <User className="h-6 w-6" />,
-      href: '/settings',
+      href: '/history',
     },
   ];
 
@@ -60,11 +55,6 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
       label: 'Inventory',
       icon: <Package className="h-6 w-6" />,
       href: '/pharmacy/inventory',
-    },
-    {
-      label: 'Analytics',
-      icon: <BarChart3 className="h-6 w-6" />,
-      href: '/pharmacy/analytics',
     },
     {
       label: 'Settings',
@@ -82,7 +72,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
         className
       )}
     >
-      <div className="grid grid-cols-4 h-16">
+      <div className={cn('grid h-16', userType === 'patient' ? 'grid-cols-3' : 'grid-cols-3')}>
         {navItems.map((item) => {
           const isActive = pathname === item.href;
 
