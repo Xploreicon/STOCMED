@@ -74,8 +74,7 @@ export default function Dashboard() {
   }
 
   const handleUpdateStock = () => {
-    // Could open a modal or navigate to update page
-    console.log('Update stock clicked')
+    navigate('/pharmacy/inventory')
   }
 
   const handleViewLowStock = () => {
@@ -91,7 +90,7 @@ export default function Dashboard() {
       <div className="space-y-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Pharmacy Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Pharmacy Dashboard</h1>
           <p className="mt-2 text-gray-600">Monitor and manage your pharmacy inventory</p>
         </div>
 
@@ -134,7 +133,7 @@ export default function Dashboard() {
           <div className="lg:col-span-1">
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl">Quick Actions</CardTitle>
+                <CardTitle className="text-lg sm:text-xl">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Button
@@ -168,7 +167,7 @@ export default function Dashboard() {
           <div className="lg:col-span-2">
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl">Recent Activity</CardTitle>
+                <CardTitle className="text-lg sm:text-xl">Recent Activity</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">

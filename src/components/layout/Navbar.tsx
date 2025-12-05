@@ -51,7 +51,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
             )}
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-blue-600">StocMed</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-blue-600">StocMed</h1>
             </div>
           </div>
 
@@ -62,13 +62,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <Button
                   variant="ghost"
                   className="hidden sm:inline-flex"
-                  onClick={() => console.log('Login clicked')}
                 >
                   Login
                 </Button>
                 <Button
                   className="bg-blue-600 hover:bg-blue-700"
-                  onClick={() => console.log('Sign Up clicked')}
                 >
                   Sign Up
                 </Button>
@@ -98,10 +96,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => console.log('Profile')}>
+                    <DropdownMenuItem>
                       Profile
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => console.log('Settings')}>
+                    <DropdownMenuItem>
                       Settings
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -140,10 +138,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem onClick={() => console.log('Pharmacy Profile')}>
+                    <DropdownMenuItem>
                       Pharmacy Profile
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => console.log('Settings')}>
+                    <DropdownMenuItem>
                       Settings
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />

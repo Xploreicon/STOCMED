@@ -130,7 +130,7 @@ export default function Chat() {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-semibold text-gray-900">
+          <h1 className="text-base sm:text-lg font-semibold text-gray-900">
             StocMed AI Assistant
           </h1>
         </div>

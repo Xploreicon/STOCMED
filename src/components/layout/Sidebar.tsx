@@ -47,17 +47,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       label: 'Chat Search',
       icon: <MessageSquare className="h-5 w-5" />,
-      href: '/chat-search',
+      href: '/chat',
     },
     {
       label: 'Search History',
       icon: <History className="h-5 w-5" />,
-      href: '/search-history',
-    },
-    {
-      label: 'Profile Settings',
-      icon: <Settings className="h-5 w-5" />,
-      href: '/settings',
+      href: '/history',
     },
   ];
 
