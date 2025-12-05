@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/store/authStore';
 import { useSearchStore } from '@/store/searchStore';
-import { SearchHistory } from '@/types/search';
+import type { SearchHistory } from '@/types/search';
 import { Search, Clock, MapPin, Package } from 'lucide-react';
 
 const SUGGESTED_SEARCHES = [
