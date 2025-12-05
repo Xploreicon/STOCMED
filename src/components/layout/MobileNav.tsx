@@ -4,10 +4,8 @@ import {
   Home,
   Search,
   History,
-  User,
   LayoutDashboard,
   Package,
-  BarChart3,
   Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
