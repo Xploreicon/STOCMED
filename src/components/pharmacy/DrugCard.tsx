@@ -1,16 +1,7 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Pencil, Trash2, CheckCircle, AlertTriangle, XCircle } from 'lucide-react'
-
-export interface Drug {
-  id: number
-  name: string
-  category: string
-  form: string
-  strength: string
-  price: number
-  stock: number
-}
+import type { Drug } from '@/types/drug'
 
 interface DrugCardProps {
   drug: Drug

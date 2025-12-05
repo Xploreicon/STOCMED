@@ -3,8 +3,9 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react'
-import { InventoryTable, Drug } from '@/components/pharmacy/InventoryTable'
+import { InventoryTable } from '@/components/pharmacy/InventoryTable'
 import { DrugCard } from '@/components/pharmacy/DrugCard'
+import type { Drug } from '@/types/drug'
 
 // Mock data with Nigerian drug brands
 const mockDrugs: Drug[] = [
