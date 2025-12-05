@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MainLayout } from '@/components/layout/MainLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -6,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useToast } from '@/components/ui/toast'
+import { useAuthStore } from '@/store/authStore'
+import { toast } from 'sonner'
 
 // Nigerian states
 const NIGERIAN_STATES = [
@@ -18,7 +20,7 @@ const NIGERIAN_STATES = [
 ]
 
 export default function Settings() {
-  const { addToast } = useToast()
+  const { pharmacy, logout } = useAuthStore()
 
   // Pharmacy Profile state
   const [pharmacyProfile, setPharmacyProfile] = useState({
@@ -53,7 +55,7 @@ export default function Settings() {
     e.preventDefault()
     // Simulate API call
     setTimeout(() => {
-      addToast('Pharmacy profile updated successfully!', 'success')
+      toast.success('Pharmacy profile updated successfully!')
     }, 500)
   }
 
@@ -63,26 +65,26 @@ export default function Settings() {
     // Validate password fields if user is trying to change password
     if (accountInfo.currentPassword || accountInfo.newPassword || accountInfo.confirmPassword) {
       if (!accountInfo.currentPassword) {
-        addToast('Please enter your current password', 'error')
+        toast.error('Please enter your current password')
         return
       }
       if (!accountInfo.newPassword) {
-        addToast('Please enter a new password', 'error')
+        toast.error('Please enter a new password')
         return
       }
       if (accountInfo.newPassword !== accountInfo.confirmPassword) {
-        addToast('New passwords do not match', 'error')
+        toast.error('New passwords do not match')
         return
       }
       if (accountInfo.newPassword.length < 8) {
-        addToast('Password must be at least 8 characters', 'error')
+        toast.error('Password must be at least 8 characters')
         return
       }
     }
 
     // Simulate API call
     setTimeout(() => {
-      addToast('Account updated successfully!', 'success')
+      toast.success('Account updated successfully!')
       // Clear password fields
       setAccountInfo(prev => ({
         ...prev,
@@ -94,10 +96,14 @@ export default function Settings() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <MainLayout
+      authState="pharmacy"
+      pharmacyName={pharmacy?.pharmacy_name || 'Pharmacy'}
+      onLogout={logout}
+    >
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="mb-8">
+        <div>
           <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
           <p className="mt-2 text-gray-600">Manage your pharmacy and account settings</p>
         </div>
@@ -314,6 +320,6 @@ export default function Settings() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </MainLayout>
   )
 }
