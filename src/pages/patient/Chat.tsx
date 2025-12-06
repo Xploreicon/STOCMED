@@ -1,16 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, X, Minimize2 } from 'lucide-react';
+import { ArrowLeft, X, Minimize2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ChatMessage } from '@/components/chat/ChatMessage';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { TypingIndicator } from '@/components/chat/TypingIndicator';
+import { sendMessage } from '@/services/chatService';
+import type { Message, SearchResult } from '@/types/drug';
+import { DrugResultCard } from '@/components/chat/DrugResultCard';
 
-interface Message {
+interface ChatMessage extends Message {
   id: string;
-  role: 'user' | 'assistant';
-  content: string;
   timestamp: Date;
+  searchResults?: SearchResult;
 }
 
 const INITIAL_GREETING = `Hi! I'm StocMed AI, your medication finder. 👋
@@ -32,9 +34,10 @@ export default function Chat() {
   const navigate = useNavigate();
   const location = useLocation();
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Auto-scroll to bottom
   const scrollToBottom = () => {
@@ -71,10 +74,10 @@ export default function Chat() {
     }
   }, [location]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputValue.trim() || isTyping) return;
 
-    const userMessage: Message = {
+    const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
       content: inputValue.trim(),
@@ -84,18 +87,58 @@ export default function Chat() {
     setMessages((prev) => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
+    setError(null);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiMessage: Message = {
+    try {
+      // Convert messages to Message[] format for API (without id and timestamp)
+      const conversationHistory: Message[] = messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      // Get AI response
+      const { message: aiResponse, searchResults } = await sendMessage(
+        userMessage.content,
+        conversationHistory
+      );
+
+      const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `I'm searching for "${userMessage.content}" in pharmacies near you. This is a simulated response. In a real implementation, this would connect to your backend API to search for medications.`,
+        content: aiResponse,
+        timestamp: new Date(),
+        searchResults,
+      };
+
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to get response';
+
+      setError(errorMessage);
+
+      const errorAiMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: "I'm having trouble connecting right now. Please try again.",
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, aiMessage]);
+
+      setMessages((prev) => [...prev, errorAiMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
+  };
+
+  const handleRetry = () => {
+    // Remove the last message (error message) and resend the previous user message
+    if (messages.length >= 2) {
+      const lastUserMessage = messages[messages.length - 2];
+      if (lastUserMessage.role === 'user') {
+        setMessages((prev) => prev.slice(0, -1)); // Remove error message
+        setInputValue(lastUserMessage.content);
+      }
+    }
   };
 
   const handleQuickAction = (prefill: string) => {
@@ -158,14 +201,44 @@ export default function Chat() {
       <div className="flex-1 overflow-y-auto px-4 py-6 pb-24">
         <div className="max-w-4xl mx-auto">
           {messages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              role={message.role}
-              content={message.content}
-              timestamp={message.timestamp}
-            />
+            <div key={message.id}>
+              <ChatMessage
+                role={message.role}
+                content={message.content}
+                timestamp={message.timestamp}
+              />
+              {/* Show search results if available */}
+              {message.searchResults && message.searchResults.results.length > 0 && (
+                <div className="mt-4 mb-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                    Available at {message.searchResults.results.length} pharmacies:
+                  </h3>
+                  {message.searchResults.results.map((result) => (
+                    <DrugResultCard key={result.id} result={result} />
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
           {isTyping && <TypingIndicator />}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mt-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <p className="text-sm text-red-800">{error}</p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetry}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Retry
+                </Button>
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
       </div>

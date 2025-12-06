@@ -1,4 +1,5 @@
 import type { Message, SearchResult } from '@/types/drug';
+import { processUserMessage } from './claudeService';
 import { getMockAIResponse } from './mockChatAI';
 
 export interface ChatResponse {
@@ -17,12 +18,34 @@ export async function sendMessage(
   conversationHistory: Message[]
 ): Promise<ChatResponse> {
   try {
-    // For now, use mock responses
-    // TODO: Replace with Claude SDK when ready
-    const { response, searchResults } = await getMockAIResponse(
-      userMessage,
-      conversationHistory
-    );
+    // Try to use Claude API first
+    const response = await processUserMessage(userMessage, conversationHistory);
+
+    // Check if we should generate mock pharmacy results
+    // This is a temporary solution until we have real pharmacy API
+    const lowerMessage = userMessage.toLowerCase();
+    const lowerResponse = response.toLowerCase();
+
+    // If the response indicates we're searching or showing results,
+    // generate mock data
+    const shouldGenerateMockResults =
+      (lowerResponse.includes('find') ||
+        lowerResponse.includes('search') ||
+        lowerResponse.includes('let me') ||
+        lowerResponse.includes('showing')) &&
+      (lowerMessage.includes('paracetamol') ||
+        lowerMessage.includes('ibuprofen') ||
+        lowerMessage.includes('amoxicillin') ||
+        lowerMessage.includes('aspirin') ||
+        lowerMessage.includes('metformin'));
+
+    let searchResults: SearchResult | undefined;
+
+    if (shouldGenerateMockResults) {
+      // Use mock AI to generate pharmacy results
+      const mockResponse = await getMockAIResponse(userMessage, conversationHistory);
+      searchResults = mockResponse.searchResults;
+    }
 
     return {
       message: response,
@@ -30,9 +53,24 @@ export async function sendMessage(
     };
   } catch (error) {
     console.error('Error sending message:', error);
-    return {
-      message: "I'm sorry, I'm having trouble processing your request right now. Please try again.",
-    };
+
+    // Fallback to mock AI if Claude API fails
+    try {
+      const { response, searchResults } = await getMockAIResponse(
+        userMessage,
+        conversationHistory
+      );
+
+      return {
+        message: response,
+        searchResults,
+      };
+    } catch (fallbackError) {
+      console.error('Fallback error:', fallbackError);
+      return {
+        message: "I'm having trouble connecting right now. Please try again in a moment.",
+      };
+    }
   }
 }
 
