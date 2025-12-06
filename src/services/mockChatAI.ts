@@ -125,11 +125,17 @@ function generateMockResults(drug: string, location: string): SearchResult {
   const forms = ['Tablet', 'Capsule'];
 
   const results: DrugAvailability[] = pharmacies.map((pharmacy, index) => {
+    const price = Math.floor(Math.random() * 3000) + 500; // ₦500 - ₦3500
+    const stock = index === 2 ? 5 : Math.floor(Math.random() * 50) + 10;
+
     const drugData: Drug = {
       id: `drug-${index}`,
       name: drug.charAt(0).toUpperCase() + drug.slice(1),
       strength: strengths[index % strengths.length],
       form: forms[index % forms.length],
+      category: 'General',
+      price: price,
+      stock: stock,
       manufacturer: index === 0 ? 'GlaxoSmithKline' : index === 1 ? 'Pfizer' : 'Roche',
     };
 
@@ -137,9 +143,9 @@ function generateMockResults(drug: string, location: string): SearchResult {
       id: `result-${index}`,
       drug: drugData,
       pharmacy,
-      price: Math.floor(Math.random() * 3000) + 500, // ₦500 - ₦3500
+      price: price,
       stockStatus: index === 2 ? 'low-stock' : 'in-stock',
-      quantity: index === 2 ? 5 : Math.floor(Math.random() * 50) + 10,
+      quantity: stock,
       lastUpdated: new Date(),
     };
   });
