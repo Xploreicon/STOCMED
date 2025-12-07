@@ -1,18 +1,30 @@
 import { useState } from 'react';
 import { Phone, MapPin, Clock, Package } from 'lucide-react';
-import type { DrugAvailability } from '@/types/drug';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 interface DrugResultCardProps {
-  result: DrugAvailability;
+  drug: any; // API response from /api/drugs/search
 }
 
-export function DrugResultCard({ result }: DrugResultCardProps) {
+export default function DrugResultCard({ drug }: DrugResultCardProps) {
   const [showDetails, setShowDetails] = useState(false);
 
-  const { drug, pharmacy, price, stockStatus, quantity } = result;
+  const pharmacy = drug.pharmacies;
+
+  // Calculate stock status
+  const getStockStatus = () => {
+    if (!drug.quantity_in_stock || drug.quantity_in_stock === 0) {
+      return 'out-of-stock';
+    }
+    if (drug.quantity_in_stock <= (drug.low_stock_threshold || 10)) {
+      return 'low-stock';
+    }
+    return 'in-stock';
+  };
+
+  const stockStatus = getStockStatus();
 
   const getStockStatusColor = (status: string) => {
     switch (status) {
@@ -40,28 +52,23 @@ export function DrugResultCard({ result }: DrugResultCardProps) {
     }
   };
 
+  if (!pharmacy) {
+    return null; // Don't render if pharmacy data is missing
+  }
+
   return (
     <Card className="p-4 mb-3 hover:shadow-md transition-shadow border border-gray-200">
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1">
           <h3 className="font-semibold text-lg text-gray-900">
-            {pharmacy.name}
+            {pharmacy.pharmacy_name}
           </h3>
           <p className="text-sm text-gray-600 flex items-center gap-1 mt-1">
             <MapPin className="h-3 w-3" />
-            {pharmacy.address}
-            {pharmacy.distance && (
-              <span className="text-primary-blue ml-1">• {pharmacy.distance}</span>
-            )}
+            {pharmacy.address}, {pharmacy.city}, {pharmacy.state}
           </p>
         </div>
-        {pharmacy.rating && (
-          <div className="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded">
-            <span className="text-yellow-500">★</span>
-            <span className="text-sm font-medium">{pharmacy.rating}</span>
-          </div>
-        )}
       </div>
 
       {/* Drug Information */}
@@ -69,9 +76,15 @@ export function DrugResultCard({ result }: DrugResultCardProps) {
         <div className="flex items-center justify-between">
           <div>
             <p className="font-medium text-gray-900">
-              {drug.name} {drug.strength}
+              {drug.name || drug.brand_name}
+              {drug.strength && ` ${drug.strength}`}
             </p>
-            <p className="text-sm text-gray-600 capitalize">{drug.form}</p>
+            {drug.generic_name && drug.name !== drug.generic_name && (
+              <p className="text-sm text-gray-600">{drug.generic_name}</p>
+            )}
+            <p className="text-sm text-gray-600 capitalize">
+              {drug.dosage_form}
+            </p>
             {drug.manufacturer && (
               <p className="text-xs text-gray-500 mt-1">
                 by {drug.manufacturer}
@@ -80,14 +93,17 @@ export function DrugResultCard({ result }: DrugResultCardProps) {
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-primary-blue">
-              ₦{price.toLocaleString()}
+              ₦{drug.price ? drug.price.toLocaleString() : 'N/A'}
             </p>
+            {drug.requires_prescription && (
+              <p className="text-xs text-red-600 mt-1">Requires Prescription</p>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Stock Status & Availability */}
-      <div className="flex items-center gap-2 mb-3">
+      {/* Stock Status & Category */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
         <span
           className={cn(
             'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
@@ -96,19 +112,11 @@ export function DrugResultCard({ result }: DrugResultCardProps) {
         >
           <Package className="h-3 w-3" />
           {getStockStatusText(stockStatus)}
-          {quantity && stockStatus !== 'out-of-stock' && ` (${quantity})`}
+          {drug.quantity_in_stock > 0 && ` (${drug.quantity_in_stock} available)`}
         </span>
-        {pharmacy.isOpen !== undefined && (
-          <span
-            className={cn(
-              'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
-              pharmacy.isOpen
-                ? 'text-green-600 bg-green-50'
-                : 'text-gray-600 bg-gray-50'
-            )}
-          >
-            <Clock className="h-3 w-3" />
-            {pharmacy.isOpen ? 'Open Now' : 'Closed'}
+        {drug.category && (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-50 text-primary-blue">
+            {drug.category}
           </span>
         )}
       </div>
@@ -123,13 +131,21 @@ export function DrugResultCard({ result }: DrugResultCardProps) {
             </div>
             <div>
               <span className="font-medium text-gray-700">Location:</span>
-              <span className="ml-2 text-gray-600">{pharmacy.location}</span>
+              <span className="ml-2 text-gray-600">
+                {pharmacy.city}, {pharmacy.state}
+              </span>
             </div>
-            {result.lastUpdated && (
+            {drug.description && (
               <div>
-                <span className="font-medium text-gray-700">Last Updated:</span>
+                <span className="font-medium text-gray-700">Description:</span>
+                <p className="mt-1 text-gray-600">{drug.description}</p>
+              </div>
+            )}
+            {drug.expiry_date && (
+              <div>
+                <span className="font-medium text-gray-700">Expiry Date:</span>
                 <span className="ml-2 text-gray-600">
-                  {new Date(result.lastUpdated).toLocaleString()}
+                  {new Date(drug.expiry_date).toLocaleDateString()}
                 </span>
               </div>
             )}
