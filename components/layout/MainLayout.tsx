@@ -29,7 +29,6 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <Navbar
-        authState={role}
         onMenuClick={toggleMobileSidebar}
       />
 

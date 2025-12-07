@@ -9,6 +9,8 @@ import { Send, Loader2 } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
 import DrugResultCard from '@/components/chat/DrugResultCard';
 
+export const dynamic = 'force-dynamic'
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';

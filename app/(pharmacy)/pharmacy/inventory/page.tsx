@@ -18,6 +18,8 @@ import {
 import InventoryTable from '@/components/pharmacy/InventoryTable';
 import AddDrugModal from '@/components/pharmacy/AddDrugModal';
 
+export const dynamic = 'force-dynamic'
+
 export default function PharmacyInventory() {
   const router = useRouter();
   const searchParams = useSearchParams();

@@ -1,5 +1,8 @@
+'use client';
+
 import React from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   Home,
   MessageSquare,
@@ -35,8 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
   className,
 }) => {
-  const location = useLocation();
-  const pathname = location.pathname;
+  const pathname = usePathname();
 
   const patientNavItems: NavItem[] = [
     {
@@ -103,34 +105,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {navItems.map((item) => {
           const isActive = pathname === item.href;
 
+          if (item.disabled) {
+            return (
+              <div
+                key={item.href}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium',
+                  'text-gray-400 cursor-not-allowed',
+                  isCollapsed && 'justify-center'
+                )}
+              >
+                <span className="flex-shrink-0">{item.icon}</span>
+                {!isCollapsed && (
+                  <>
+                    <span className="flex-1">{item.label}</span>
+                    {item.badge && (
+                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                        {item.badge}
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          }
+
           return (
             <Link
               key={item.href}
-              to={item.disabled ? '#' : item.href}
+              href={item.href}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-blue-50 text-blue-600'
-                  : item.disabled
-                  ? 'text-gray-400 cursor-not-allowed'
                   : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900',
                 isCollapsed && 'justify-center'
               )}
-              onClick={(e: React.MouseEvent) => item.disabled && e.preventDefault()}
             >
               <span className={cn('flex-shrink-0', isActive && 'text-blue-600')}>
                 {item.icon}
               </span>
-              {!isCollapsed && (
-                <>
-                  <span className="flex-1">{item.label}</span>
-                  {item.badge && (
-                    <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
-                </>
-              )}
+              {!isCollapsed && <span className="flex-1">{item.label}</span>}
             </Link>
           );
         })}

@@ -77,8 +77,8 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json()
 
     // Update pharmacy details
-    const { data: pharmacy, error } = await supabase
-      .from('pharmacies')
+    const { data: pharmacy, error } = await (supabase
+      .from('pharmacies') as any)
       .update({
         pharmacy_name: body.pharmacy_name,
         address: body.address,

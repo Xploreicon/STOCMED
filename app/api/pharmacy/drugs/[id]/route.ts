@@ -47,7 +47,7 @@ export async function PATCH(
       )
     }
 
-    if (existingDrug.pharmacy_id !== pharmacy.id) {
+    if ((existingDrug as any).pharmacy_id !== (pharmacy as any).id) {
       return NextResponse.json(
         { error: 'Forbidden: Drug does not belong to your pharmacy' },
         { status: 403 }
@@ -58,8 +58,8 @@ export async function PATCH(
     const body = await request.json()
 
     // Update drug
-    const { data: drug, error: updateError } = await supabase
-      .from('drugs')
+    const { data: drug, error: updateError } = await (supabase
+      .from('drugs') as any)
       .update({
         name: body.name,
         generic_name: body.generic_name,
@@ -144,7 +144,7 @@ export async function DELETE(
       )
     }
 
-    if (existingDrug.pharmacy_id !== pharmacy.id) {
+    if ((existingDrug as any).pharmacy_id !== (pharmacy as any).id) {
       return NextResponse.json(
         { error: 'Forbidden: Drug does not belong to your pharmacy' },
         { status: 403 }

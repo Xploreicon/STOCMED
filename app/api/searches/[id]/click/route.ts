@@ -22,8 +22,8 @@ export async function POST(
 
     // Note: This assumes a clicked_result or metadata field exists in searches table
     // The database schema should be updated to include this field
-    const { data: search, error: updateError } = await supabase
-      .from('searches')
+    const { data: search, error: updateError } = await (supabase
+      .from('searches') as any)
       .update({
         // Using metadata field (JSON) to store click information
         // If schema has a specific clicked_result field, use that instead

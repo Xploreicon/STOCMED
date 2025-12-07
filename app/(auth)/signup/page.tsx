@@ -10,6 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 
+export const dynamic = 'force-dynamic'
+
 type Step = 1 | 2;
 type Role = 'patient' | 'pharmacy';
 
@@ -149,7 +151,7 @@ export default function Signup() {
         phone: formData.phone,
         role: selectedRole!,
         location: selectedRole === 'patient' ? formData.location : formData.city,
-      });
+      } as any);
 
       if (userError) console.error('Error inserting user:', userError);
 
@@ -162,7 +164,7 @@ export default function Signup() {
           city: formData.city,
           state: formData.state,
           phone: formData.phone,
-        });
+        } as any);
 
         if (pharmacyError) console.error('Error inserting pharmacy:', pharmacyError);
       }

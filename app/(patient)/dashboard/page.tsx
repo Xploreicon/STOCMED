@@ -32,7 +32,7 @@ export default async function PatientDashboard() {
     .order('created_at', { ascending: false })
     .limit(5)
 
-  const userName = userData?.full_name || user.email?.split('@')[0] || 'there'
+  const userName = (userData as any)?.full_name || user.email?.split('@')[0] || 'there'
 
   return (
     <div className="min-h-screen bg-gray-50">

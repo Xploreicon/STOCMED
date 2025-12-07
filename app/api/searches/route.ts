@@ -21,8 +21,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Log search
-    const { data: search, error: insertError } = await supabase
-      .from('searches')
+    const { data: search, error: insertError } = await (supabase
+      .from('searches') as any)
       .insert({
         user_id: user?.id || null,
         query,

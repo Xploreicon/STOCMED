@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     const { data: drugs, error: drugsError } = await supabase
       .from('drugs')
       .select('*')
-      .eq('pharmacy_id', pharmacy.id)
+      .eq('pharmacy_id', (pharmacy as any).id)
       .order('created_at', { ascending: false })
 
     if (drugsError) {
@@ -47,9 +47,9 @@ export async function GET(request: NextRequest) {
     // Calculate stats
     const stats = {
       total: drugs.length,
-      in_stock: drugs.filter(d => d.quantity_in_stock > d.low_stock_threshold).length,
-      low_stock: drugs.filter(d => d.quantity_in_stock > 0 && d.quantity_in_stock <= d.low_stock_threshold).length,
-      out_of_stock: drugs.filter(d => d.quantity_in_stock === 0).length,
+      in_stock: drugs.filter((d: any) => d.quantity_in_stock > d.low_stock_threshold).length,
+      low_stock: drugs.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= d.low_stock_threshold).length,
+      out_of_stock: drugs.filter((d: any) => d.quantity_in_stock === 0).length,
     }
 
     return NextResponse.json({
@@ -108,10 +108,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert drug
-    const { data: drug, error: insertError } = await supabase
-      .from('drugs')
+    const { data: drug, error: insertError } = await (supabase
+      .from('drugs') as any)
       .insert({
-        pharmacy_id: pharmacy.id,
+        pharmacy_id: (pharmacy as any).id,
         name: body.name,
         generic_name: body.generic_name || null,
         brand_name: body.brand_name || null,

@@ -10,6 +10,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
 
+export const dynamic = 'force-dynamic'
+
 export default function Login() {
   const router = useRouter();
   const searchParams = useSearchParams();

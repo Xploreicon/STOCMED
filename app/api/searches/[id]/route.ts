@@ -33,7 +33,7 @@ export async function DELETE(
       )
     }
 
-    if (existingSearch.user_id !== user.id) {
+    if ((existingSearch as any).user_id !== user.id) {
       return NextResponse.json(
         { error: 'Forbidden: Search does not belong to you' },
         { status: 403 }
