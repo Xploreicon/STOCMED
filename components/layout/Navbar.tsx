@@ -1,4 +1,8 @@
+'use client';
+
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Menu, X, Search, Bell, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,27 +12,34 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useUser } from '@/hooks/useUser';
+import { createClient } from '@/lib/supabase/client';
 
 interface NavbarProps {
-  authState?: 'logged-out' | 'patient' | 'pharmacy';
   patientPoints?: number;
   pharmacyName?: string;
   onMenuClick?: () => void;
-  onLogout?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
-  authState = 'logged-out',
   patientPoints = 0,
   pharmacyName = 'Pharmacy Name',
   onMenuClick,
-  onLogout,
 }) => {
+  const router = useRouter();
+  const { user, isPatient, isPharmacy, isLoading } = useUser();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen(!isMobileMenuOpen);
     onMenuClick?.();
+  };
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push('/');
+    router.refresh();
   };
 
   return (
@@ -37,7 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex justify-between items-center h-16">
           {/* Left side - Logo and Mobile Menu */}
           <div className="flex items-center gap-4">
-            {authState !== 'logged-out' && (
+            {user && (
               <button
                 onClick={toggleMobileMenu}
                 className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
@@ -50,30 +61,34 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </button>
             )}
-            <div className="flex items-center">
-              <h1 className="text-xl sm:text-2xl font-bold text-blue-600">StocMed</h1>
-            </div>
+            <Link href="/">
+              <h1 className="text-xl sm:text-2xl font-bold text-blue-600 cursor-pointer">StocMed</h1>
+            </Link>
           </div>
 
           {/* Right side - Conditional rendering based on auth state */}
           <div className="flex items-center gap-4">
-            {authState === 'logged-out' && (
+            {!user && !isLoading && (
               <>
-                <Button
-                  variant="ghost"
-                  className="hidden sm:inline-flex"
-                >
-                  Login
-                </Button>
-                <Button
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  Sign Up
-                </Button>
+                <Link href="/login">
+                  <Button
+                    variant="ghost"
+                    className="hidden sm:inline-flex"
+                  >
+                    Login
+                  </Button>
+                </Link>
+                <Link href="/signup">
+                  <Button
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Sign Up
+                  </Button>
+                </Link>
               </>
             )}
 
-            {authState === 'patient' && (
+            {user && isPatient && (
               <>
                 <button
                   className="p-2 rounded-md hover:bg-gray-100 transition-colors"
@@ -104,7 +119,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={onLogout}
+                      onClick={handleSignOut}
                       className="text-red-600"
                     >
                       Logout
@@ -114,7 +129,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </>
             )}
 
-            {authState === 'pharmacy' && (
+            {user && isPharmacy && (
               <>
                 <div className="hidden sm:flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-700">
@@ -146,7 +161,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      onClick={onLogout}
+                      onClick={handleSignOut}
                       className="text-red-600"
                     >
                       Logout

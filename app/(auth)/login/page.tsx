@@ -1,19 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuthStore } from '@/store/authStore';
-import { mockLogin } from '@/services/mockApi';
+import { createClient } from '@/lib/supabase/client';
 
 export default function Login() {
   const router = useRouter();
-  const setUser = useAuthStore((state) => state.setUser);
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get('redirectTo') || null;
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState<{
@@ -57,13 +57,31 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await mockLogin(formData);
-      setUser(response.user, response.pharmacy, response.token);
+      const supabase = createClient();
 
-      if (response.user.role === 'pharmacy') {
-        router.push('/pharmacy/dashboard');
-      } else {
-        router.push('/dashboard');
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (error) {
+        setErrors({
+          general: error.message,
+        });
+        return;
+      }
+
+      if (data.user) {
+        // Get user role from metadata
+        const role = data.user.user_metadata?.role || 'patient';
+
+        // Redirect based on role or to the original destination
+        if (redirectTo) {
+          router.push(redirectTo);
+        } else {
+          router.push(role === 'pharmacy' ? '/pharmacy/dashboard' : '/dashboard');
+        }
+        router.refresh();
       }
     } catch (error) {
       setErrors({
