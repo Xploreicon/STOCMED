@@ -1,5 +1,8 @@
+'use client';
+
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +12,7 @@ import { useAuthStore } from '@/store/authStore';
 import { mockLogin } from '@/services/mockApi';
 
 export default function Login() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const setUser = useAuthStore((state) => state.setUser);
   const [isLoading, setIsLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -27,14 +30,12 @@ export default function Login() {
   const validateForm = () => {
     const newErrors: typeof errors = {};
 
-    // Email validation
     if (!formData.email) {
       newErrors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
 
-    // Password validation
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
@@ -59,11 +60,10 @@ export default function Login() {
       const response = await mockLogin(formData);
       setUser(response.user, response.pharmacy, response.token);
 
-      // Redirect based on role
       if (response.user.role === 'pharmacy') {
-        navigate('/pharmacy/dashboard');
+        router.push('/pharmacy/dashboard');
       } else {
-        navigate('/dashboard');
+        router.push('/dashboard');
       }
     } catch (error) {
       setErrors({
@@ -167,7 +167,7 @@ export default function Login() {
                 </Label>
               </div>
               <Link
-                to="/forgot-password"
+                href="/forgot-password"
                 className="text-sm text-primary-blue hover:underline"
               >
                 Forgot Password?
@@ -185,7 +185,7 @@ export default function Login() {
             <div className="text-center text-sm">
               <span className="text-gray-600">Don't have an account? </span>
               <Link
-                to="/signup"
+                href="/signup"
                 className="text-primary-blue hover:underline font-medium"
               >
                 Sign Up

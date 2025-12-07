@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
 export default function Landing() {
@@ -16,12 +16,12 @@ export default function Landing() {
 
           {/* CTAs */}
           <div className="flex flex-col md:flex-row gap-4 justify-center items-center max-w-lg mx-auto">
-            <Link to="/signup?role=patient" className="w-full md:w-auto">
+            <Link href="/signup?role=patient" className="w-full md:w-auto">
               <Button className="w-full md:w-auto bg-primary-blue hover:bg-blue-700 text-white px-8 py-6 text-lg font-semibold rounded-lg">
                 Find Medication
               </Button>
             </Link>
-            <Link to="/signup?role=pharmacy" className="w-full md:w-auto">
+            <Link href="/signup?role=pharmacy" className="w-full md:w-auto">
               <Button
                 variant="outline"
                 className="w-full md:w-auto border-2 border-primary-blue text-primary-blue hover:bg-blue-50 px-8 py-6 text-lg font-semibold rounded-lg"
@@ -127,19 +127,19 @@ export default function Landing() {
       <footer className="bg-white border-t border-gray-200 py-8 px-4">
         <div className="container mx-auto max-w-6xl">
           <div className="flex flex-wrap justify-center items-center gap-6 text-medium-gray">
-            <Link to="/about" className="hover:text-primary-blue transition-colors">
+            <Link href="/about" className="hover:text-primary-blue transition-colors">
               About
             </Link>
             <span className="text-gray-300">|</span>
-            <Link to="/contact" className="hover:text-primary-blue transition-colors">
+            <Link href="/contact" className="hover:text-primary-blue transition-colors">
               Contact
             </Link>
             <span className="text-gray-300">|</span>
-            <Link to="/privacy" className="hover:text-primary-blue transition-colors">
+            <Link href="/privacy" className="hover:text-primary-blue transition-colors">
               Privacy
             </Link>
             <span className="text-gray-300">|</span>
-            <Link to="/terms" className="hover:text-primary-blue transition-colors">
+            <Link href="/terms" className="hover:text-primary-blue transition-colors">
               Terms
             </Link>
           </div>
