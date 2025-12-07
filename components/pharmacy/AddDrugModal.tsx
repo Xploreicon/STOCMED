@@ -1,201 +1,196 @@
-import * as React from "react"
+'use client';
+
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Loader2 } from 'lucide-react';
 
 interface AddDrugModalProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onSuccess?: () => void
-}
-
-interface DrugFormData {
-  drugName: string
-  genericName: string
-  brandName: string
-  category: string
-  dosageForm: string
-  strength: string
-  price: string
-  quantity: string
-  expiryDate: string
-  featured: boolean
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
 const categories = [
-  "Analgesics",
-  "Antibiotics",
-  "Antimalarials",
-  "Antihypertensives",
-  "Diabetes",
-  "Vitamins",
-  "Gastrointestinal",
-  "Respiratory",
-  "Others",
-]
+  'Analgesics',
+  'Antibiotics',
+  'Antimalarials',
+  'Antihypertensives',
+  'Diabetes',
+  'Vitamins',
+  'Gastrointestinal',
+  'Respiratory',
+  'Others',
+];
 
 const dosageForms = [
-  "Tablet",
-  "Capsule",
-  "Syrup",
-  "Injection",
-  "Cream",
-  "Drops",
-  "Inhaler",
-]
+  'tablet',
+  'capsule',
+  'syrup',
+  'injection',
+  'cream',
+  'drops',
+  'inhaler',
+];
 
-export const AddDrugModal: React.FC<AddDrugModalProps> = ({
-  open,
-  onOpenChange,
+export default function AddDrugModal({
+  isOpen,
+  onClose,
   onSuccess,
-}) => {
-  const [loading, setLoading] = React.useState(false)
-  const [formData, setFormData] = React.useState<DrugFormData>({
-    drugName: "",
-    genericName: "",
-    brandName: "",
-    category: "",
-    dosageForm: "",
-    strength: "",
-    price: "",
-    quantity: "",
-    expiryDate: "",
-    featured: false,
-  })
+}: AddDrugModalProps) {
+  const [formData, setFormData] = useState({
+    name: '',
+    generic_name: '',
+    brand_name: '',
+    category: '',
+    dosage_form: '',
+    strength: '',
+    price: '',
+    quantity_in_stock: '',
+    low_stock_threshold: '10',
+    manufacturer: '',
+    description: '',
+    requires_prescription: false,
+    expiry_date: '',
+  });
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleCheckboxChange = (checked: boolean) => {
-    setFormData((prev) => ({ ...prev, featured: checked }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-
-    // Validate required fields
-    if (
-      !formData.drugName ||
-      !formData.category ||
-      !formData.dosageForm ||
-      !formData.strength ||
-      !formData.price ||
-      !formData.quantity
-    ) {
-      alert("Please fill in all required fields")
-      return
-    }
-
-    setLoading(true)
-
-    try {
-      // TODO: Add API call to save drug
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-
-      // Show success message
-      alert("Drug added to inventory successfully!")
-
+  const addDrugMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await fetch('/api/pharmacy/drugs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to add drug');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
       // Reset form
       setFormData({
-        drugName: "",
-        genericName: "",
-        brandName: "",
-        category: "",
-        dosageForm: "",
-        strength: "",
-        price: "",
-        quantity: "",
-        expiryDate: "",
-        featured: false,
-      })
+        name: '',
+        generic_name: '',
+        brand_name: '',
+        category: '',
+        dosage_form: '',
+        strength: '',
+        price: '',
+        quantity_in_stock: '',
+        low_stock_threshold: '10',
+        manufacturer: '',
+        description: '',
+        requires_prescription: false,
+        expiry_date: '',
+      });
+      onSuccess();
+    },
+  });
 
-      // Close modal and trigger success callback
-      onOpenChange(false)
-      onSuccess?.()
-    } catch (error) {
-      console.error("Error adding drug:", error)
-      alert("Failed to add drug. Please try again.")
-    } finally {
-      setLoading(false)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      await addDrugMutation.mutateAsync({
+        name: formData.name,
+        generic_name: formData.generic_name || null,
+        brand_name: formData.brand_name || null,
+        category: formData.category,
+        dosage_form: formData.dosage_form,
+        strength: formData.strength,
+        price: parseFloat(formData.price),
+        quantity_in_stock: parseInt(formData.quantity_in_stock),
+        low_stock_threshold: parseInt(formData.low_stock_threshold),
+        manufacturer: formData.manufacturer || null,
+        description: formData.description || null,
+        requires_prescription: formData.requires_prescription,
+        expiry_date: formData.expiry_date || null,
+      });
+    } catch (error: any) {
+      alert(error.message || 'Failed to add drug');
     }
-  }
+  };
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+  ) => {
+    const { name, value, type } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]:
+        type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+    }));
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-3xl"
-        onClose={() => onOpenChange(false)}
-      >
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Drug</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
-          <div className="px-6 py-4">
+          <div className="space-y-6 p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Drug Name */}
-              <div className="space-y-2">
-                <Label htmlFor="drugName">
-                  Drug Name <span className="text-red-500">*</span>
-                </Label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Drug Name *
+                </label>
                 <Input
-                  id="drugName"
-                  name="drugName"
-                  value={formData.drugName}
+                  name="name"
+                  value={formData.name}
                   onChange={handleChange}
-                  placeholder="Enter drug name"
                   required
+                  placeholder="Enter drug name"
                 />
               </div>
 
               {/* Generic Name */}
-              <div className="space-y-2">
-                <Label htmlFor="genericName">Generic Name</Label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Generic Name
+                </label>
                 <Input
-                  id="genericName"
-                  name="genericName"
-                  value={formData.genericName}
+                  name="generic_name"
+                  value={formData.generic_name}
                   onChange={handleChange}
                   placeholder="Enter generic name"
                 />
               </div>
 
               {/* Brand Name */}
-              <div className="space-y-2">
-                <Label htmlFor="brandName">Brand Name</Label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Brand Name
+                </label>
                 <Input
-                  id="brandName"
-                  name="brandName"
-                  value={formData.brandName}
+                  name="brand_name"
+                  value={formData.brand_name}
                   onChange={handleChange}
                   placeholder="Enter brand name"
                 />
               </div>
 
               {/* Category */}
-              <div className="space-y-2">
-                <Label htmlFor="category">
-                  Category <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  id="category"
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Category *
+                </label>
+                <select
                   name="category"
                   value={formData.category}
                   onChange={handleChange}
                   required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
                 >
                   <option value="">Select category</option>
                   {categories.map((cat) => (
@@ -203,123 +198,169 @@ export const AddDrugModal: React.FC<AddDrugModalProps> = ({
                       {cat}
                     </option>
                   ))}
-                </Select>
+                </select>
               </div>
 
               {/* Dosage Form */}
-              <div className="space-y-2">
-                <Label htmlFor="dosageForm">
-                  Dosage Form <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  id="dosageForm"
-                  name="dosageForm"
-                  value={formData.dosageForm}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dosage Form *
+                </label>
+                <select
+                  name="dosage_form"
+                  value={formData.dosage_form}
                   onChange={handleChange}
                   required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
                 >
-                  <option value="">Select dosage form</option>
+                  <option value="">Select form</option>
                   {dosageForms.map((form) => (
                     <option key={form} value={form}>
-                      {form}
+                      {form.charAt(0).toUpperCase() + form.slice(1)}
                     </option>
                   ))}
-                </Select>
+                </select>
               </div>
 
               {/* Strength */}
-              <div className="space-y-2">
-                <Label htmlFor="strength">
-                  Strength <span className="text-red-500">*</span>
-                </Label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Strength *
+                </label>
                 <Input
-                  id="strength"
                   name="strength"
                   value={formData.strength}
                   onChange={handleChange}
-                  placeholder="e.g., 500mg"
                   required
+                  placeholder="e.g., 500mg"
                 />
               </div>
 
               {/* Price */}
-              <div className="space-y-2">
-                <Label htmlFor="price">
-                  Price ₦ <span className="text-red-500">*</span>
-                </Label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Price (₦) *
+                </label>
                 <Input
-                  id="price"
                   name="price"
                   type="number"
+                  step="0.01"
                   value={formData.price}
                   onChange={handleChange}
-                  placeholder="0.00"
-                  min="0"
-                  step="0.01"
                   required
+                  placeholder="Enter price"
                 />
               </div>
 
               {/* Quantity in Stock */}
-              <div className="space-y-2">
-                <Label htmlFor="quantity">
-                  Quantity in Stock <span className="text-red-500">*</span>
-                </Label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantity in Stock *
+                </label>
                 <Input
-                  id="quantity"
-                  name="quantity"
+                  name="quantity_in_stock"
                   type="number"
-                  value={formData.quantity}
+                  value={formData.quantity_in_stock}
                   onChange={handleChange}
-                  placeholder="0"
-                  min="0"
                   required
+                  placeholder="Enter quantity"
+                />
+              </div>
+
+              {/* Low Stock Threshold */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Low Stock Threshold
+                </label>
+                <Input
+                  name="low_stock_threshold"
+                  type="number"
+                  value={formData.low_stock_threshold}
+                  onChange={handleChange}
+                  placeholder="Default: 10"
+                />
+              </div>
+
+              {/* Manufacturer */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Manufacturer
+                </label>
+                <Input
+                  name="manufacturer"
+                  value={formData.manufacturer}
+                  onChange={handleChange}
+                  placeholder="Enter manufacturer"
                 />
               </div>
 
               {/* Expiry Date */}
-              <div className="space-y-2">
-                <Label htmlFor="expiryDate">Expiry Date</Label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Expiry Date
+                </label>
                 <Input
-                  id="expiryDate"
-                  name="expiryDate"
+                  name="expiry_date"
                   type="date"
-                  value={formData.expiryDate}
+                  value={formData.expiry_date}
                   onChange={handleChange}
                 />
               </div>
+            </div>
 
-              {/* Featured Checkbox */}
-              <div className="space-y-2 flex items-end pb-2">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="featured"
-                    checked={formData.featured}
-                    onCheckedChange={handleCheckboxChange}
-                  />
-                  <Label htmlFor="featured" className="cursor-pointer">
-                    Featured
-                  </Label>
-                </div>
-              </div>
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description
+              </label>
+              <textarea
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
+                placeholder="Enter drug description"
+              />
+            </div>
+
+            {/* Requires Prescription */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                name="requires_prescription"
+                checked={formData.requires_prescription}
+                onChange={handleChange}
+                className="h-4 w-4 text-primary-blue border-gray-300 rounded"
+              />
+              <label className="text-sm font-medium text-gray-700">
+                Requires Prescription
+              </label>
             </div>
           </div>
 
-          <DialogFooter>
+          {/* Footer */}
+          <div className="flex justify-end gap-3 p-6 border-t">
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
+              onClick={onClose}
+              disabled={addDrugMutation.isPending}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? "Adding..." : "Add to Inventory"}
+            <Button type="submit" disabled={addDrugMutation.isPending}>
+              {addDrugMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                'Add Drug'
+              )}
             </Button>
-          </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
