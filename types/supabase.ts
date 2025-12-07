@@ -153,6 +153,7 @@ export interface Database {
           user_id: string
           query: string
           results_count: number
+          metadata: Json | null
           created_at: string
         }
         Insert: {
@@ -160,6 +161,7 @@ export interface Database {
           user_id: string
           query: string
           results_count: number
+          metadata?: Json | null
           created_at?: string
         }
         Update: {
@@ -167,6 +169,7 @@ export interface Database {
           user_id?: string
           query?: string
           results_count?: number
+          metadata?: Json | null
           created_at?: string
         }
       }
