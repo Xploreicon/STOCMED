@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
@@ -5,18 +7,12 @@ import { MobileNav } from './MobileNav';
 
 interface MainLayoutProps {
   children: React.ReactNode;
-  authState?: 'patient' | 'pharmacy';
-  patientPoints?: number;
-  pharmacyName?: string;
-  onLogout?: () => void;
+  role: 'patient' | 'pharmacy';
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({
   children,
-  authState = 'patient',
-  patientPoints = 0,
-  pharmacyName = 'Pharmacy Name',
-  onLogout,
+  role,
 }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -33,18 +29,15 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <Navbar
-        authState={authState}
-        patientPoints={patientPoints}
-        pharmacyName={pharmacyName}
+        authState={role}
         onMenuClick={toggleMobileSidebar}
-        onLogout={onLogout}
       />
 
       <div className="flex h-[calc(100vh-4rem)]">
         {/* Desktop Sidebar */}
         <div className="hidden lg:block">
           <Sidebar
-            userType={authState}
+            userType={role}
             isCollapsed={isSidebarCollapsed}
             onToggleCollapse={toggleSidebarCollapse}
             className="h-full"
@@ -60,7 +53,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
             />
             <div className="fixed inset-y-0 left-0 z-50 lg:hidden">
               <Sidebar
-                userType={authState}
+                userType={role}
                 isCollapsed={false}
                 onToggleCollapse={toggleMobileSidebar}
                 className="h-full shadow-xl"
@@ -78,7 +71,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <MobileNav userType={authState} />
+      <MobileNav userType={role} />
     </div>
   );
 };

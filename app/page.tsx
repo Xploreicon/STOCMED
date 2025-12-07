@@ -1,7 +1,23 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
 
-export default function Landing() {
+export default async function Landing() {
+  // Check if user is logged in
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (user) {
+    // Redirect based on user role
+    const role = user.user_metadata?.role;
+    if (role === 'pharmacy') {
+      redirect('/pharmacy/dashboard');
+    } else {
+      redirect('/dashboard');
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white">
       {/* Hero Section */}
