@@ -1,0 +1,152 @@
+'use client'
+
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+
+export default function Landing() {
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Hero Section */}
+      <section className="bg-gradient-to-b from-light-blue-bg to-white py-16 md:py-24 px-4">
+        <div className="container mx-auto max-w-6xl text-center">
+          <h1 className="text-[32px] md:text-5xl lg:text-6xl font-bold text-dark-gray mb-4 md:mb-6">
+            Find Your Medications in Minutes, Not Hours
+          </h1>
+          <p className="text-lg md:text-xl text-medium-gray mb-8 md:mb-10">
+            Nigeria's First AI-Powered Medication Search Platform
+          </p>
+
+          {/* CTAs */}
+          <div className="flex flex-col md:flex-row gap-4 justify-center items-center max-w-lg mx-auto">
+            <Link href="/signup?role=patient" className="w-full md:w-auto">
+              <Button className="w-full md:w-auto bg-primary-blue hover:bg-blue-700 text-white px-8 py-6 text-lg font-semibold rounded-lg">
+                Find Medication
+              </Button>
+            </Link>
+            <Link href="/signup?role=pharmacy" className="w-full md:w-auto">
+              <Button
+                variant="outline"
+                className="w-full md:w-auto border-2 border-primary-blue text-primary-blue hover:bg-blue-50 px-8 py-6 text-lg font-semibold rounded-lg"
+              >
+                I'm a Pharmacy
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Value Props Section */}
+      <section className="py-16 px-4 bg-white">
+        <div className="container mx-auto max-w-6xl">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Prop 1 */}
+            <div className="text-center p-6">
+              <div className="text-5xl mb-4">🔍</div>
+              <h3 className="text-xl font-semibold text-dark-gray mb-2">
+                Search 100+ Medications
+              </h3>
+              <p className="text-medium-gray">
+                Find any medication quickly with our comprehensive database
+              </p>
+            </div>
+
+            {/* Prop 2 */}
+            <div className="text-center p-6">
+              <div className="text-5xl mb-4">📍</div>
+              <h3 className="text-xl font-semibold text-dark-gray mb-2">
+                Find Nearest Pharmacy
+              </h3>
+              <p className="text-medium-gray">
+                Locate pharmacies near you with real-time availability
+              </p>
+            </div>
+
+            {/* Prop 3 */}
+            <div className="text-center p-6">
+              <div className="text-5xl mb-4">💬</div>
+              <h3 className="text-xl font-semibold text-dark-gray mb-2">
+                AI-Powered Assistance
+              </h3>
+              <p className="text-medium-gray">
+                Get instant help from our intelligent medication assistant
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section className="py-16 px-4 bg-light-blue-bg">
+        <div className="container mx-auto max-w-6xl">
+          <h2 className="text-3xl md:text-4xl font-bold text-dark-gray text-center mb-12">
+            How It Works
+          </h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Step 1 */}
+            <div className="bg-white rounded-lg p-8 shadow-sm">
+              <div className="w-12 h-12 bg-primary-blue text-white rounded-full flex items-center justify-center text-xl font-bold mb-4">
+                1
+              </div>
+              <h3 className="text-xl font-semibold text-dark-gray mb-3">
+                Tell our AI what you need
+              </h3>
+              <p className="text-medium-gray">
+                Simply describe your medication or health concern to our intelligent assistant
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="bg-white rounded-lg p-8 shadow-sm">
+              <div className="w-12 h-12 bg-primary-blue text-white rounded-full flex items-center justify-center text-xl font-bold mb-4">
+                2
+              </div>
+              <h3 className="text-xl font-semibold text-dark-gray mb-3">
+                See which pharmacies have it
+              </h3>
+              <p className="text-medium-gray">
+                Get instant results showing nearby pharmacies with your medication in stock
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className="bg-white rounded-lg p-8 shadow-sm">
+              <div className="w-12 h-12 bg-primary-blue text-white rounded-full flex items-center justify-center text-xl font-bold mb-4">
+                3
+              </div>
+              <h3 className="text-xl font-semibold text-dark-gray mb-3">
+                Visit or call to purchase
+              </h3>
+              <p className="text-medium-gray">
+                Contact the pharmacy directly or visit to get your medication quickly
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-white border-t border-gray-200 py-8 px-4">
+        <div className="container mx-auto max-w-6xl">
+          <div className="flex flex-wrap justify-center items-center gap-6 text-medium-gray">
+            <Link href="/about" className="hover:text-primary-blue transition-colors">
+              About
+            </Link>
+            <span className="text-gray-300">|</span>
+            <Link href="/contact" className="hover:text-primary-blue transition-colors">
+              Contact
+            </Link>
+            <span className="text-gray-300">|</span>
+            <Link href="/privacy" className="hover:text-primary-blue transition-colors">
+              Privacy
+            </Link>
+            <span className="text-gray-300">|</span>
+            <Link href="/terms" className="hover:text-primary-blue transition-colors">
+              Terms
+            </Link>
+          </div>
+        </div>
+      </footer>
+    </div>
+  )
+}
