@@ -98,7 +98,7 @@ export default function Chat() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-32">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -111,7 +111,7 @@ export default function Chat() {
         </div>
 
         {/* Chat Messages */}
-        <div className="space-y-6 mb-24">
+        <div className="space-y-6">
           {messages.length === 0 && (
             <Card className="p-8 text-center">
               <h2 className="text-xl font-semibold mb-2">
@@ -177,21 +177,20 @@ export default function Chat() {
         </div>
 
         {/* Input Form - Fixed at bottom */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-50">
           <div className="max-w-4xl mx-auto">
-            <form onSubmit={handleSubmit} className="flex gap-3">
+            <form onSubmit={handleSubmit} className="flex gap-2">
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Type a medication name or describe your symptoms..."
                 disabled={isLoading}
-                className="flex-1 text-lg py-6"
+                className="flex-1 h-12"
               />
               <Button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                size="lg"
-                className="px-8"
+                className="h-12 w-12 p-0 shrink-0"
               >
                 {isLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin" />
