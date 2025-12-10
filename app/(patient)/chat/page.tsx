@@ -98,7 +98,7 @@ export default function Chat() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32">
+    <div className="flex flex-col h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -111,7 +111,7 @@ export default function Chat() {
         </div>
 
         {/* Chat Messages */}
-        <div className="space-y-6">
+        <div className="flex-1 overflow-y-auto space-y-6 max-w-4xl mx-auto w-full px-4 pb-32">
           {messages.length === 0 && (
             <Card className="p-8 text-center">
               <h2 className="text-xl font-semibold mb-2">
@@ -177,7 +177,7 @@ export default function Chat() {
         </div>
 
         {/* Input Form - Fixed at bottom */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-50">
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 pb-[env(safe-area-inset-bottom)] z-50">
           <div className="max-w-4xl mx-auto">
             <form onSubmit={handleSubmit} className="flex gap-2">
               <Input
