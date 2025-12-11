@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -20,6 +20,7 @@ import {
 export default function PharmacySettings() {
   const router = useRouter();
   const { user, isLoading: authLoading, isPharmacy } = useUser();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'profile' | 'account'>('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -33,6 +34,13 @@ export default function PharmacySettings() {
   const [phone, setPhone] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoUploadError, setLogoUploadError] = useState<string | null>(null);
+  const [removeLogo, setRemoveLogo] = useState(false);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isActive, setIsActive] = useState(true);
 
   // Account settings
   const [currentPassword, setCurrentPassword] = useState('');
@@ -67,6 +75,12 @@ export default function PharmacySettings() {
       setPhone(pharmacy.phone || '');
       setLatitude(pharmacy.latitude?.toString() || '');
       setLongitude(pharmacy.longitude?.toString() || '');
+      setLogoUrl(pharmacy.logo_url || null);
+      setLogoPreview(pharmacy.logo_url || null);
+      setLogoFile(null);
+      setRemoveLogo(false);
+      setLogoUploadError(null);
+      setIsActive(pharmacy.is_active ?? true);
     }
   }, [pharmacy]);
 
@@ -82,9 +96,15 @@ export default function PharmacySettings() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedPharmacy) => {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
+      setLogoUrl(updatedPharmacy.logo_url || null);
+      setLogoPreview(updatedPharmacy.logo_url || null);
+      setLogoFile(null);
+      setRemoveLogo(false);
+      setIsActive(updatedPharmacy.is_active ?? true);
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-profile'] });
     },
   });
 
@@ -93,6 +113,43 @@ export default function PharmacySettings() {
     setIsSaving(true);
 
     try {
+      let nextLogoUrl = logoUrl;
+
+      if (logoFile) {
+        setIsUploadingLogo(true);
+        const supabase = createClient();
+        const fileExt = logoFile.name.split('.').pop()?.toLowerCase() || 'png';
+        const uniqueName =
+          (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) +
+          `.${fileExt}`;
+        const filePath = `pharmacies/${uniqueName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('pharmacy-assets')
+          .upload(filePath, logoFile, {
+            cacheControl: '3600',
+            upsert: false,
+            contentType: logoFile.type,
+          });
+
+        if (uploadError) {
+          setLogoUploadError(uploadError.message);
+          throw uploadError;
+        }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('pharmacy-assets').getPublicUrl(filePath);
+
+        nextLogoUrl = publicUrl;
+      } else if (removeLogo) {
+        nextLogoUrl = null;
+      }
+
+      setLogoUploadError(null);
+
       await updateProfileMutation.mutateAsync({
         pharmacy_name: pharmacyName,
         license_number: licenseNumber,
@@ -102,10 +159,13 @@ export default function PharmacySettings() {
         phone,
         latitude: latitude ? parseFloat(latitude) : null,
         longitude: longitude ? parseFloat(longitude) : null,
+        logo_url: nextLogoUrl,
+        is_active: isActive,
       });
     } catch (error) {
       console.error('Error saving profile:', error);
     } finally {
+      setIsUploadingLogo(false);
       setIsSaving(false);
     }
   };
@@ -147,6 +207,35 @@ export default function PharmacySettings() {
     }
   };
 
+  const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setLogoUploadError('Please select a valid image file (PNG, JPG, or SVG).');
+      return;
+    }
+
+    if (file.size > 1024 * 1024) {
+      setLogoUploadError('Image size must be 1MB or less.');
+      return;
+    }
+
+    setLogoUploadError(null);
+    setLogoFile(file);
+    setLogoPreview(URL.createObjectURL(file));
+    setRemoveLogo(false);
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoFile(null);
+    setLogoPreview(null);
+    setRemoveLogo(true);
+    setLogoUploadError(null);
+  };
+
   if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -157,6 +246,9 @@ export default function PharmacySettings() {
       </div>
     );
   }
+
+  const isProfileSubmitting =
+    isSaving || updateProfileMutation.isPending || isUploadingLogo;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -200,6 +292,48 @@ export default function PharmacySettings() {
           <Card className="p-6">
             <form onSubmit={handleSaveProfile}>
               <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-100 border border-dashed border-gray-200 flex items-center justify-center">
+                    {logoPreview ? (
+                      <img
+                        src={logoPreview}
+                        alt="Pharmacy logo preview"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-xs text-gray-500">Logo</span>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <label className="inline-flex">
+                      <span className="px-4 py-2 border border-gray-300 rounded-md text-sm text-gray-700 hover:border-primary-blue transition-colors cursor-pointer">
+                        {logoPreview ? 'Change logo' : 'Upload logo'}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/svg+xml"
+                        className="hidden"
+                        onChange={handleLogoChange}
+                      />
+                    </label>
+                    {logoPreview && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="text-sm text-red-600 hover:underline"
+                      >
+                        Remove logo
+                      </button>
+                    )}
+                    <p className="text-xs text-gray-500">
+                      PNG, JPG, or SVG. Maximum size 1MB.
+                    </p>
+                    {logoUploadError && (
+                      <p className="text-xs text-red-600">{logoUploadError}</p>
+                    )}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -278,6 +412,40 @@ export default function PharmacySettings() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Inventory Visibility
+                    </label>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-6 p-4 border border-gray-200 rounded-lg bg-white">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">
+                          {isActive ? 'Currently accepting orders' : 'Temporarily unavailable'}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {isActive
+                            ? 'Your inventory will be visible to patients searching for medications.'
+                            : 'Your pharmacy will be hidden from patient searches and AI recommendations until you reactivate.'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsActive((prev) => !prev)}
+                        className={`relative inline-flex h-8 w-16 shrink-0 cursor-pointer rounded-full transition-colors ${
+                          isActive ? 'bg-green-500' : 'bg-gray-300'
+                        }`}
+                        aria-label="Toggle pharmacy visibility"
+                      >
+                        <span
+                          className={`pointer-events-none absolute left-1 top-1 h-6 w-6 rounded-full bg-white transition-transform ${
+                            isActive ? 'translate-x-8' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Latitude (Optional)
@@ -308,10 +476,10 @@ export default function PharmacySettings() {
                 <div className="flex items-center gap-4 pt-4">
                   <Button
                     type="submit"
-                    disabled={isSaving}
-                    className="min-w-[120px]"
+                    disabled={isProfileSubmitting}
+                    className="min-w-[140px]"
                   >
-                    {isSaving ? (
+                    {isProfileSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                         Saving...
@@ -325,12 +493,10 @@ export default function PharmacySettings() {
                   </Button>
 
                   {saveSuccess && (
-                    <div className="flex items-center text-green-600">
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      <span className="text-sm font-medium">
-                        Changes saved successfully
-                      </span>
-                    </div>
+                    <span className="inline-flex items-center gap-2 text-green-600 text-sm font-medium">
+                      <CheckCircle className="h-4 w-4" />
+                      Changes saved successfully
+                    </span>
                   )}
                 </div>
               </div>

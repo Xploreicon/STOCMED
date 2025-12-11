@@ -56,6 +56,7 @@ export interface Database {
           is_verified: boolean
           created_at: string
           updated_at: string
+          logo_url: string | null
         }
         Insert: {
           id?: string
@@ -71,6 +72,7 @@ export interface Database {
           is_verified?: boolean
           created_at?: string
           updated_at?: string
+          logo_url?: string | null
         }
         Update: {
           id?: string
@@ -86,6 +88,7 @@ export interface Database {
           is_verified?: boolean
           created_at?: string
           updated_at?: string
+          logo_url?: string | null
         }
       }
       drugs: {

@@ -23,6 +23,10 @@ interface PharmacyStats {
   in_stock: number;
   low_stock: number;
   out_of_stock: number;
+}
+
+interface PharmacyStatsResponse {
+  stats: PharmacyStats;
   drugs: any[];
 }
 
@@ -36,7 +40,7 @@ export default function PharmacyDashboard() {
     }
   }, [user, authLoading, isPharmacy, router]);
 
-  const { data: stats, isLoading } = useQuery<PharmacyStats>({
+  const { data: statsResponse, isLoading } = useQuery<PharmacyStatsResponse>({
     queryKey: ['pharmacy-stats'],
     queryFn: async () => {
       const response = await fetch('/api/pharmacy/drugs');
@@ -46,9 +50,24 @@ export default function PharmacyDashboard() {
       return response.json();
     },
     enabled: !!user && isPharmacy,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 60 * 1000,
   });
 
-  if (authLoading || isLoading) {
+  const { data: profile, isLoading: isProfileLoading } = useQuery({
+    queryKey: ['pharmacy-profile'],
+    queryFn: async () => {
+      const response = await fetch('/api/pharmacy/profile');
+      if (!response.ok) {
+        throw new Error('Failed to fetch pharmacy profile');
+      }
+      return response.json();
+    },
+    enabled: !!user && isPharmacy,
+  });
+
+  if (authLoading || isLoading || isProfileLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex items-center gap-3">
@@ -59,31 +78,35 @@ export default function PharmacyDashboard() {
     );
   }
 
+  const pharmacyName = profile?.pharmacy_name || 'Your Pharmacy';
+  const logoUrl = profile?.logo_url || null;
+  const metrics = statsResponse?.stats;
+
   const statCards = [
     {
       title: 'Total Drugs',
-      value: stats?.total || 0,
+      value: metrics?.total || 0,
       icon: Package,
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
     },
     {
       title: 'In Stock',
-      value: stats?.in_stock || 0,
+      value: metrics?.in_stock || 0,
       icon: PackageCheck,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
     },
     {
       title: 'Low Stock',
-      value: stats?.low_stock || 0,
+      value: metrics?.low_stock || 0,
       icon: PackageMinus,
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
     },
     {
       title: 'Out of Stock',
-      value: stats?.out_of_stock || 0,
+      value: metrics?.out_of_stock || 0,
       icon: PackageX,
       color: 'text-red-600',
       bgColor: 'bg-red-50',
@@ -94,12 +117,30 @@ export default function PharmacyDashboard() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-2">
-              Manage your pharmacy inventory and track performance
-            </p>
+        <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="h-16 w-16 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center overflow-hidden">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt={`${pharmacyName} logo`}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-lg font-semibold text-primary-blue">
+                  {(pharmacyName?.charAt(0) || 'P').toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Welcome back</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                {pharmacyName}
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Manage your pharmacy inventory and track performance
+              </p>
+            </div>
           </div>
           <Button asChild>
             <Link href="/pharmacy/inventory">
@@ -160,15 +201,15 @@ export default function PharmacyDashboard() {
               className="h-auto py-4 justify-start"
             >
               <Link href="/pharmacy/inventory?filter=low_stock">
-                <AlertTriangle className="h-5 w-5 mr-3 text-orange-600" />
-                <div className="text-left">
-                  <p className="font-semibold">Low Stock Alert</p>
-                  <p className="text-xs text-gray-500">
-                    {stats?.low_stock || 0} items need restocking
-                  </p>
-                </div>
-              </Link>
-            </Button>
+              <AlertTriangle className="h-5 w-5 mr-3 text-orange-600" />
+              <div className="text-left">
+                <p className="font-semibold">Low Stock Alert</p>
+                <p className="text-xs text-gray-500">
+                  {metrics?.low_stock || 0} items need restocking
+                </p>
+              </div>
+            </Link>
+          </Button>
             <Button
               asChild
               variant="outline"
@@ -204,7 +245,7 @@ export default function PharmacyDashboard() {
         </Card>
 
         {/* Alerts */}
-        {stats && stats.low_stock > 0 && (
+        {metrics && metrics.low_stock > 0 && (
           <Card className="p-6 mt-6 border-orange-200 bg-orange-50">
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
@@ -213,7 +254,7 @@ export default function PharmacyDashboard() {
                   Low Stock Alert
                 </h3>
                 <p className="text-sm text-orange-800">
-                  You have {stats.low_stock} item{stats.low_stock !== 1 ? 's' : ''} running low on stock.
+                  You have {metrics.low_stock} item{metrics.low_stock !== 1 ? 's' : ''} running low on stock.
                   Consider restocking to avoid shortages.
                 </p>
                 <Button
@@ -230,7 +271,7 @@ export default function PharmacyDashboard() {
           </Card>
         )}
 
-        {stats && stats.out_of_stock > 0 && (
+        {metrics && metrics.out_of_stock > 0 && (
           <Card className="p-6 mt-4 border-red-200 bg-red-50">
             <div className="flex items-start gap-3">
               <PackageX className="h-5 w-5 text-red-600 mt-0.5" />
@@ -239,7 +280,7 @@ export default function PharmacyDashboard() {
                   Out of Stock Alert
                 </h3>
                 <p className="text-sm text-red-800">
-                  You have {stats.out_of_stock} item{stats.out_of_stock !== 1 ? 's' : ''} out of stock.
+                  You have {metrics.out_of_stock} item{metrics.out_of_stock !== 1 ? 's' : ''} out of stock.
                   Restock immediately to continue serving customers.
                 </p>
                 <Button

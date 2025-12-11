@@ -33,11 +33,13 @@ export async function GET(request: NextRequest) {
           state,
           phone,
           latitude,
-          longitude
+          longitude,
+          is_active
         )
       `)
       .order('updated_at', { ascending: false })
       .or(`name.ilike.%${query}%,generic_name.ilike.%${query}%,brand_name.ilike.%${query}%`)
+      .eq('pharmacies.is_active', true)
 
     // Apply filters
     if (category) {

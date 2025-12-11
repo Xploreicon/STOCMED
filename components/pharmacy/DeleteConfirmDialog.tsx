@@ -39,8 +39,14 @@ export default function DeleteConfirmDialog({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
-      queryClient.invalidateQueries({ queryKey: ['pharmacy-stats'] });
+      queryClient.invalidateQueries({
+        queryKey: ['pharmacy-drugs'],
+        refetchType: 'active',
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['pharmacy-stats'],
+        refetchType: 'active',
+      });
       onSuccess();
     },
   });

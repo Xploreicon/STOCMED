@@ -72,6 +72,8 @@ export async function PATCH(request: NextRequest) {
         license_number: body.license_number,
         latitude: body.latitude,
         longitude: body.longitude,
+        logo_url: body.logo_url,
+        is_active: typeof body.is_active === 'boolean' ? body.is_active : undefined,
       })
       .eq('id', pharmacyRecord.id)
       .select()

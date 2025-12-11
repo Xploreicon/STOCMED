@@ -12,6 +12,7 @@ type PendingPharmacyProfile = {
   city?: string
   state?: string
   phone?: string
+  logo_url?: string
 } | null
 
 type CompletedPharmacyProfile = {
@@ -21,6 +22,7 @@ type CompletedPharmacyProfile = {
   city: string
   state: string
   phone: string
+  logo_url?: string
 }
 
 function hasCompletePendingProfile(
@@ -96,6 +98,8 @@ export async function ensurePharmacyRecord(
       city: pendingProfile.city,
       state: pendingProfile.state,
       phone: pendingProfile.phone,
+      logo_url: pendingProfile.logo_url ?? null,
+      is_active: true,
     })
     .select('*')
     .single()

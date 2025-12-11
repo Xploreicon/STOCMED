@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
+import { useQuery } from '@tanstack/react-query';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -17,6 +18,18 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  const { data: pharmacyProfile } = useQuery({
+    queryKey: ['pharmacy-profile'],
+    queryFn: async () => {
+      const response = await fetch('/api/pharmacy/profile');
+      if (!response.ok) {
+        throw new Error('Failed to fetch pharmacy profile');
+      }
+      return response.json();
+    },
+    enabled: role === 'pharmacy',
+  });
+
   const toggleSidebarCollapse = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
@@ -29,6 +42,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <Navbar
+        pharmacyName={role === 'pharmacy' ? pharmacyProfile?.pharmacy_name : undefined}
         onMenuClick={toggleMobileSidebar}
       />
 

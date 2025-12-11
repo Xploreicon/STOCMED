@@ -102,8 +102,14 @@ export default function AddDrugModal({
       setImageFile(null);
       setImagePreview(null);
       setUploadError(null);
-      queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
-      queryClient.invalidateQueries({ queryKey: ['pharmacy-stats'] });
+      queryClient.invalidateQueries({
+        queryKey: ['pharmacy-drugs'],
+        refetchType: 'active',
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['pharmacy-stats'],
+        refetchType: 'active',
+      });
       onSuccess();
     },
   });
