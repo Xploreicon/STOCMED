@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import Image from 'next/image';
 
 interface AddDrugModalProps {
   isOpen: boolean;
@@ -45,6 +47,8 @@ export default function AddDrugModal({
   onClose,
   onSuccess,
 }: AddDrugModalProps) {
+  const queryClient = useQueryClient();
+
   const [formData, setFormData] = useState({
     name: '',
     generic_name: '',
@@ -60,6 +64,10 @@ export default function AddDrugModal({
     requires_prescription: false,
     expiry_date: '',
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const addDrugMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -91,6 +99,11 @@ export default function AddDrugModal({
         requires_prescription: false,
         expiry_date: '',
       });
+      setImageFile(null);
+      setImagePreview(null);
+      setUploadError(null);
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-stats'] });
       onSuccess();
     },
   });
@@ -99,6 +112,39 @@ export default function AddDrugModal({
     e.preventDefault();
 
     try {
+      let imageUrl: string | null = null;
+
+      if (imageFile) {
+        setIsUploading(true);
+        const supabase = createClient();
+        const fileExt = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const uniqueName =
+          (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) +
+          `.${fileExt}`;
+        const filePath = `drugs/${uniqueName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('drug-images')
+          .upload(filePath, imageFile, {
+            cacheControl: '3600',
+            contentType: imageFile.type,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          setUploadError(uploadError.message);
+          throw uploadError;
+        }
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('drug-images').getPublicUrl(filePath);
+
+        imageUrl = publicUrl;
+      }
+
       await addDrugMutation.mutateAsync({
         name: formData.name,
         generic_name: formData.generic_name || null,
@@ -113,9 +159,12 @@ export default function AddDrugModal({
         description: formData.description || null,
         requires_prescription: formData.requires_prescription,
         expiry_date: formData.expiry_date || null,
+        image_url: imageUrl,
       });
     } catch (error: any) {
       alert(error.message || 'Failed to add drug');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -130,6 +179,34 @@ export default function AddDrugModal({
     }));
   };
 
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setImageFile(null);
+      setImagePreview(null);
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please select a valid image file (PNG or JPG).');
+      return;
+    }
+
+    if (file.size > 1024 * 1024) {
+      setUploadError('Image size must be 1MB or less.');
+      return;
+    }
+
+    setUploadError(null);
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -140,6 +217,47 @@ export default function AddDrugModal({
         <form onSubmit={handleSubmit}>
           <div className="space-y-6 p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Drug Image */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Drug Image (optional)
+                </label>
+                <div className="flex items-center gap-4">
+                  <label className="cursor-pointer">
+                    <span className="px-4 py-2 border border-dashed border-gray-300 rounded-md text-sm text-gray-600 hover:border-primary-blue transition-colors inline-flex items-center gap-2">
+                      Upload image
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                  </label>
+                  {imagePreview && (
+                    <div className="relative h-16 w-16 rounded-md overflow-hidden border border-gray-200">
+                      <Image
+                        src={imagePreview}
+                        alt="Drug preview"
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={clearImage}
+                        className="absolute -top-2 -right-2 bg-white border border-gray-200 rounded-full px-1 text-xs"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {uploadError && (
+                  <p className="mt-2 text-xs text-red-600">{uploadError}</p>
+                )}
+              </div>
+
               {/* Drug Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -344,15 +462,15 @@ export default function AddDrugModal({
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={addDrugMutation.isPending}
+              disabled={addDrugMutation.isPending || isUploading}
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={addDrugMutation.isPending}>
-              {addDrugMutation.isPending ? (
+            <Button type="submit" disabled={addDrugMutation.isPending || isUploading}>
+              {addDrugMutation.isPending || isUploading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Adding...
+                  {isUploading ? 'Uploading...' : 'Adding...'}
                 </>
               ) : (
                 'Add Drug'

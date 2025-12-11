@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Phone, MapPin, Clock, Package } from 'lucide-react';
+import { Phone, MapPin, Clock, Package, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -59,7 +59,16 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
   return (
     <Card className="p-4 mb-3 hover:shadow-md transition-shadow border border-gray-200">
       {/* Header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start gap-3 mb-3">
+        {drug.image_url && (
+          <div className="h-16 w-16 shrink-0">
+            <img
+              src={drug.image_url}
+              alt={drug.name || drug.brand_name || 'Drug image'}
+              className="h-16 w-16 rounded-lg object-cover border border-gray-200"
+            />
+          </div>
+        )}
         <div className="flex-1">
           <h3 className="font-semibold text-lg text-gray-900">
             {pharmacy.pharmacy_name}
@@ -69,6 +78,12 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
             {pharmacy.address}, {pharmacy.city}, {pharmacy.state}
           </p>
         </div>
+        {pharmacy.p2p_verified && (
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
+            <ShieldCheck className="h-3 w-3" />
+            Verified
+          </span>
+        )}
       </div>
 
       {/* Drug Information */}
@@ -129,6 +144,12 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
               <span className="font-medium text-gray-700">Phone:</span>
               <span className="ml-2 text-gray-600">{pharmacy.phone}</span>
             </div>
+            {pharmacy.operating_hours && (
+              <div className="flex items-center text-gray-600 gap-2">
+                <Clock className="h-4 w-4 text-gray-500" />
+                <span className="text-sm">{pharmacy.operating_hours}</span>
+              </div>
+            )}
             <div>
               <span className="font-medium text-gray-700">Location:</span>
               <span className="ml-2 text-gray-600">

@@ -68,7 +68,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
   return (
     <nav
       className={cn(
-        'fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 lg:hidden z-50',
+        'fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 lg:hidden z-40',
         className
       )}
     >

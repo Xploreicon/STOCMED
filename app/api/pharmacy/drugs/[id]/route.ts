@@ -70,6 +70,7 @@ export async function PATCH(
         requires_prescription: body.requires_prescription,
         manufacturer: body.manufacturer,
         expiry_date: body.expiry_date,
+        image_url: body.image_url,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)

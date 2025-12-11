@@ -116,6 +116,7 @@ export async function POST(request: NextRequest) {
         requires_prescription: body.requires_prescription || false,
         manufacturer: body.manufacturer || null,
         expiry_date: body.expiry_date || null,
+        image_url: body.image_url || null,
       })
       .select()
       .single()

@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
           longitude
         )
       `)
+      .order('updated_at', { ascending: false })
       .or(`name.ilike.%${query}%,generic_name.ilike.%${query}%,brand_name.ilike.%${query}%`)
 
     // Apply filters

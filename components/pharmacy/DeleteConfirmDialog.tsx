@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,8 @@ export default function DeleteConfirmDialog({
   drug,
   onSuccess,
 }: DeleteConfirmDialogProps) {
+  const queryClient = useQueryClient();
+
   const deleteDrugMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch(`/api/pharmacy/drugs/${drug.id}`, {
@@ -37,6 +39,8 @@ export default function DeleteConfirmDialog({
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-stats'] });
       onSuccess();
     },
   });

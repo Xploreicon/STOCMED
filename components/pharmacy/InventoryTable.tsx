@@ -47,6 +47,9 @@ export default function InventoryTable({ drugs, onRefetch }: InventoryTableProps
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Image
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Drug Name
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -79,6 +82,19 @@ export default function InventoryTable({ drugs, onRefetch }: InventoryTableProps
 
               return (
                 <tr key={drug.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {drug.image_url ? (
+                      <img
+                        src={drug.image_url}
+                        alt={drug.name || drug.brand_name || 'Drug image'}
+                        className="h-12 w-12 rounded-md object-cover border border-gray-200"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 rounded-md bg-gray-100 flex items-center justify-center text-xs text-gray-500">
+                        No image
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="font-medium text-gray-900">
                       {drug.name || drug.brand_name}

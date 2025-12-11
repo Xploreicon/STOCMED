@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,11 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const welcomeSuggestions = useMemo(
+    () => ['Paracetamol', 'Pain relief', 'Blood pressure medication'],
+    []
+  );
 
   useEffect(() => {
     if (initialQuery && messages.length === 0) {
@@ -62,16 +67,37 @@ export default function Chat() {
         });
       }
 
+      const results = data.results || [];
+
+      const topSummaries = results.slice(0, 3).map((drug: any) => {
+        const pharmacy = drug.pharmacies;
+        const location = pharmacy
+          ? `${pharmacy.city || ''}${pharmacy.city && pharmacy.state ? ', ' : ''}${
+              pharmacy.state || ''
+            }`.trim()
+          : '';
+        const price = drug.price ? `₦${drug.price.toLocaleString()}` : 'Price not listed';
+        return `${drug.name || drug.brand_name || 'Unnamed drug'} • ${price}${
+          location ? ` • ${location}` : ''
+        }${pharmacy?.pharmacy_name ? ` • ${pharmacy.pharmacy_name}` : ''}`;
+      });
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
         content:
           data.count > 0
-            ? `I found ${data.count} medication${
-                data.count !== 1 ? 's' : ''
-              } matching "${query}". Here are the results:`
-            : `I couldn't find any medications matching "${query}". Try a different search term or check the spelling.`,
-        results: data.results || [],
+            ? [
+                `I found ${data.count} medication${data.count !== 1 ? 's' : ''} for "${query}".`,
+                topSummaries.length > 0
+                  ? `Top matches:\n${topSummaries.map((line: string) => `• ${line}`).join('\n')}`
+                  : '',
+                'Scroll through the cards below for contact details, stock level, and directions.',
+              ]
+                .filter(Boolean)
+                .join('\n\n')
+            : `I couldn't find any medications matching "${query}". Try a different spelling, or search by symptom. You can also add your location (e.g. "Ibuprofen in Lagos").`,
+        results,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -120,17 +146,15 @@ export default function Chat() {
                 Type a medication name or describe your symptoms
               </p>
               <div className="mt-4 sm:mt-6 flex flex-wrap gap-2 justify-center">
-                {['Paracetamol', 'Pain relief', 'Blood pressure medication'].map(
-                  (suggestion) => (
-                    <button
-                      key={suggestion}
-                      onClick={() => handleSearch(suggestion)}
-                      className="px-3 sm:px-4 py-2 rounded-full bg-blue-50 hover:bg-blue-100 text-primary-blue text-xs sm:text-sm font-medium transition-colors"
-                    >
-                      {suggestion}
-                    </button>
-                  )
-                )}
+                {welcomeSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    onClick={() => handleSearch(suggestion)}
+                    className="px-3 sm:px-4 py-2 rounded-full bg-blue-50 hover:bg-blue-100 text-primary-blue text-xs sm:text-sm font-medium transition-colors"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
               </div>
             </Card>
           )}
@@ -149,7 +173,7 @@ export default function Chat() {
               ) : (
                 <div className="w-full">
                   <div className="bg-white rounded-2xl px-4 sm:px-6 py-3 sm:py-4 shadow-sm mb-3 sm:mb-4">
-                    <p className="text-sm sm:text-base text-gray-900">
+                    <p className="text-sm sm:text-base text-gray-900 whitespace-pre-line">
                       {message.content}
                     </p>
                   </div>
@@ -181,7 +205,7 @@ export default function Chat() {
       </div>
 
       {/* Input Form - Fixed at bottom with mobile optimization */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 sm:p-4 z-50 safe-bottom">
+      <div className="fixed bottom-16 lg:bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 sm:p-4 z-[60] safe-bottom">
         <div className="max-w-4xl mx-auto">
           <form onSubmit={handleSubmit} className="flex gap-2">
             <Input
