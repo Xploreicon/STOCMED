@@ -173,7 +173,9 @@ export default function Signup() {
           .select('id')
           .single();
 
-        if (pharmacyError || !pharmacyRecord) {
+        const insertedPharmacy = pharmacyRecord as { id: string } | null;
+
+        if (pharmacyError || !insertedPharmacy) {
           console.error('Error inserting pharmacy:', pharmacyError);
           setErrors({
             general:
@@ -185,7 +187,7 @@ export default function Signup() {
         const { error: metadataError } = await supabase.auth.updateUser({
           data: {
             ...authData.user.user_metadata,
-            pharmacy_id: pharmacyRecord.id,
+            pharmacy_id: insertedPharmacy.id,
           },
         });
 
