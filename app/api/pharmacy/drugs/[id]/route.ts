@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
@@ -19,16 +20,11 @@ export async function PATCH(
       )
     }
 
-    // Get pharmacy for this user
-    const { data: pharmacy, error: pharmacyError } = await supabase
-      .from('pharmacies')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
+    const pharmacy = await ensurePharmacyRecord(supabase, user)
 
-    if (pharmacyError || !pharmacy) {
+    if (!pharmacy) {
       return NextResponse.json(
-        { error: 'Pharmacy not found' },
+        { error: 'Pharmacy profile not found. Complete your setup to continue.' },
         { status: 404 }
       )
     }
@@ -47,7 +43,7 @@ export async function PATCH(
       )
     }
 
-    if ((existingDrug as any).pharmacy_id !== (pharmacy as any).id) {
+    if ((existingDrug as any).pharmacy_id !== pharmacy.id) {
       return NextResponse.json(
         { error: 'Forbidden: Drug does not belong to your pharmacy' },
         { status: 403 }
@@ -116,16 +112,11 @@ export async function DELETE(
       )
     }
 
-    // Get pharmacy for this user
-    const { data: pharmacy, error: pharmacyError } = await supabase
-      .from('pharmacies')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
+    const pharmacy = await ensurePharmacyRecord(supabase, user)
 
-    if (pharmacyError || !pharmacy) {
+    if (!pharmacy) {
       return NextResponse.json(
-        { error: 'Pharmacy not found' },
+        { error: 'Pharmacy profile not found. Complete your setup to continue.' },
         { status: 404 }
       )
     }
@@ -144,7 +135,7 @@ export async function DELETE(
       )
     }
 
-    if ((existingDrug as any).pharmacy_id !== (pharmacy as any).id) {
+    if ((existingDrug as any).pharmacy_id !== pharmacy.id) {
       return NextResponse.json(
         { error: 'Forbidden: Drug does not belong to your pharmacy' },
         { status: 403 }

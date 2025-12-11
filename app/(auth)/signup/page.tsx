@@ -130,6 +130,17 @@ export default function Signup() {
             role: selectedRole,
             full_name: formData.full_name,
             phone: formData.phone,
+            pharmacy_profile:
+              selectedRole === 'pharmacy'
+                ? {
+                    pharmacy_name: formData.pharmacy_name,
+                    license_number: formData.license_number,
+                    address: formData.address,
+                    city: formData.city,
+                    state: formData.state,
+                    phone: formData.phone,
+                  }
+                : null,
           },
         },
       });
@@ -155,7 +166,9 @@ export default function Signup() {
 
       if (userError) console.error('Error inserting user:', userError);
 
-      if (selectedRole === 'pharmacy') {
+      const hasSession = !!authData.session;
+
+      if (selectedRole === 'pharmacy' && hasSession) {
         const {
           data: pharmacyRecord,
           error: pharmacyError,
@@ -186,14 +199,19 @@ export default function Signup() {
 
         const { error: metadataError } = await supabase.auth.updateUser({
           data: {
-            ...authData.user.user_metadata,
             pharmacy_id: insertedPharmacy.id,
+            pharmacy_profile: null,
           },
         });
 
         if (metadataError) {
           console.error('Failed to store pharmacy_id in auth metadata', metadataError);
         }
+      }
+
+      if (!hasSession) {
+        router.push('/login?verifyEmail=1');
+        return;
       }
 
       router.push(selectedRole === 'pharmacy' ? '/pharmacy/dashboard' : '/dashboard');

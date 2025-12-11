@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -15,32 +16,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get pharmacy_id from user metadata
-    const pharmacyId = user.user_metadata?.pharmacy_id
+    const pharmacyRecord = await ensurePharmacyRecord(supabase, user)
 
-    if (!pharmacyId) {
+    if (!pharmacyRecord) {
       return NextResponse.json(
-        { error: 'Pharmacy ID not found in user profile' },
+        { error: 'Pharmacy profile not found. Complete your setup to continue.' },
         { status: 404 }
       )
     }
 
-    // Fetch pharmacy details
-    const { data: pharmacy, error } = await supabase
-      .from('pharmacies')
-      .select('*')
-      .eq('id', pharmacyId)
-      .single()
-
-    if (error) {
-      console.error('Error fetching pharmacy:', error)
-      return NextResponse.json(
-        { error: 'Failed to fetch pharmacy details' },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json(pharmacy)
+    return NextResponse.json(pharmacyRecord)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(
@@ -64,12 +49,11 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    // Get pharmacy_id from user metadata
-    const pharmacyId = user.user_metadata?.pharmacy_id
+    const pharmacyRecord = await ensurePharmacyRecord(supabase, user)
 
-    if (!pharmacyId) {
+    if (!pharmacyRecord) {
       return NextResponse.json(
-        { error: 'Pharmacy ID not found in user profile' },
+        { error: 'Pharmacy profile not found. Complete your setup to continue.' },
         { status: 404 }
       )
     }
@@ -77,7 +61,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json()
 
     // Update pharmacy details
-    const { data: pharmacy, error } = await (supabase
+    const { data: updatedPharmacy, error } = await (supabase
       .from('pharmacies') as any)
       .update({
         pharmacy_name: body.pharmacy_name,
@@ -89,7 +73,7 @@ export async function PATCH(request: NextRequest) {
         latitude: body.latitude,
         longitude: body.longitude,
       })
-      .eq('id', pharmacyId)
+      .eq('id', pharmacyRecord.id)
       .select()
       .single()
 
@@ -101,7 +85,7 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(pharmacy)
+    return NextResponse.json(updatedPharmacy)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(

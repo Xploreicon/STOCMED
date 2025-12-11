@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -15,16 +16,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Get pharmacy for this user
-    const { data: pharmacy, error: pharmacyError } = await supabase
-      .from('pharmacies')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
+    const pharmacy = await ensurePharmacyRecord(supabase, user)
 
-    if (pharmacyError || !pharmacy) {
+    if (!pharmacy) {
       return NextResponse.json(
-        { error: 'Pharmacy not found' },
+        { error: 'Pharmacy profile not found. Complete your setup to continue.' },
         { status: 404 }
       )
     }
@@ -33,7 +29,7 @@ export async function GET(request: NextRequest) {
     const { data: drugs, error: drugsError } = await supabase
       .from('drugs')
       .select('*')
-      .eq('pharmacy_id', (pharmacy as any).id)
+      .eq('pharmacy_id', pharmacy.id)
       .order('created_at', { ascending: false })
 
     if (drugsError) {
@@ -79,16 +75,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get pharmacy for this user
-    const { data: pharmacy, error: pharmacyError } = await supabase
-      .from('pharmacies')
-      .select('id')
-      .eq('user_id', user.id)
-      .single()
+    const pharmacy = await ensurePharmacyRecord(supabase, user)
 
-    if (pharmacyError || !pharmacy) {
+    if (!pharmacy) {
       return NextResponse.json(
-        { error: 'Pharmacy not found' },
+        { error: 'Pharmacy profile not found. Complete your setup to continue.' },
         { status: 404 }
       )
     }
@@ -111,7 +102,7 @@ export async function POST(request: NextRequest) {
     const { data: drug, error: insertError } = await (supabase
       .from('drugs') as any)
       .insert({
-        pharmacy_id: (pharmacy as any).id,
+        pharmacy_id: pharmacy.id,
         name: body.name,
         generic_name: body.generic_name || null,
         brand_name: body.brand_name || null,
