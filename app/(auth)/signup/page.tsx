@@ -166,9 +166,7 @@ export default function Signup() {
 
       if (userError) console.error('Error inserting user:', userError);
 
-      const hasSession = !!authData.session;
-
-      if (selectedRole === 'pharmacy' && hasSession) {
+      if (selectedRole === 'pharmacy') {
         const {
           data: pharmacyRecord,
           error: pharmacyError,
@@ -208,6 +206,8 @@ export default function Signup() {
           console.error('Failed to store pharmacy_id in auth metadata', metadataError);
         }
       }
+
+      const hasSession = !!authData.session;
 
       if (!hasSession) {
         router.push('/login?verifyEmail=1');
