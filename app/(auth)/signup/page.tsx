@@ -156,17 +156,42 @@ export default function Signup() {
       if (userError) console.error('Error inserting user:', userError);
 
       if (selectedRole === 'pharmacy') {
-        const { error: pharmacyError } = await supabase.from('pharmacies').insert({
-          user_id: authData.user.id,
-          pharmacy_name: formData.pharmacy_name,
-          license_number: formData.license_number,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          phone: formData.phone,
-        } as any);
+        const {
+          data: pharmacyRecord,
+          error: pharmacyError,
+        } = await supabase
+          .from('pharmacies')
+          .insert({
+            user_id: authData.user.id,
+            pharmacy_name: formData.pharmacy_name,
+            license_number: formData.license_number,
+            address: formData.address,
+            city: formData.city,
+            state: formData.state,
+            phone: formData.phone,
+          } as any)
+          .select('id')
+          .single();
 
-        if (pharmacyError) console.error('Error inserting pharmacy:', pharmacyError);
+        if (pharmacyError || !pharmacyRecord) {
+          console.error('Error inserting pharmacy:', pharmacyError);
+          setErrors({
+            general:
+              'We could not finish setting up your pharmacy. Please verify your email and try again.',
+          });
+          return;
+        }
+
+        const { error: metadataError } = await supabase.auth.updateUser({
+          data: {
+            ...authData.user.user_metadata,
+            pharmacy_id: pharmacyRecord.id,
+          },
+        });
+
+        if (metadataError) {
+          console.error('Failed to store pharmacy_id in auth metadata', metadataError);
+        }
       }
 
       router.push(selectedRole === 'pharmacy' ? '/pharmacy/dashboard' : '/dashboard');
