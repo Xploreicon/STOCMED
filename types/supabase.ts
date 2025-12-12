@@ -185,27 +185,30 @@ export interface Database {
       chat_messages: {
         Row: {
           id: string
-          user_id: string
-          message: string
+          user_id: string | null
+          session_id: string | null
           role: 'user' | 'assistant'
+          content: string
           metadata: Json | null
-          created_at: string
+          timestamp: string
         }
         Insert: {
           id?: string
-          user_id: string
-          message: string
+          user_id?: string | null
+          session_id?: string | null
           role: 'user' | 'assistant'
+          content: string
           metadata?: Json | null
-          created_at?: string
+          timestamp?: string
         }
         Update: {
           id?: string
-          user_id?: string
-          message?: string
+          user_id?: string | null
+          session_id?: string | null
           role?: 'user' | 'assistant'
+          content?: string
           metadata?: Json | null
-          created_at?: string
+          timestamp?: string
         }
       }
     }

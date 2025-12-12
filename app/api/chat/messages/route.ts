@@ -11,15 +11,8 @@ export async function POST(request: NextRequest) {
     // Get current user
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
     const body = await request.json()
-    const { message, role, metadata } = body
+    const { message, role, metadata, sessionId } = body
 
     if (!message || !role) {
       return NextResponse.json(
@@ -35,12 +28,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // For logged-in users, require user authentication
+    // For anonymous users, require sessionId
+    if (!user && !sessionId) {
+      return NextResponse.json(
+        { error: 'User authentication or session ID required' },
+        { status: 401 }
+      )
+    }
+
     // Save message to database
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
-        user_id: user.id,
-        message,
+        user_id: user?.id || null,
+        session_id: sessionId || null,
+        content: message,
         role,
         metadata: metadata || null,
       })
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Get chat history for current user
+// Get chat history for current user or session
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -73,24 +76,33 @@ export async function GET(request: NextRequest) {
     // Get current user
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) {
+    const searchParams = request.nextUrl.searchParams
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const offset = parseInt(searchParams.get('offset') || '0')
+    const sessionId = searchParams.get('sessionId')
+
+    // Require either user authentication or session ID
+    if (!user && !sessionId) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'User authentication or session ID required' },
         { status: 401 }
       )
     }
 
-    const searchParams = request.nextUrl.searchParams
-    const limit = parseInt(searchParams.get('limit') || '50')
-    const offset = parseInt(searchParams.get('offset') || '0')
-
-    // Fetch messages
-    const { data: messages, error } = await supabase
+    // Build query based on user or session
+    let query = supabase
       .from('chat_messages')
       .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
+      .order('timestamp', { ascending: true })
       .range(offset, offset + limit - 1)
+
+    if (user) {
+      query = query.eq('user_id', user.id)
+    } else if (sessionId) {
+      query = query.eq('session_id', sessionId)
+    }
+
+    const { data: messages, error } = await query
 
     if (error) {
       console.error('Error fetching chat messages:', error)
@@ -100,7 +112,16 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ messages: messages || [] })
+    // Transform response to match expected format
+    const transformedMessages = (messages || []).map((msg: any) => ({
+      id: msg.id,
+      role: msg.role,
+      message: msg.content, // Map content back to message for compatibility
+      metadata: msg.metadata,
+      created_at: msg.timestamp || msg.created_at,
+    }))
+
+    return NextResponse.json({ messages: transformedMessages })
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(

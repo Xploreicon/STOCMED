@@ -78,28 +78,40 @@ export default function Chat() {
             body: JSON.stringify({ message, role, metadata }),
           });
         } catch (error) {
-          console.error('Error saving message:', error);
+          console.error('Error saving message to database:', error);
         }
-      } else if (typeof window !== 'undefined') {
-        // Save to localStorage for anonymous users
+      } else if (sessionId) {
+        // Save to database for anonymous users with session ID
         try {
-          const key = `stocmed:chat:${sessionId}`;
-          const stored = window.localStorage.getItem(key);
-          const messages = stored ? JSON.parse(stored) : [];
-          messages.push({
-            id: generateMessageId(),
-            role,
-            content: message,
-            metadata,
-            timestamp: new Date().toISOString(),
+          await fetch('/api/chat/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, role, metadata, sessionId }),
           });
-          // Keep only last 50 messages
-          if (messages.length > 50) {
-            messages.splice(0, messages.length - 50);
-          }
-          window.localStorage.setItem(key, JSON.stringify(messages));
         } catch (error) {
-          console.error('Error saving to localStorage:', error);
+          console.error('Error saving message for anonymous user:', error);
+          // Fallback to localStorage if database save fails
+          if (typeof window !== 'undefined') {
+            try {
+              const key = `stocmed:chat:${sessionId}`;
+              const stored = window.localStorage.getItem(key);
+              const messages = stored ? JSON.parse(stored) : [];
+              messages.push({
+                id: generateMessageId(),
+                role,
+                content: message,
+                metadata,
+                timestamp: new Date().toISOString(),
+              });
+              // Keep only last 50 messages
+              if (messages.length > 50) {
+                messages.splice(0, messages.length - 50);
+              }
+              window.localStorage.setItem(key, JSON.stringify(messages));
+            } catch (localError) {
+              console.error('Error saving to localStorage:', localError);
+            }
+          }
         }
       }
     },
@@ -156,7 +168,7 @@ export default function Chat() {
     }
   }, []);
 
-  // Load chat history (from database for logged-in users, localStorage for anonymous)
+  // Load chat history (from database for logged-in users and anonymous with sessionId)
   useEffect(() => {
     const loadChatHistory = async () => {
       if (isLoadingHistory) return;
@@ -177,18 +189,36 @@ export default function Chat() {
               results: msg.metadata?.results || undefined,
             }));
           }
-        } else if (typeof window !== 'undefined') {
-          // Load from localStorage for anonymous users
-          const key = `stocmed:chat:${sessionId}`;
-          const stored = window.localStorage.getItem(key);
-          if (stored) {
-            const messages = JSON.parse(stored);
-            historyMessages = messages.map((msg: any) => ({
-              id: msg.id || generateMessageId(),
-              role: msg.role,
-              content: msg.content,
-              results: msg.metadata?.results || undefined,
-            }));
+        } else if (sessionId) {
+          // Try to load from database for anonymous users
+          try {
+            const response = await fetch(`/api/chat/messages?limit=50&sessionId=${encodeURIComponent(sessionId)}`);
+            if (response.ok) {
+              const data = await response.json();
+              historyMessages = (data.messages || []).map((msg: any) => ({
+                id: msg.id,
+                role: msg.role,
+                content: msg.message,
+                results: msg.metadata?.results || undefined,
+              }));
+            }
+          } catch (dbError) {
+            console.error('Error loading from database, trying localStorage:', dbError);
+          }
+
+          // Fallback to localStorage if database load failed or returned empty
+          if (historyMessages.length === 0 && typeof window !== 'undefined') {
+            const key = `stocmed:chat:${sessionId}`;
+            const stored = window.localStorage.getItem(key);
+            if (stored) {
+              const messages = JSON.parse(stored);
+              historyMessages = messages.map((msg: any) => ({
+                id: msg.id || generateMessageId(),
+                role: msg.role,
+                content: msg.content,
+                results: msg.metadata?.results || undefined,
+              }));
+            }
           }
         }
 
