@@ -51,15 +51,69 @@ export default function Chat() {
     results: any[];
   } | null>(null);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [sessionId] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const stored = window.localStorage.getItem('stocmed:sessionId');
+    if (stored) return stored;
+    const newId = `session-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    window.localStorage.setItem('stocmed:sessionId', newId);
+    return newId;
+  });
 
   const welcomeSuggestions = useMemo(
     () => ['Paracetamol', 'Pain relief', 'Blood pressure medication'],
     []
   );
 
-  const appendMessage = useCallback((message: Message) => {
+  // Save message to database or localStorage
+  const saveMessage = useCallback(
+    async (message: string, role: 'user' | 'assistant', metadata?: any) => {
+      if (user) {
+        // Save to database for logged-in users
+        try {
+          await fetch('/api/chat/messages', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, role, metadata }),
+          });
+        } catch (error) {
+          console.error('Error saving message:', error);
+        }
+      } else if (typeof window !== 'undefined') {
+        // Save to localStorage for anonymous users
+        try {
+          const key = `stocmed:chat:${sessionId}`;
+          const stored = window.localStorage.getItem(key);
+          const messages = stored ? JSON.parse(stored) : [];
+          messages.push({
+            id: generateMessageId(),
+            role,
+            content: message,
+            metadata,
+            timestamp: new Date().toISOString(),
+          });
+          // Keep only last 50 messages
+          if (messages.length > 50) {
+            messages.splice(0, messages.length - 50);
+          }
+          window.localStorage.setItem(key, JSON.stringify(messages));
+        } catch (error) {
+          console.error('Error saving to localStorage:', error);
+        }
+      }
+    },
+    [user, sessionId]
+  );
+
+  const appendMessage = useCallback((message: Message, shouldSave = true) => {
     setMessages((prev) => [...prev, message]);
-  }, []);
+    if (shouldSave) {
+      saveMessage(message.content, message.role, {
+        results: message.results || null,
+      });
+    }
+  }, [saveMessage]);
 
   const requestAssistantMessage = useCallback(
     async (payload: {
@@ -89,6 +143,7 @@ export default function Chat() {
     []
   );
 
+  // Load user location from localStorage
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = window.localStorage.getItem('stocmed:userLocation');
@@ -100,6 +155,61 @@ export default function Chat() {
       }
     }
   }, []);
+
+  // Load chat history (from database for logged-in users, localStorage for anonymous)
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (isLoadingHistory) return;
+
+      setIsLoadingHistory(true);
+      try {
+        let historyMessages: Message[] = [];
+
+        if (user) {
+          // Load from database for logged-in users
+          const response = await fetch('/api/chat/messages?limit=50');
+          if (response.ok) {
+            const data = await response.json();
+            historyMessages = (data.messages || []).map((msg: any) => ({
+              id: msg.id,
+              role: msg.role,
+              content: msg.message,
+              results: msg.metadata?.results || undefined,
+            }));
+          }
+        } else if (typeof window !== 'undefined') {
+          // Load from localStorage for anonymous users
+          const key = `stocmed:chat:${sessionId}`;
+          const stored = window.localStorage.getItem(key);
+          if (stored) {
+            const messages = JSON.parse(stored);
+            historyMessages = messages.map((msg: any) => ({
+              id: msg.id || generateMessageId(),
+              role: msg.role,
+              content: msg.content,
+              results: msg.metadata?.results || undefined,
+            }));
+          }
+        }
+
+        if (historyMessages.length > 0) {
+          setMessages(historyMessages);
+          setConversation(
+            historyMessages.map((msg) => ({
+              role: msg.role,
+              content: msg.content,
+            }))
+          );
+        }
+      } catch (error) {
+        console.error('Error loading chat history:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadChatHistory();
+  }, [user, sessionId, isLoadingHistory]);
 
   const handleSearch = useCallback(
     async (rawQuery: string, options: { skipUserMessage?: boolean } = {}) => {
@@ -181,53 +291,14 @@ export default function Chat() {
           userLocation,
         });
 
-        const topSummaries = results.slice(0, 3).map((drug: any) => {
-          const pharmacy = drug.pharmacies;
-          const location = pharmacy
-            ? `${pharmacy.city || ''}${
-                pharmacy.city && pharmacy.state ? ', ' : ''
-              }${pharmacy.state || ''}`.trim()
-            : '';
-          const price =
-            typeof drug.price_range_min === 'number' &&
-            typeof drug.price_range_max === 'number'
-              ? `₦${drug.price_range_min.toLocaleString()} – ₦${drug.price_range_max.toLocaleString()}`
-              : drug.price
-              ? `₦${Number(drug.price).toLocaleString()}`
-              : 'Price not listed';
-          return `${drug.name || drug.brand_name || 'Unnamed drug'} • ${price}${
-            location ? ` • ${location}` : ''
-          }${pharmacy?.pharmacy_name ? ` • ${pharmacy.pharmacy_name}` : ''}${
-            drug.distance_km ? ` • ${drug.distance_km} km away` : ''
-          }`;
-        });
-
-        const followUps = [
-          'Is this a new prescription, a refill, or something you are exploring?',
-          'Would you like a quick overview of how this medication works, common side effects, and key precautions?',
-          'Do you want me to connect you with a licensed pharmacist for a quick chat or pickup confirmation?',
-        ];
-
         const assistantMessage: Message = {
           id: generateMessageId(),
           role: 'assistant',
-          content:
+          content: assistantResponse ?? (
             data.count > 0
-              ? [
-                  `I found ${data.count} medication${
-                    data.count !== 1 ? 's' : ''
-                  } for "${query}" near ${userLocation.label}.`,
-                  topSummaries.length > 0
-                    ? `Top matches:\n${topSummaries
-                        .map((line: string) => `• ${line}`)
-                        .join('\n')}`
-                    : '',
-                  'Scroll through the cards below for distance, stock level, and contact details. Let me know which pharmacy works best and I can keep it pinned for you.',
-                  followUps.map((item, idx) => `${idx + 1}. ${item}`).join('\n'),
-                ]
-                  .filter(Boolean)
-                  .join('\n\n')
-              : `I couldn't find any medications matching "${query}". Try a different spelling, or search by symptom. You can also add your location (e.g. "Ibuprofen in Lagos").`,
+              ? `I found ${data.count} medication${data.count !== 1 ? 's' : ''} for "${query}" near ${userLocation.label}. Browse the results below to see prices, stock levels, and pharmacy details.`
+              : `I couldn't find any medications matching "${query}". Try a different spelling, or let me know what symptoms you're experiencing and I can suggest options.`
+          ),
           results,
         };
 
@@ -236,7 +307,7 @@ export default function Chat() {
           ...prev,
           {
             role: 'assistant',
-            content: assistantResponse ?? assistantMessage.content,
+            content: assistantMessage.content,
           },
         ]);
         setLastResultContext(

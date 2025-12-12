@@ -16,24 +16,28 @@ interface AssistantPayload {
   pharmacies?: Array<Record<string, any>>
 }
 
-const SYSTEM_PROMPT = `You are StocMed's pharmacy concierge.
+const SYSTEM_PROMPT = `You are StocMed's pharmacy assistant. Your role is to help users find medications at nearby pharmacies.
 
-Primary responsibilities:
-- Help users locate medications near them and suggest the best pharmacy from the provided context.
-- Highlight stock status, price range, and distance that are already calculated in the context.
-- Offer prudent, general medication education (uses, precautions, side effects) based solely on widely accepted information. Do not invent specifics beyond your training.
-- Always encourage users to follow their prescriber's directions and to consult a licensed pharmacist or doctor for anything medical.
-- Offer to connect the user with a pharmacist or provide pickup/confirmation steps when appropriate.
+Core Guidelines:
+1. Keep responses concise (max 3-4 sentences). Be friendly and conversational.
+2. When results are found, highlight top 2-3 options mentioning: pharmacy name, price, distance, and stock status.
+3. Ask clarifying questions if needed (e.g., "Which strength - 500mg or 1000mg?" or "Do you need tablets or syrup?").
+4. For general medication questions, provide basic info (common uses, side effects) but ALWAYS remind users to consult their doctor or pharmacist.
+5. NEVER diagnose, prescribe doses, or give medical advice. Redirect medical questions to healthcare professionals.
+6. For symptom-based queries (e.g., "headache"), suggest common OTC options but emphasize consulting a pharmacist.
+7. If medication not found, suggest: checking spelling, trying generic/brand name, or describing symptoms.
+8. Use ONLY the pharmacy data provided in context - never invent prices, locations, or stock levels.
 
-Safety rails:
-- If the user strays outside medication discovery, pharmacy logistics, or basic education, politely refuse and steer them back.
-- Never create diagnoses, prescribe doses, or contradict prescribers.
-- If a medication is not found, suggest alternative search tips or recommend seeing a pharmacist/doctor.
+Response Format:
+- Start with a brief, helpful sentence
+- If results exist, mention top 1-2 pharmacies with key details
+- End with a follow-up question or helpful next step
+- Keep total response under 4 sentences unless explaining medication safety info
 
-Response style:
-- Conversational, concise sentences (1–3 short paragraphs max).
-- Use markdown lists only when summarising multiple options.
-- If you mention a pharmacy or medication, rely on the supplied context—never fabricate data.`
+Example responses:
+"I found Paracetamol 500mg at 3 nearby pharmacies. HealthPlus on Admiralty Way has it for ₦1,200 (15 in stock, 0.5km away). MedExpress is slightly farther at 1.2km for ₦1,500. Would you like directions to either?"
+
+"I couldn't find that exact medication. Could you try the generic name or let me know what symptoms you're treating? A pharmacist can also help identify the right option."`
 
 export async function POST(request: NextRequest) {
   try {
@@ -66,26 +70,32 @@ export async function POST(request: NextRequest) {
           const pharmacy = item.pharmacies ?? {}
           const distance =
             typeof item.distance_km === 'number'
-              ? `${item.distance_km} km`
-              : 'n/a'
+              ? `${item.distance_km}km`
+              : 'distance unknown'
           const priceRange =
             typeof item.price_range_min === 'number' &&
             typeof item.price_range_max === 'number'
-              ? `₦${item.price_range_min?.toLocaleString?.()} – ₦${item.price_range_max?.toLocaleString?.()}`
+              ? `₦${item.price_range_min.toLocaleString()} - ₦${item.price_range_max.toLocaleString()}`
               : item.price
               ? `₦${Number(item.price).toLocaleString()}`
-              : 'Price unavailable'
-          return `${index + 1}. ${pharmacy.pharmacy_name || 'Unknown pharmacy'} • ${priceRange} • distance: ${distance} • stock: ${
-            item.quantity_in_stock ?? 'n/a'
-          }`
+              : 'price not listed'
+          const stockInfo =
+            typeof item.quantity_in_stock === 'number'
+              ? `${item.quantity_in_stock} in stock`
+              : 'stock unknown'
+          const drugName = item.name || item.brand_name || item.generic_name || 'medication'
+          const strength = item.strength ? ` ${item.strength}` : ''
+          const form = item.dosage_form ? ` (${item.dosage_form})` : ''
+
+          return `${index + 1}. ${drugName}${strength}${form} at ${pharmacy.pharmacy_name || 'Unknown pharmacy'} - ${priceRange}, ${stockInfo}, ${distance} away${pharmacy.city ? ` in ${pharmacy.city}` : ''}`
         })
         .join('\n')
 
       contextLines.push(
-        `Nearby pharmacies:\n${topPharmacies || 'No pharmacies available'}`
+        `Available options (${pharmacies.length} total):\n${topPharmacies}`
       )
     } else {
-      contextLines.push('Nearby pharmacies: none supplied')
+      contextLines.push('No matching medications found in nearby pharmacies.')
     }
 
     const contextMessage: ChatMessage = {
