@@ -54,6 +54,7 @@ export interface Database {
           longitude: number | null
           phone: string
           is_verified: boolean
+          is_active: boolean
           created_at: string
           updated_at: string
           logo_url: string | null
@@ -70,6 +71,7 @@ export interface Database {
           longitude?: number | null
           phone: string
           is_verified?: boolean
+          is_active?: boolean
           created_at?: string
           updated_at?: string
           logo_url?: string | null
@@ -86,6 +88,7 @@ export interface Database {
           longitude?: number | null
           phone?: string
           is_verified?: boolean
+          is_active?: boolean
           created_at?: string
           updated_at?: string
           logo_url?: string | null

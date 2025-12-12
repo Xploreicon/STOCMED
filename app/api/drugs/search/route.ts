@@ -10,6 +10,12 @@ export async function GET(request: NextRequest) {
     const location = searchParams.get('location')
     const category = searchParams.get('category')
     const inStockOnly = searchParams.get('in_stock_only') === 'true'
+    const lat = searchParams.get('lat')
+    const lng = searchParams.get('lng')
+
+    const userLatitude = lat ? Number.parseFloat(lat) : NaN
+    const userLongitude = lng ? Number.parseFloat(lng) : NaN
+    const hasUserCoordinates = Number.isFinite(userLatitude) && Number.isFinite(userLongitude)
 
     if (!query) {
       return NextResponse.json(
@@ -34,7 +40,8 @@ export async function GET(request: NextRequest) {
           phone,
           latitude,
           longitude,
-          is_active
+          is_active,
+          logo_url
         )
       `)
       .order('updated_at', { ascending: false })
@@ -62,7 +69,41 @@ export async function GET(request: NextRequest) {
     }
 
     // Filter by pharmacy location if provided
-    let results = drugs || []
+    let results = (drugs || []).map((drug: any) => {
+      const price = typeof drug.price === 'number' ? drug.price : Number(drug.price)
+      const priceDelta = Number.isFinite(price) ? price * 0.05 : null
+      const pharmacy = drug.pharmacies
+      let distanceKm: number | null = null
+
+      if (
+        hasUserCoordinates &&
+        pharmacy?.latitude !== null &&
+        pharmacy?.latitude !== undefined &&
+        pharmacy?.longitude !== null &&
+        pharmacy?.longitude !== undefined
+      ) {
+        const toRadians = (value: number) => (value * Math.PI) / 180
+        const earthRadiusKm = 6371
+        const dLat = toRadians(pharmacy.latitude - userLatitude)
+        const dLon = toRadians(pharmacy.longitude - userLongitude)
+        const lat1 = toRadians(userLatitude)
+        const lat2 = toRadians(pharmacy.latitude)
+
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.sin(dLon / 2) * Math.sin(dLon / 2) * Math.cos(lat1) * Math.cos(lat2)
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+        distanceKm = Math.round(earthRadiusKm * c * 10) / 10
+      }
+
+      return {
+        ...drug,
+        price_range_min: Number.isFinite(price) ? Math.max(Math.round((price - (priceDelta ?? 0)) / 10) * 10, 0) : null,
+        price_range_max: Number.isFinite(price) ? Math.round((price + (priceDelta ?? 0)) / 10) * 10 : null,
+        distance_km: distanceKm,
+      }
+    })
+
     if (location) {
       results = results.filter((drug: any) => {
         const pharmacy = drug.pharmacies
@@ -70,6 +111,14 @@ export async function GET(request: NextRequest) {
           pharmacy.city?.toLowerCase().includes(location.toLowerCase()) ||
           pharmacy.state?.toLowerCase().includes(location.toLowerCase())
         )
+      })
+    }
+
+    if (hasUserCoordinates) {
+      results = results.sort((a: any, b: any) => {
+        const distanceA = Number.isFinite(a.distance_km) ? a.distance_km : Number.POSITIVE_INFINITY
+        const distanceB = Number.isFinite(b.distance_km) ? b.distance_km : Number.POSITIVE_INFINITY
+        return distanceA - distanceB
       })
     }
 
@@ -81,6 +130,7 @@ export async function GET(request: NextRequest) {
         location,
         category,
         inStockOnly,
+        hasLocation: hasUserCoordinates,
       },
     })
   } catch (error) {
