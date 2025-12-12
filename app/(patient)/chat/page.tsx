@@ -62,6 +62,99 @@ const formatTimestamp = (iso: string) => {
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
+const GREETING_PREFIXES = [
+  'hello',
+  'hi',
+  'hey',
+  'good morning',
+  'good afternoon',
+  'good evening',
+];
+
+const REQUEST_PHRASES = [
+  'i need',
+  'i am looking for',
+  'looking for',
+  'need pharmacies that have',
+  'pharmacies that have',
+  'find pharmacies with',
+  'do you have',
+  'can i get',
+  'please find',
+];
+
+const STOPWORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'to',
+  'for',
+  'and',
+  'with',
+  'that',
+  'have',
+  'has',
+  'please',
+  'pharmacy',
+  'pharmacies',
+  'drug',
+  'medication',
+  'medicine',
+  'someone',
+  'somebody',
+  'anyone',
+  'anybody',
+  'hello',
+  'hi',
+  'hey',
+  'need',
+  'search',
+  'find',
+]);
+
+const extractMedicationKeyword = (input: string): string | null => {
+  let cleaned = input.trim();
+  if (!cleaned) return null;
+
+  const lower = cleaned.toLowerCase();
+  for (const prefix of GREETING_PREFIXES) {
+    if (lower.startsWith(prefix)) {
+      cleaned = cleaned.slice(prefix.length).trim();
+      break;
+    }
+  }
+
+  let updated = cleaned;
+  for (const phrase of REQUEST_PHRASES) {
+    if (updated.toLowerCase().includes(phrase)) {
+      updated = updated
+        .toLowerCase()
+        .replace(phrase, '')
+        .replace(/^\s+/, '');
+    }
+  }
+
+  if (!updated.trim()) {
+    updated = cleaned;
+  }
+
+  const tokens = updated
+    .split(/[\s,.;:!?]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0 && !STOPWORDS.has(token.toLowerCase()));
+
+  if (tokens.length === 0) {
+    return cleaned.trim();
+  }
+
+  const candidates = tokens
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 2)
+    .join(' ');
+
+  return candidates.trim() || cleaned.trim();
+};
+
 const resolveLocationLabel = (value: string) => {
   const text = normalize(value);
   if (!text) return null;
@@ -326,8 +419,9 @@ export default function Chat() {
 
   const handleMedicationInput = useCallback(
     async (text: string) => {
-      if (!text.trim()) return;
-      await runSearch({ medication: text.trim() });
+      const keyword = extractMedicationKeyword(text);
+      if (!keyword) return;
+      await runSearch({ medication: keyword });
     },
     [runSearch]
   );
@@ -363,12 +457,32 @@ export default function Chat() {
         return;
       }
 
+      const normalized = text.toLowerCase();
+      const wantsStrength = normalized.includes('strength');
+      const wantsForm =
+        normalized.includes('form') ||
+        normalized.includes('tablet') ||
+        normalized.includes('capsule') ||
+        normalized.includes('syrup');
+
+      if (wantsStrength || wantsForm) {
+        pushAssistantMessage(
+          wantsStrength
+            ? 'Reply with the strength you need (e.g. "500mg", "1000mg", or "not sure") and I’ll refine the list.'
+            : 'Tell me the form you prefer (for example "tablets", "capsules", or "syrup") and I’ll refine the list.'
+        );
+        return;
+      }
+
+      const keyword = extractMedicationKeyword(`${lastQueryText} ${text}`);
+      if (!keyword) return;
+
       await runSearch({
-        medication: `${lastQueryText} ${text}`.trim(),
+        medication: keyword,
         locationOverride: pendingLocationLabel,
       });
     },
-    [handleMedicationInput, lastQueryText, pendingLocationLabel, runSearch]
+    [handleMedicationInput, lastQueryText, pendingLocationLabel, runSearch, pushAssistantMessage]
   );
 
   const handleInput = useCallback(
