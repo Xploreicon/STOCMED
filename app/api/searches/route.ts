@@ -21,15 +21,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Log search
-    const { data: search, error: insertError } = await (supabase
+    const { error: insertError } = await (supabase
       .from('searches') as any)
       .insert({
         user_id: user?.id || null,
         query,
         results_count: results_count || 0,
       })
-      .select()
-      .single()
 
     if (insertError) {
       console.error('Error logging search:', insertError)
@@ -39,7 +37,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(search, { status: 201 })
+    return NextResponse.json({ success: true }, { status: 201 })
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(
