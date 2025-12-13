@@ -96,7 +96,7 @@ export default function PharmacyInventory() {
               Inventory Management
             </h1>
             <p className="text-gray-600 mt-2">
-              Manage your pharmacy's drug inventory
+              Manage your pharmacy&apos;s drug inventory
             </p>
           </div>
           <Button onClick={() => setIsAddModalOpen(true)}>

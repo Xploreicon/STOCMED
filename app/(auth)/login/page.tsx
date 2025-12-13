@@ -214,7 +214,7 @@ export default function Login() {
             </Button>
 
             <div className="text-center text-sm">
-              <span className="text-gray-600">Don't have an account? </span>
+            <span className="text-gray-600">Don&apos;t have an account? </span>
               <Link
                 href="/signup"
                 className="text-primary-blue hover:underline font-medium"

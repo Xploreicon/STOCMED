@@ -17,6 +17,7 @@ import {
   Loader2
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface PharmacyStats {
   total: number;
@@ -121,10 +122,13 @@ export default function PharmacyDashboard() {
           <div className="flex items-center gap-4">
             <div className="h-16 w-16 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center overflow-hidden">
               {logoUrl ? (
-                <img
+                <Image
                   src={logoUrl}
                   alt={`${pharmacyName} logo`}
+                  width={64}
+                  height={64}
                   className="h-full w-full object-cover"
+                  unoptimized
                 />
               ) : (
                 <span className="text-lg font-semibold text-primary-blue">

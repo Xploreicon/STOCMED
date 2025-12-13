@@ -16,6 +16,7 @@ import {
   Save,
   CheckCircle
 } from 'lucide-react';
+import Image from 'next/image';
 
 export default function PharmacySettings() {
   const router = useRouter();
@@ -295,10 +296,13 @@ export default function PharmacySettings() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                   <div className="h-20 w-20 rounded-full overflow-hidden bg-gray-100 border border-dashed border-gray-200 flex items-center justify-center">
                     {logoPreview ? (
-                      <img
+                      <Image
                         src={logoPreview}
                         alt="Pharmacy logo preview"
+                        width={80}
+                        height={80}
                         className="h-full w-full object-cover"
+                        unoptimized
                       />
                     ) : (
                       <span className="text-xs text-gray-500">Logo</span>

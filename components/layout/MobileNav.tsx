@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Package,
   Settings,
+  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -39,9 +40,19 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
       href: '/chat',
     },
     {
+      label: 'Profile',
+      icon: <User className="h-6 w-6" />,
+      href: '/profile',
+    },
+    {
       label: 'History',
       icon: <History className="h-6 w-6" />,
       href: '/history',
+    },
+    {
+      label: 'Settings',
+      icon: <Settings className="h-6 w-6" />,
+      href: '/settings',
     },
   ];
 
@@ -72,7 +83,12 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
         className
       )}
     >
-      <div className={cn('grid h-16', userType === 'patient' ? 'grid-cols-3' : 'grid-cols-3')}>
+      <div
+        className={cn(
+          'grid h-16',
+          userType === 'patient' ? 'grid-cols-5' : 'grid-cols-3'
+        )}
+      >
         {navItems.map((item) => {
           const isActive = pathname === item.href;
 

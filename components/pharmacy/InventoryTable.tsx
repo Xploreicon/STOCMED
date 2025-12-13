@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Pencil, Trash2, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
 import EditDrugModal from './EditDrugModal';
@@ -84,10 +85,13 @@ export default function InventoryTable({ drugs, onRefetch }: InventoryTableProps
                 <tr key={drug.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap">
                     {drug.image_url ? (
-                      <img
+                      <Image
                         src={drug.image_url}
                         alt={drug.name || drug.brand_name || 'Drug image'}
+                        width={48}
+                        height={48}
                         className="h-12 w-12 rounded-md object-cover border border-gray-200"
+                        unoptimized
                       />
                     ) : (
                       <div className="h-12 w-12 rounded-md bg-gray-100 flex items-center justify-center text-xs text-gray-500">

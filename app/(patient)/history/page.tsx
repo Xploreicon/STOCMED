@@ -54,25 +54,16 @@ export default function History() {
   };
 
   useEffect(() => {
-    applyFilters();
-  }, [dateFilter, startDate, endDate, searchQuery, searches]);
-
-  const applyFilters = () => {
     let filtered = [...searches];
 
-    // Apply date filter
     if (dateFilter === '7days') {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      filtered = filtered.filter(
-        (search) => new Date(search.timestamp) >= sevenDaysAgo
-      );
+      filtered = filtered.filter((search) => new Date(search.timestamp) >= sevenDaysAgo);
     } else if (dateFilter === '30days') {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      filtered = filtered.filter(
-        (search) => new Date(search.timestamp) >= thirtyDaysAgo
-      );
+      filtered = filtered.filter((search) => new Date(search.timestamp) >= thirtyDaysAgo);
     } else if (dateFilter === 'custom' && startDate && endDate) {
       filtered = filtered.filter((search) => {
         const searchDate = new Date(search.timestamp);
@@ -80,17 +71,15 @@ export default function History() {
       });
     }
 
-    // Apply search query filter
     if (searchQuery.trim()) {
+      const normalizedQuery = searchQuery.toLowerCase();
       filtered = filtered.filter((search) =>
-        (search.query_text || '')
-          .toLowerCase()
-          .includes(searchQuery.toLowerCase())
+        (search.query_text || '').toLowerCase().includes(normalizedQuery)
       );
     }
 
     setFilteredSearches(filtered);
-  };
+  }, [dateFilter, endDate, searchQuery, searches, startDate]);
 
   const handleClearHistory = async () => {
     if (!confirm('Are you sure you want to clear your entire search history? This action cannot be undone.')) {

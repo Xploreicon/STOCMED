@@ -141,10 +141,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        router.push('/profile');
+                      }}
+                    >
                       Profile
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        router.push('/settings');
+                      }}
+                    >
                       Settings
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />

@@ -64,7 +64,7 @@ export default async function Landing() {
             Find Your Medications in Minutes, Not Hours
           </h1>
           <p className="text-lg md:text-xl text-medium-gray mb-8 md:mb-10">
-            Nigeria's First AI-Powered Medication Search Platform
+            Nigeria&apos;s First AI-Powered Medication Search Platform
           </p>
 
           {/* CTAs */}
@@ -79,7 +79,7 @@ export default async function Landing() {
                 variant="outline"
                 className="w-full md:w-auto border-2 border-primary-blue text-primary-blue hover:bg-blue-50 px-8 py-6 text-lg font-semibold rounded-lg"
               >
-                I'm a Pharmacy
+                I&apos;m a Pharmacy
               </Button>
             </Link>
           </div>

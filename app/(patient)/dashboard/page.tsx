@@ -25,12 +25,49 @@ export default async function PatientDashboard() {
     .single()
 
   // Fetch recent searches
-  const { data: recentSearches } = await supabase
+  const { data: recentSearchesData } = await supabase
     .from('searches')
-    .select('*')
+    .select('id, query_text, location, timestamp, metadata')
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
+    .order('timestamp', { ascending: false })
     .limit(5)
+
+  type RecentSearchRow = {
+    id: string
+    query_text: string | null
+    location: string | null
+    timestamp: string
+    metadata: Record<string, unknown> | null
+  }
+
+  const recentSearchRows = (recentSearchesData ?? []) as RecentSearchRow[]
+
+  const recentSearches: Array<{
+    id: string
+    query: string
+    displayName: string
+    location?: string | null
+    timestamp: string
+  }> = recentSearchRows.map((search) => {
+    let displayName = '';
+
+    if (typeof search.metadata === 'object' && search.metadata !== null) {
+      const metadata = search.metadata as { drug_name?: string; query?: string };
+      displayName = metadata.drug_name ?? metadata.query ?? '';
+    }
+
+    if (!displayName) {
+      displayName = search.query_text ?? '';
+    }
+
+    return {
+      id: search.id,
+      query: search.query_text ?? '',
+      displayName,
+      location: search.location,
+      timestamp: search.timestamp,
+    };
+  })
 
   const userName = (userData as any)?.full_name || user.email?.split('@')[0] || 'there'
 
@@ -98,7 +135,7 @@ export default async function PatientDashboard() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <RecentSearches searches={recentSearches || []} />
+                <RecentSearches searches={recentSearches} />
               </CardContent>
             </Card>
           </div>

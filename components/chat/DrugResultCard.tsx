@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import {
   Phone,
   MapPin,
@@ -75,17 +76,21 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
     }
   };
 
-  if (!pharmacy) {
-    return null; // Don't render if pharmacy data is missing
-  }
-
   useEffect(() => {
+    if (!pharmacy) {
+      return;
+    }
+
+    if (!isDetailOpen || detailMessage || detailError || isDetailLoading) {
+      return;
+    }
+
     let isMounted = true;
 
     const fetchAssistantDetails = async () => {
-      setIsDetailLoading(true);
-      setDetailError(null);
       try {
+        setIsDetailLoading(true);
+        setDetailError(null);
         const drugName =
           drug.name || drug.brand_name || drug.generic_name || 'this medication';
         const response = await fetch('/api/chat/assistant', {
@@ -129,14 +134,16 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
       }
     };
 
-    if (isDetailOpen && !detailMessage && !detailError && !isDetailLoading) {
-      fetchAssistantDetails();
-    }
+    fetchAssistantDetails();
 
     return () => {
       isMounted = false;
     };
-  }, [isDetailOpen, detailMessage, detailError, isDetailLoading, drug.id]);
+  }, [detailError, detailMessage, drug, isDetailLoading, isDetailOpen, pharmacy]);
+
+  if (!pharmacy) {
+    return null; // Don't render if pharmacy data is missing
+  }
 
   return (
     <>
@@ -146,10 +153,13 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
           <div className="flex-1 space-y-1.5">
             <div className="flex items-center gap-2">
               {pharmacy.logo_url ? (
-                <img
+                <Image
                   src={pharmacy.logo_url}
                   alt={`${pharmacy.pharmacy_name} logo`}
+                  width={32}
+                  height={32}
                   className="h-8 w-8 rounded-full border border-gray-200 object-cover"
+                  unoptimized
                 />
               ) : (
                 <div className="h-8 w-8 rounded-full bg-blue-50 text-primary-blue flex items-center justify-center text-sm font-semibold">
@@ -182,10 +192,13 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
             )}
           </div>
           {drug.image_url && (
-            <img
+            <Image
               src={drug.image_url}
               alt={drug.name || drug.brand_name || 'Drug image'}
+              width={64}
+              height={64}
               className="h-16 w-16 rounded-lg object-cover border border-gray-200"
+              unoptimized
             />
           )}
         </div>
@@ -299,10 +312,13 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
           <div className="flex flex-col sm:flex-row sm:items-start sm:gap-6">
             <div className="flex items-center gap-3">
               {pharmacy.logo_url ? (
-                <img
+                <Image
                   src={pharmacy.logo_url}
                   alt={`${pharmacy.pharmacy_name} logo`}
+                  width={48}
+                  height={48}
                   className="h-12 w-12 rounded-full border border-gray-200 object-cover"
+                  unoptimized
                 />
               ) : (
                 <div className="h-12 w-12 rounded-full bg-blue-50 text-primary-blue flex items-center justify-center text-lg font-semibold">
@@ -324,10 +340,13 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
               </div>
             </div>
             {drug.image_url && (
-              <img
+              <Image
                 src={drug.image_url}
                 alt={drug.name || drug.brand_name || 'Drug image'}
+                width={112}
+                height={112}
                 className="mt-4 sm:mt-0 h-28 w-28 rounded-lg border border-gray-200 object-cover"
+                unoptimized
               />
             )}
           </div>
