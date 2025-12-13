@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -23,6 +24,16 @@ export default async function Landing() {
       {/* Hero Section */}
       <section className="bg-gradient-to-b from-light-blue-bg to-white py-16 md:py-24 px-4">
         <div className="container mx-auto max-w-6xl text-center">
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/logo.png"
+              alt="StocMed"
+              width={240}
+              height={80}
+              className="h-20 w-auto"
+              priority
+            />
+          </div>
           <h1 className="text-[32px] md:text-5xl lg:text-6xl font-bold text-dark-gray mb-4 md:mb-6">
             Find Your Medications in Minutes, Not Hours
           </h1>

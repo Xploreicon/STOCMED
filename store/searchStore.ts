@@ -11,7 +11,7 @@ export const useSearchStore = create<SearchStore>()(
         const newSearch: SearchHistory = {
           ...search,
           id: `search-${Date.now()}-${Math.random()}`,
-          search_date: new Date(),
+          timestamp: new Date(),
         };
 
         set((state) => ({

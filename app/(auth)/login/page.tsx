@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,6 +125,16 @@ export default function Login() {
     <div className="min-h-screen bg-light-blue-bg flex items-center justify-center p-4">
       <Card className="w-full max-w-[500px]">
         <CardHeader className="space-y-1">
+          <div className="flex justify-center mb-2">
+            <Image
+              src="/logo.png"
+              alt="StocMed"
+              width={180}
+              height={60}
+              className="h-14 w-auto"
+              priority
+            />
+          </div>
           <CardTitle className="text-2xl font-bold text-center">Welcome Back</CardTitle>
           <CardDescription className="text-center">
             Sign in to your StocMed account

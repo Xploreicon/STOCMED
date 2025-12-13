@@ -159,53 +159,65 @@ export interface Database {
       searches: {
         Row: {
           id: string
-          user_id: string
-          query: string
-          results_count: number
+          user_id: string | null
+          session_id: string | null
+          query_text: string
+          interpreted_query: Json | null
+          results_count: number | null
+          clicked_result: string | null
+          timestamp: string
+          location: string | null
           metadata: Json | null
-          created_at: string
         }
         Insert: {
           id?: string
-          user_id: string
-          query: string
-          results_count: number
+          user_id?: string | null
+          session_id?: string | null
+          query_text: string
+          interpreted_query?: Json | null
+          results_count?: number | null
+          clicked_result?: string | null
+          timestamp?: string
+          location?: string | null
           metadata?: Json | null
-          created_at?: string
         }
         Update: {
           id?: string
-          user_id?: string
-          query?: string
-          results_count?: number
+          user_id?: string | null
+          session_id?: string | null
+          query_text?: string
+          interpreted_query?: Json | null
+          results_count?: number | null
+          clicked_result?: string | null
+          timestamp?: string
+          location?: string | null
           metadata?: Json | null
-          created_at?: string
         }
       }
       chat_messages: {
         Row: {
           id: string
-          user_id: string
-          message: string
-          role: 'user' | 'assistant'
-          metadata: Json | null
-          created_at: string
+          user_id: string | null
+          session_id: string | null
+          role: string
+          content: string
+          timestamp: string
         }
         Insert: {
           id?: string
-          user_id: string
-          message: string
-          role: 'user' | 'assistant'
-          metadata?: Json | null
-          created_at?: string
+          user_id?: string | null
+          session_id?: string | null
+          role: string
+          content: string
+          timestamp?: string
         }
         Update: {
           id?: string
-          user_id?: string
-          message?: string
-          role?: 'user' | 'assistant'
-          metadata?: Json | null
-          created_at?: string
+          user_id?: string | null
+          session_id?: string | null
+          role?: string
+          content?: string
+          timestamp?: string
         }
       }
     }

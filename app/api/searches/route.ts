@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import type { Database } from '@/types/supabase'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -6,12 +7,14 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
 
     // Get user if authenticated (optional for searches)
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
     // Parse request body
     const body = await request.json()
 
-    const { query, results_count } = body
+    const { query, results_count, location, session_id, metadata } = body
 
     if (!query) {
       return NextResponse.json(
@@ -21,13 +24,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Log search
+    const insertPayload: Database['public']['Tables']['searches']['Insert'] = {
+      user_id: user?.id ?? null,
+      session_id: session_id ?? null,
+      query_text: query,
+      location: location ?? null,
+      metadata: (metadata ?? null) as Database['public']['Tables']['searches']['Insert']['metadata'],
+      results_count: results_count ?? null,
+    }
+
     const { error: insertError } = await (supabase
-      .from('searches') as any)
-      .insert({
-        user_id: user?.id || null,
-        query,
-        results_count: results_count || 0,
-      })
+      .from('searches') as any).insert(insertPayload)
 
     if (insertError) {
       console.error('Error logging search:', insertError)
@@ -66,7 +73,7 @@ export async function GET(request: NextRequest) {
       .from('searches')
       .select('*')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .order('timestamp', { ascending: false })
       .limit(50)
 
     if (fetchError) {

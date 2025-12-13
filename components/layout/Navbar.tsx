@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import Link from 'next/link';
-import { Menu, X, Search, Bell, ChevronDown } from 'lucide-react';
+import { Menu, X, Search, Bell, ChevronDown, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -19,15 +20,20 @@ interface NavbarProps {
   patientPoints?: number;
   pharmacyName?: string;
   onMenuClick?: () => void;
+  userRole?: 'patient' | 'pharmacy';
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   patientPoints = 0,
   pharmacyName = 'Pharmacy Name',
   onMenuClick,
+  userRole,
 }) => {
   const router = useRouter();
   const { user, isPatient, isPharmacy, isLoading } = useUser();
+  const resolvedRole = userRole ?? (isPatient ? 'patient' : isPharmacy ? 'pharmacy' : undefined);
+  const shouldShowPatientUI = resolvedRole === 'patient' || (!!user && !resolvedRole);
+  const shouldShowPharmacyUI = resolvedRole === 'pharmacy';
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const toggleMobileMenu = () => {
@@ -61,8 +67,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </button>
             )}
-            <Link href="/">
-              <h1 className="text-xl sm:text-2xl font-bold text-blue-600 cursor-pointer">StocMed</h1>
+            <Link href="/" className="flex items-center">
+              <Image
+                src="/logo.png"
+                alt="StocMed"
+                width={120}
+                height={40}
+                className="h-10 w-auto"
+                priority
+              />
             </Link>
           </div>
 
@@ -88,7 +101,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </>
             )}
 
-            {user && isPatient && (
+            {user && shouldShowPatientUI && (
               <>
                 <button
                   className="p-2 rounded-md hover:bg-gray-100 transition-colors"
@@ -101,6 +114,23 @@ export const Navbar: React.FC<NavbarProps> = ({
                     Points: {patientPoints}
                   </span>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSignOut}
+                  className="hidden sm:inline-flex"
+                >
+                  Logout
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleSignOut}
+                  className="sm:hidden"
+                  aria-label="Logout"
+                >
+                  <LogOut className="h-5 w-5 text-gray-600" />
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 transition-colors">
@@ -129,7 +159,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               </>
             )}
 
-            {user && isPharmacy && (
+            {user && shouldShowPharmacyUI && (
               <>
                 <div className="hidden sm:flex items-center gap-2">
                   <span className="text-sm font-medium text-gray-700">

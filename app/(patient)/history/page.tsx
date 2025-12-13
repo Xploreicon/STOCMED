@@ -11,9 +11,10 @@ import { formatDistanceToNow } from 'date-fns';
 
 interface SearchHistory {
   id: string;
-  query: string;
-  results_count: number;
-  created_at: string;
+  query_text: string;
+  results_count: number | null;
+  timestamp: string;
+  location?: string | null;
   metadata?: any;
 }
 
@@ -64,17 +65,17 @@ export default function History() {
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       filtered = filtered.filter(
-        (search) => new Date(search.created_at) >= sevenDaysAgo
+        (search) => new Date(search.timestamp) >= sevenDaysAgo
       );
     } else if (dateFilter === '30days') {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       filtered = filtered.filter(
-        (search) => new Date(search.created_at) >= thirtyDaysAgo
+        (search) => new Date(search.timestamp) >= thirtyDaysAgo
       );
     } else if (dateFilter === 'custom' && startDate && endDate) {
       filtered = filtered.filter((search) => {
-        const searchDate = new Date(search.created_at);
+        const searchDate = new Date(search.timestamp);
         return searchDate >= new Date(startDate) && searchDate <= new Date(endDate);
       });
     }
@@ -82,7 +83,9 @@ export default function History() {
     // Apply search query filter
     if (searchQuery.trim()) {
       filtered = filtered.filter((search) =>
-        search.query.toLowerCase().includes(searchQuery.toLowerCase())
+        (search.query_text || '')
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase())
       );
     }
 
@@ -240,50 +243,54 @@ export default function History() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {filteredSearches.map((search) => (
-              <Card
-                key={search.id}
-                className="p-4 hover:border-primary-blue transition-colors cursor-pointer"
-                onClick={() => handleSearchAgain(search.query)}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Search className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                      <h3 className="text-lg font-semibold text-gray-900">
-                        {search.query}
-                      </h3>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 ml-8">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        {formatDistanceToNow(new Date(search.created_at), {
-                          addSuffix: true,
-                        })}
-                      </span>
-                      <span>
-                        {search.results_count} result{search.results_count !== 1 ? 's' : ''}
-                      </span>
-                      {search.metadata?.clicked_drug_id && (
-                        <span className="text-primary-blue font-medium">
-                          • Clicked result
+            {filteredSearches.map((search) => {
+              const query = search.query_text ?? '';
+              const resultCount = search.results_count ?? 0;
+              return (
+                <Card
+                  key={search.id}
+                  className="p-4 hover:border-primary-blue transition-colors cursor-pointer"
+                  onClick={() => handleSearchAgain(query)}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <Search className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {query || 'Unknown query'}
+                        </h3>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-gray-600 ml-8">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-4 w-4" />
+                          {formatDistanceToNow(new Date(search.timestamp), {
+                            addSuffix: true,
+                          })}
                         </span>
-                      )}
+                        <span>
+                          {resultCount} result{resultCount === 1 ? '' : 's'}
+                        </span>
+                        {search.metadata?.clicked_drug_id && (
+                          <span className="text-primary-blue font-medium">
+                            • Clicked result
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSearchAgain(query);
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Search Again
+                    </Button>
                   </div>
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSearchAgain(search.query);
-                    }}
-                    size="sm"
-                    variant="outline"
-                  >
-                    Search Again
-                  </Button>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

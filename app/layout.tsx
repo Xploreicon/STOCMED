@@ -6,6 +6,9 @@ import { Toaster } from 'sonner'
 export const metadata: Metadata = {
   title: 'StocMed - Find Your Medications in Minutes',
   description: "Nigeria's First AI-Powered Medication Search Platform",
+  icons: {
+    icon: '/favicon.png',
+  },
 }
 
 export default function RootLayout({

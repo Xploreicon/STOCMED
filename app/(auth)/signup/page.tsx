@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -228,7 +229,17 @@ export default function Signup() {
   return (
     <div className="min-h-screen bg-light-blue-bg flex items-center justify-center p-4">
       <Card className="w-full max-w-[500px]">
-        <CardHeader className="space-y-1">
+        <CardHeader className="space-y-3">
+          <div className="flex justify-center">
+            <Image
+              src="/logo.png"
+              alt="StocMed"
+              width={200}
+              height={60}
+              className="h-14 w-auto"
+              priority
+            />
+          </div>
           <CardTitle className="text-xl sm:text-2xl font-bold text-center">Create Account</CardTitle>
           <CardDescription className="text-center">
             {currentStep === 1 ? 'Choose your account type' : 'Fill in your details'}

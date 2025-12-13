@@ -42,6 +42,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <Navbar
+        userRole={role}
         pharmacyName={role === 'pharmacy' ? pharmacyProfile?.pharmacy_name : undefined}
         onMenuClick={toggleMobileSidebar}
       />
