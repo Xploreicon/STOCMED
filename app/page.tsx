@@ -19,8 +19,34 @@ export default async function Landing() {
     }
   }
 
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'MedicalBusiness',
+    name: 'StocMed',
+    description:
+      "Nigeria's first AI-powered medication search platform helping patients discover pharmacies with their medications in stock.",
+    url: 'https://askstocmed.com',
+    logo: 'https://askstocmed.com/logo.png',
+    areaServed: [
+      { '@type': 'AdministrativeArea', name: 'Lagos' },
+      { '@type': 'AdministrativeArea', name: 'Abuja' },
+      { '@type': 'AdministrativeArea', name: 'Nigeria' },
+    ],
+    serviceType: ['Medication search', 'Pharmacy discovery', 'Drug price comparison'],
+    contactPoint: {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      email: 'support@askstocmed.com',
+      availableLanguage: ['English'],
+    },
+  };
+
   return (
     <div className="min-h-screen bg-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
       {/* Hero Section */}
       <section className="bg-gradient-to-b from-light-blue-bg to-white py-16 md:py-24 px-4">
         <div className="container mx-auto max-w-6xl text-center">

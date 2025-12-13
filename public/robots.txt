@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://askstocmed.com/sitemap.xml
