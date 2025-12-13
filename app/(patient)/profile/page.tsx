@@ -50,6 +50,13 @@ export default function PatientProfilePage() {
 
         if (!isMounted) return;
 
+        type ProfileRow = {
+          full_name: string | null;
+          email: string | null;
+          phone: string | null;
+          location: string | null;
+        };
+
         const { data: profileRow, error: profileError } = await supabase
           .from('users')
           .select('full_name, email, phone, location')
@@ -64,11 +71,13 @@ export default function PatientProfilePage() {
         const metadataPhone = (user.user_metadata?.phone as string | undefined) ?? undefined;
         const metadataLocation = (user.user_metadata?.location as string | undefined) ?? undefined;
 
+        const safeProfile = (profileRow ?? {}) as Partial<ProfileRow>;
+
         setForm({
-          full_name: metadataFullName ?? profileRow?.full_name ?? '',
-          email: profileRow?.email ?? user.email ?? '',
-          phone: metadataPhone ?? profileRow?.phone ?? '',
-          location: metadataLocation ?? profileRow?.location ?? '',
+          full_name: metadataFullName ?? safeProfile.full_name ?? '',
+          email: safeProfile.email ?? user.email ?? '',
+          phone: metadataPhone ?? safeProfile.phone ?? '',
+          location: metadataLocation ?? safeProfile.location ?? '',
         });
         setLoading(false);
       } catch (loadError) {
