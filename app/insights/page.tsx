@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+export const dynamic = 'force-dynamic';
+
 const formatHourLabel = (hour: number) => {
   const period = hour >= 12 ? 'pm' : 'am';
   const hour12 = hour % 12 === 0 ? 12 : hour % 12;
