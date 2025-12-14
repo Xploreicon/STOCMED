@@ -16,24 +16,25 @@ interface AssistantPayload {
   pharmacies?: Array<Record<string, any>>
 }
 
-const SYSTEM_PROMPT = `You are StocMed's pharmacy concierge.
+const SYSTEM_PROMPT = `You are StocMed's friendly pharmacy concierge.
 
-Primary responsibilities:
-- Help users locate medications near them and suggest the best pharmacy from the provided context.
-- Highlight stock status, price range, and distance that are already calculated in the context.
-- Offer prudent, general medication education (uses, precautions, side effects) based solely on widely accepted information. Do not invent specifics beyond your training.
-- Always encourage users to follow their prescriber's directions and to consult a licensed pharmacist or doctor for anything medical.
-- Offer to connect the user with a pharmacist or provide pickup/confirmation steps when appropriate.
+Tone & style:
+- Warm, professional, and conversational. Use emojis sparingly (at most one per paragraph) to add warmth.
+- Keep responses concise: no more than 3–4 sentences total.
+- Format pharmacy options as clear bullet points with bold pharmacy names, medication details, price (use the ₦ symbol), stock, and distance.
+- Always close with a helpful nudge or question that keeps the conversation moving.
 
-Safety rails:
-- If the user strays outside medication discovery, pharmacy logistics, or basic education, politely refuse and steer them back.
-- Never create diagnoses, prescribe doses, or contradict prescribers.
-- If a medication is not found, suggest alternative search tips or recommend seeing a pharmacist/doctor.
+Safety:
+- NEVER prescribe, recommend dosages, or claim medical authority.
+- Always remind users to follow their doctor's advice or speak with a licensed pharmacist for medical questions.
+- If information is missing, ask follow-up questions (e.g., strength, preferred brand, location).
+- If there are no results, offer concrete next steps so the user is never stuck.
 
-Response style:
-- Conversational, concise sentences (1–3 short paragraphs max).
-- Use markdown lists only when summarising multiple options.
-- If you mention a pharmacy or medication, rely on the supplied context—never fabricate data.`
+Knowledge base:
+- Rely solely on the provided context for pharmacy and product data—do not invent or assume availability beyond what you see.`
+
+const GREETING_REGEX =
+  /^(hi|hello|hey|hiya|good morning|good afternoon|good evening)(?:[!\.\s]*)$/i
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,6 +53,18 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as AssistantPayload
     const { conversation, query, userLocation, pharmacies } = body
 
+    const lastUserMessage =
+      [...conversation].filter((msg) => msg.role === 'user').pop()?.content || ''
+
+    if (
+      GREETING_REGEX.test(lastUserMessage.trim()) &&
+      (!query || !query.trim())
+    ) {
+      return NextResponse.json({
+        message: 'Hi! What medication are you looking for today?',
+      })
+    }
+
     const contextLines: string[] = [
       `Query: ${query}`,
       userLocation
@@ -60,24 +73,45 @@ export async function POST(request: NextRequest) {
     ]
 
     if (pharmacies && pharmacies.length > 0) {
+      const formatCurrency = (value: number | null | undefined) =>
+        typeof value === 'number' && !Number.isNaN(value)
+          ? `₦${value.toLocaleString()}`
+          : null
+
+      const describeStock = (
+        quantity: number | null | undefined,
+        threshold?: number | null
+      ) => {
+        if (quantity === null || quantity === undefined) return 'Stock unknown'
+        if (quantity <= 0) return 'Out of stock'
+        if (threshold && quantity <= threshold)
+          return `Low stock (${quantity} remaining)`
+        return `In stock (${quantity} available)`
+      }
+
       const topPharmacies = pharmacies
         .slice(0, 5)
         .map((item, index) => {
           const pharmacy = item.pharmacies ?? {}
           const distance =
             typeof item.distance_km === 'number'
-              ? `${item.distance_km} km`
+              ? `${item.distance_km.toFixed(1)} km`
               : 'n/a'
           const priceRange =
             typeof item.price_range_min === 'number' &&
             typeof item.price_range_max === 'number'
-              ? `₦${item.price_range_min?.toLocaleString?.()} – ₦${item.price_range_max?.toLocaleString?.()}`
-              : item.price
-              ? `₦${Number(item.price).toLocaleString()}`
-              : 'Price unavailable'
-          return `${index + 1}. ${pharmacy.pharmacy_name || 'Unknown pharmacy'} • ${priceRange} • distance: ${distance} • stock: ${
-            item.quantity_in_stock ?? 'n/a'
-          }`
+              ? `${formatCurrency(item.price_range_min)} – ${formatCurrency(
+                  item.price_range_max
+                )}`
+              : formatCurrency(item.price) ?? 'Price unavailable'
+          const medicationName =
+            item.name || item.brand_name || item.generic_name || 'Medication'
+          const strength = item.strength ? ` (${item.strength})` : ''
+          const stockText = describeStock(
+            item.quantity_in_stock ?? null,
+            item.low_stock_threshold
+          )
+          return `- Pharmacy ${index + 1}: ${pharmacy.pharmacy_name || 'Unknown pharmacy'} | Product: ${medicationName}${strength} | Price: ${priceRange} | ${stockText} | Distance: ${distance}`
         })
         .join('\n')
 

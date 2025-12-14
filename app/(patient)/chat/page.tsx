@@ -112,6 +112,26 @@ const STOPWORDS = new Set([
   'find',
 ]);
 
+const GREETING_WORDS = new Set([
+  'hello',
+  'hi',
+  'hey',
+  'hiya',
+  'good',
+  'morning',
+  'afternoon',
+  'evening',
+  'there',
+]);
+
+const isGreetingMessage = (raw: string) => {
+  const cleaned = raw.replace(/[!?.]/g, ' ').trim().toLowerCase();
+  if (!cleaned) return false;
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0 || tokens.length > 3) return false;
+  return tokens.every((token) => GREETING_WORDS.has(token));
+};
+
 const extractMedicationKeyword = (input: string): string | null => {
   let cleaned = input.trim();
   if (!cleaned) return null;
@@ -167,6 +187,52 @@ const resolveLocationLabel = (value: string) => {
   return null;
 };
 
+const formatCurrency = (value: number | null | undefined) => {
+  if (typeof value !== 'number' || Number.isNaN(value)) return null;
+  return `₦${value.toLocaleString()}`;
+};
+
+const describeStock = (quantity: number | null | undefined, threshold?: number | null) => {
+  if (quantity === null || quantity === undefined) return 'Stock unknown';
+  if (quantity <= 0) return 'Out of stock';
+  if (threshold && quantity <= threshold) return `Low stock (${quantity} left)`;
+  return `In stock (${quantity} available)`;
+};
+
+const formatResultBullet = (item: any) => {
+  const pharmacy = item?.pharmacies ?? {};
+  const name = pharmacy?.pharmacy_name ?? 'Unknown pharmacy';
+  const medication = item?.name || item?.brand_name || item?.generic_name || 'Medication';
+  const brand =
+    item?.brand_name && item?.brand_name !== item?.name ? ` (${item.brand_name})` : '';
+  const strength = item?.strength ? ` • ${item.strength}` : '';
+
+  const priceRange =
+    typeof item?.price_range_min === 'number' && typeof item?.price_range_max === 'number'
+      ? `${formatCurrency(item.price_range_min)} – ${formatCurrency(item.price_range_max)}`
+      : formatCurrency(item?.price) ?? 'Price unavailable';
+
+  const stockText = describeStock(item?.quantity_in_stock ?? null, item?.low_stock_threshold);
+
+  const distanceText =
+    typeof item?.distance_km === 'number'
+      ? `${item.distance_km.toFixed(1)} km away`
+      : pharmacy?.city || pharmacy?.state
+      ? [pharmacy.city, pharmacy.state].filter(Boolean).join(', ')
+      : null;
+
+  const details = [
+    `${medication}${brand}${strength}`,
+    `Price: ${priceRange}`,
+    `Stock: ${stockText}`,
+    distanceText ? `Distance: ${distanceText}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
+  return `• **${name}** — ${details}`;
+};
+
 const quickActionsIntro = [
   { label: '🔍 Search by name', token: '__SEARCH_NAME__' },
   { label: '📍 Update my location', token: '__UPDATE_LOCATION__' },
@@ -201,10 +267,31 @@ export default function Chat() {
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  const welcomeSuggestions = useMemo(
+const welcomeSuggestions = useMemo(
     () => ['Paracetamol', 'Amatem', 'Hypertension meds'],
     []
   );
+
+  const welcomeMessage = useMemo(
+    () =>
+      [
+        '👋 Hi, I’m your StocMed assistant.',
+        '',
+        'Tell me what medication you need + your area, and I’ll find nearby pharmacies.',
+        '',
+        'Example: “Paracetamol 500mg in Ikeja”',
+        '',
+        '⚠️ I find medications, not prescribe them.',
+      ].join('\n'),
+    []
+  );
+
+  const greetingReply = useMemo(
+    () => 'Hi! What medication are you looking for today?',
+    []
+  );
+
+  const welcomeShownRef = useRef(false);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -265,12 +352,11 @@ export default function Chat() {
   );
 
   useEffect(() => {
-    if (messages.length === 0) {
-      pushAssistantMessage(
-        "Hi! I'm the StocMed assistant. Tell me a medication and I'll show nearby pharmacies, prices, and stock."
-      );
+    if (!welcomeShownRef.current && messages.length === 0) {
+      pushAssistantMessage(welcomeMessage);
+      welcomeShownRef.current = true;
     }
-  }, [messages.length, pushAssistantMessage]);
+  }, [messages.length, pushAssistantMessage, welcomeMessage]);
 
   const requestAssistantMessage = useCallback(
     async (payload: {
@@ -359,49 +445,40 @@ export default function Chat() {
         const summaryParts: string[] = [];
 
         if (results.length > 0) {
-          summaryParts.push(
-            `Found ${results.length} option${results.length === 1 ? '' : 's'} for “${trimmedMedication}”${
-              locationOverride
-                ? ` near ${locationOverride}`
-                : userLocation
-                ? ` near ${userLocation.label}`
-                : ''
-            }.`
-          );
-          const topCards = results.slice(0, 3).map((item: any) => {
-            const pharmacy = item.pharmacies;
-            const price =
-              typeof item.price_range_min === 'number' &&
-              typeof item.price_range_max === 'number'
-                ? `₦${item.price_range_min.toLocaleString()} – ₦${item.price_range_max.toLocaleString()}`
-                : item.price
-                ? `₦${Number(item.price).toLocaleString()}`
-                : 'Price not listed';
-            const locationText = pharmacy
-              ? [pharmacy.city, pharmacy.state].filter(Boolean).join(', ')
+          const locationHint =
+            locationOverride || userLocation?.label
+              ? ` around ${locationOverride ?? userLocation?.label}`
               : '';
-            return `${pharmacy?.pharmacy_name ?? 'Unknown pharmacy'} • ${price}${
-              locationText ? ` • ${locationText}` : ''
-            }${item.distance_km ? ` • ${item.distance_km} km away` : ''}`;
-          });
-          if (topCards.length) {
-            summaryParts.push(
-              `Top matches:\n${topCards.map((line: string) => `• ${line}`).join('\n')}`
-            );
-          }
+          summaryParts.push(`Here’s what I found for “${trimmedMedication}”${locationHint}:`);
+          const bulletLines = results.slice(0, 3).map(formatResultBullet);
+          summaryParts.push(bulletLines.join('\n'));
           summaryParts.push(
-            'Scroll the cards for stock, contact, and pickup details. Ask if you need to refine by strength or form.'
+            'Need another option? Ask for a different strength, brand, or location and I’ll keep searching.'
           );
         } else {
+          summaryParts.push(`I couldn’t find pharmacies stocking “${trimmedMedication}” right now.`);
           summaryParts.push(
-            `I couldn't find pharmacies stocking “${trimmedMedication}”. Try another spelling, or share the condition so I can suggest alternatives.`
+            [
+              'Let’s try these next steps:',
+              '• Double-check the spelling or share another brand name.',
+              '• Tell me the generic ingredient if you know it.',
+              '• Describe the condition so I can look for alternatives.',
+              'I’m here to help—just give me more details.',
+            ].join('\n')
           );
         }
 
-        const finalMessage =
-          assistantReply && assistantReply.trim().length
-            ? `${assistantReply.trim()}\n\n${summaryParts.join('\n\n')}`
-            : summaryParts.join('\n\n');
+        const summaryText = summaryParts.join('\n\n');
+        let finalMessage =
+          assistantReply && assistantReply.trim().length ? assistantReply.trim() : summaryText;
+
+        if (results.length === 0 && assistantReply && assistantReply.trim().length) {
+          finalMessage = `${assistantReply.trim()}\n\n${summaryText}`;
+        }
+
+        if (results.length > 0 && !finalMessage.toLowerCase().includes('tap a card')) {
+          finalMessage = `${finalMessage}\n\nTap a card below to view pharmacy details or let me refine the search.`;
+        }
 
         pushAssistantMessage(finalMessage, { results });
         setStage('FOLLOW_UP');
@@ -492,6 +569,12 @@ export default function Chat() {
 
       pushUserMessage(trimmed);
 
+      if (isGreetingMessage(trimmed)) {
+        pushAssistantMessage(greetingReply);
+        setStage('AWAITING_MEDICATION');
+        return;
+      }
+
       switch (stage) {
         case 'AWAITING_LOCATION':
           await handleLocationInput(trimmed);
@@ -504,7 +587,15 @@ export default function Chat() {
           break;
       }
     },
-    [stage, handleLocationInput, handleFollowUpInput, handleMedicationInput, pushUserMessage]
+    [
+      stage,
+      handleLocationInput,
+      handleFollowUpInput,
+      handleMedicationInput,
+      pushUserMessage,
+      pushAssistantMessage,
+      greetingReply,
+    ]
   );
 
   useEffect(() => {
