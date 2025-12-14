@@ -60,7 +60,7 @@ export default function PatientProfilePage() {
         const { data: profileRow, error: profileError } = await supabase
           .from('users')
           .select('full_name, email, phone, location')
-          .eq('id', user.id)
+          .eq('user_id', user.id)
           .maybeSingle();
 
         if (profileError) {
@@ -147,7 +147,7 @@ export default function PatientProfilePage() {
           phone: form.phone,
           location: form.location,
         })
-        .eq('id', user.id);
+        .eq('user_id', user.id);
 
       router.refresh();
 
