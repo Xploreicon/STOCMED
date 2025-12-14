@@ -153,7 +153,7 @@ export default async function Landing() {
                     {card.label}
                   </p>
                   <p className="mt-3 text-3xl sm:text-4xl font-bold text-dark-gray">
-                    {card.value.toLocaleString()}
+                    {(card.value ?? 0).toLocaleString()}
                   </p>
                   <p className="mt-3 text-sm text-medium-gray leading-relaxed">{card.subtext}</p>
                 </div>

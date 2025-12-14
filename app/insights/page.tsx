@@ -20,12 +20,19 @@ export default async function InsightsPage() {
     supabase.from('searches').select('id', { count: 'exact', head: true }),
   ]);
 
-  const { data: searchSamples = [] } =
+  const { data: searchSamplesRaw } =
     (await supabase
       .from('searches')
       .select('query_text, location, timestamp')
       .order('timestamp', { ascending: false })
       .limit(1000)) ?? {};
+
+  const searchSamples =
+    (searchSamplesRaw ?? []) as Array<{
+      query_text: string | null;
+      location: string | null;
+      timestamp: string | null;
+    }>;
 
   const queryCounts = new Map<string, number>();
   const locationCounts = new Map<string, number>();
@@ -107,9 +114,9 @@ export default async function InsightsPage() {
 
         <section className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           {[
-            { label: 'Pharmacies onboarded', value: pharmacyCount },
-            { label: 'Medications listed', value: medicationsListed },
-            { label: 'Total searches', value: totalSearches },
+            { label: 'Pharmacies onboarded', value: pharmacyCount ?? 0 },
+            { label: 'Medications listed', value: medicationsListed ?? 0 },
+            { label: 'Total searches', value: totalSearches ?? 0 },
           ].map((item) => (
             <Card key={item.label} className="border-blue-100 bg-blue-50/40">
               <CardHeader>
