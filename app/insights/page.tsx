@@ -10,22 +10,47 @@ const formatHourLabel = (hour: number) => {
 export default async function InsightsPage() {
   const supabase = await createClient();
 
-  const [
-    { count: pharmacyCount = 0 } = {},
-    { count: medicationsListed = 0 } = {},
-    { count: totalSearches = 0 } = {},
-  ] = await Promise.all([
-    supabase.from('pharmacies').select('id', { count: 'exact', head: true }),
-    supabase.from('drugs').select('id', { count: 'exact', head: true }),
-    supabase.from('searches').select('id', { count: 'exact', head: true }),
-  ]);
+  const { count: medicationsListed = 0 } = await supabase
+    .from('drugs')
+    .select('id', { count: 'exact', head: true });
 
-  const { data: searchSamplesRaw } =
-    (await supabase
-      .from('searches')
-      .select('query_text, location, timestamp')
-      .order('timestamp', { ascending: false })
-      .limit(1000)) ?? {};
+  const { data: pharmacyRowsRaw } = await supabase
+    .from('pharmacies')
+    .select('id, is_active');
+
+  const pharmacyRows =
+    (pharmacyRowsRaw ?? []) as Array<{ id: string; is_active: boolean | null }>;
+  const pharmacyRegistered = pharmacyRows.length;
+  const pharmaciesActive = pharmacyRows.filter((row) => row.is_active).length;
+
+  const { data: userRowsRaw } = await supabase.from('users').select('id, role');
+
+  const userRows =
+    (userRowsRaw ?? []) as Array<{ id: string; role: 'patient' | 'pharmacy' | string | null }>;
+  const totalUsers = userRows.length;
+  const patientUsers = userRows.filter((user) => user.role === 'patient').length;
+  const pharmacyUsers = userRows.filter((user) => user.role === 'pharmacy').length;
+
+  const { data: drugsRowsRaw } = await supabase
+    .from('drugs')
+    .select('pharmacy_id, quantity_in_stock')
+    .gt('quantity_in_stock', 0);
+
+  const drugsRows =
+    (drugsRowsRaw ?? []) as Array<{ pharmacy_id: string | null; quantity_in_stock: number | null }>;
+  const contributingPharmacies = new Set(
+    drugsRows.map((row) => row.pharmacy_id).filter((id): id is string => Boolean(id))
+  ).size;
+
+  const { count: totalSearches = 0 } = await supabase
+    .from('searches')
+    .select('id', { count: 'exact', head: true });
+
+  const { data: searchSamplesRaw } = await supabase
+    .from('searches')
+    .select('query_text, location, timestamp')
+    .order('timestamp', { ascending: false })
+    .limit(1000);
 
   const searchSamples =
     (searchSamplesRaw ?? []) as Array<{
@@ -112,11 +137,28 @@ export default async function InsightsPage() {
           </p>
         </header>
 
-        <section className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: 'Pharmacies onboarded', value: pharmacyCount ?? 0 },
-            { label: 'Medications listed', value: medicationsListed ?? 0 },
-            { label: 'Total searches', value: totalSearches ?? 0 },
+            {
+              label: 'Users onboarded',
+              value: totalUsers,
+              detail: `${patientUsers.toLocaleString()} patients · ${pharmacyUsers.toLocaleString()} pharmacies`,
+            },
+            {
+              label: 'Pharmacies sharing inventory',
+              value: contributingPharmacies,
+              detail: `${pharmacyRegistered.toLocaleString()} registered · ${pharmaciesActive.toLocaleString()} active`,
+            },
+            {
+              label: 'Medications listed',
+              value: medicationsListed,
+              detail: 'Unique SKUs currently available on the network',
+            },
+            {
+              label: 'Total searches captured',
+              value: totalSearches,
+              detail: 'Patient intents logged in real time',
+            },
           ].map((item) => (
             <Card key={item.label} className="border-blue-100 bg-blue-50/40">
               <CardHeader>
@@ -126,7 +168,10 @@ export default async function InsightsPage() {
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold text-dark-gray">
-                  {item.value.toLocaleString()}
+                  {(item.value ?? 0).toLocaleString()}
+                </p>
+                <p className="mt-2 text-xs text-medium-gray leading-relaxed">
+                  {item.detail}
                 </p>
               </CardContent>
             </Card>
@@ -172,8 +217,13 @@ export default async function InsightsPage() {
                       key={item.location}
                       className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0 last:pb-0"
                     >
-                      <span className="font-medium text-gray-800">{item.location}</span>
-                      <span className="text-sm text-primary-blue font-semibold">
+                      <div className="flex flex-col">
+                        <span className="font-medium text-gray-800">{item.location}</span>
+                        <span className="text-xs text-medium-gray">
+                          {item.count.toLocaleString()} searches
+                        </span>
+                      </div>
+                      <span className="text-sm font-semibold text-primary-blue">
                         {item.percent}%
                       </span>
                     </li>
