@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import type { Database } from '@/types/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -141,14 +140,13 @@ export default function PatientProfilePage() {
         throw updateError;
       }
 
-      await supabase
-        .from('users')
+      await (supabase.from('users') as any)
         .update({
           full_name: form.full_name,
           email: form.email,
           phone: form.phone,
           location: form.location,
-        } satisfies Database['public']['Tables']['users']['Update'])
+        })
         .eq('id', user.id);
 
       router.refresh();
