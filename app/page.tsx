@@ -19,6 +19,31 @@ export default async function Landing() {
     }
   }
 
+  const today = new Date();
+  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setDate(startOfDay.getDate() + 1);
+
+  const [
+    { count: searchesToday = 0 } = {},
+    { count: pharmaciesOnline = 0 } = {},
+    { count: medicationsAvailable = 0 } = {},
+  ] = await Promise.all([
+    supabase
+      .from('searches')
+      .select('id', { count: 'exact', head: true })
+      .gte('timestamp', startOfDay.toISOString())
+      .lt('timestamp', endOfDay.toISOString()),
+    supabase
+      .from('pharmacies')
+      .select('id', { count: 'exact', head: true })
+      .eq('is_active', true),
+    supabase
+      .from('drugs')
+      .select('id', { count: 'exact', head: true })
+      .gt('quantity_in_stock', 0),
+  ]);
+
   const structuredData = {
     '@context': 'https://schema.org',
     '@type': 'MedicalBusiness',
@@ -82,6 +107,58 @@ export default async function Landing() {
                 I&apos;m a Pharmacy
               </Button>
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Live Activity */}
+      <section className="py-12 px-4 bg-white">
+        <div className="container mx-auto max-w-6xl">
+          <div className="flex items-center justify-between flex-wrap gap-4 mb-8">
+            <h2 className="text-2xl md:text-3xl font-bold text-dark-gray flex items-center gap-2">
+              <span role="img" aria-label="fire">
+                🔥
+              </span>
+              Live Activity
+            </h2>
+            <p className="text-sm text-medium-gray">
+              Capturing demand signals from patients in real-time.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {[
+              {
+                label: 'Searches Today',
+                value: searchesToday,
+                subtext: 'Fresh intents from patients across Nigeria',
+              },
+              {
+                label: 'Pharmacies Online',
+                value: pharmaciesOnline,
+                subtext: 'Active partners sharing inventory data',
+              },
+              {
+                label: 'Medications Available',
+                value: medicationsAvailable,
+                subtext: 'Skus currently in stock on the network',
+              },
+            ].map((card) => (
+              <div
+                key={card.label}
+                className="relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-white to-blue-50/70 shadow-sm transition hover:shadow-md"
+              >
+                <div className="absolute inset-0 bg-gradient-to-br from-primary-blue/5 to-transparent animate-pulse [animation-duration:6s]" />
+                <div className="relative px-6 py-6 sm:px-8 sm:py-8">
+                  <p className="text-sm font-medium uppercase tracking-wide text-primary-blue">
+                    {card.label}
+                  </p>
+                  <p className="mt-3 text-3xl sm:text-4xl font-bold text-dark-gray">
+                    {card.value.toLocaleString()}
+                  </p>
+                  <p className="mt-3 text-sm text-medium-gray leading-relaxed">{card.subtext}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
