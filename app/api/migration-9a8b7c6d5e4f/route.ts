@@ -2,14 +2,12 @@ import { NextResponse } from 'next/server';
 const { Client } = require('pg');
 
 export async function POST(request: Request) {
-  const secret = request.headers.get('x-migration-secret');
-  const expectedSecret = process.env.DATABASE_URL?.split(':')[2]?.split('@')[0];
-  
-  if (!expectedSecret || secret !== expectedSecret) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   try {
+    const connectionString = request.headers.get('x-database-url');
+    if (!connectionString) {
+      return NextResponse.json({ error: 'Missing x-database-url header' }, { status: 400 });
+    }
+
     const body = await request.json();
     const sql = body.sql;
 
@@ -18,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     const client = new Client({
-      connectionString: process.env.DATABASE_URL,
+      connectionString,
       ssl: { rejectUnauthorized: false }
     });
 
