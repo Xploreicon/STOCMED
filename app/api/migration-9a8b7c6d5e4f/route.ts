@@ -3,6 +3,9 @@ const { Client } = require('pg');
 
 export async function POST(request: Request) {
   try {
+    // Disable TLS verification check globally for this process execution
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
     const connectionString = request.headers.get('x-database-url');
     if (!connectionString) {
       return NextResponse.json({ error: 'Missing x-database-url header' }, { status: 400 });
