@@ -425,6 +425,15 @@ const welcomeSuggestions = useMemo(
             body: JSON.stringify({
               query: trimmedMedication,
               results_count: data.count || 0,
+              location:
+                locationOverride ??
+                userLocation?.label ??
+                (pendingLocationLabel ?? null),
+              metadata: {
+                source: 'chat',
+                location_label:
+                  locationOverride ?? userLocation?.label ?? pendingLocationLabel ?? null,
+              },
             }),
           });
         }
@@ -491,7 +500,14 @@ const welcomeSuggestions = useMemo(
         setIsLoading(false);
       }
     },
-    [conversation, pushAssistantMessage, requestAssistantMessage, user, userLocation]
+    [
+      conversation,
+      pushAssistantMessage,
+      requestAssistantMessage,
+      user,
+      userLocation,
+      pendingLocationLabel,
+    ]
   );
 
   const handleMedicationInput = useCallback(

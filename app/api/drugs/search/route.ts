@@ -1,4 +1,4 @@
-import { getAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
@@ -24,15 +24,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const supabase = getAdminClient()
-
-    if (!supabase) {
-      console.error('SUPABASE_SERVICE_ROLE_KEY is not configured on the server.')
-      return NextResponse.json(
-        { error: 'Server configuration error. Please contact support.' },
-        { status: 500 }
-      )
-    }
+    const supabase = await createClient()
 
     // Build the query
     let queryBuilder = supabase

@@ -1,4 +1,6 @@
+import { getAdminClient } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
@@ -10,7 +12,22 @@ const formatHourLabel = (hour: number) => {
 };
 
 export default async function InsightsPage() {
-  const supabase = await createClient();
+  const serverClient = await createClient();
+  const { data: { user } } = await serverClient.auth.getUser();
+
+  if (!user || user.user_metadata?.role !== 'pharmacy') {
+    redirect('/login?redirectTo=/insights');
+  }
+
+  const supabase = getAdminClient();
+
+  if (!supabase) {
+    return (
+      <div className="min-h-screen bg-white py-12 px-4 flex items-center justify-center">
+        <p className="text-red-500">Database connection error. Admin client unavailable.</p>
+      </div>
+    );
+  }
 
   const { count: medicationsListed = 0 } = await supabase
     .from('drugs')
