@@ -44,32 +44,66 @@ export async function POST(request: NextRequest) {
         // Idempotency check: see if sale already exists
         const { data: existingSale } = await supabase
           .from('sales')
-          .select('id')
+          .select('id, status')
           .eq('id', id)
           .maybeSingle()
 
-        if (existingSale) {
+        if (existingSale && existingSale.status === 'completed') {
           syncedIds.push(id)
           continue
         }
 
-        // 1. Insert sale record in 'pending' status
-        const { error: saleErr } = await supabase
-          .from('sales')
-          .insert({
-            id,
-            pharmacy_id: pharmacy.id,
-            cashier_id: user.id,
-            subtotal,
-            discount,
-            total,
-            payment_method,
-            status: 'pending',
-            created_at: created_at || new Date().toISOString()
-          })
+        // Negative stock check: verify quantity_in_stock before executing deduction
+        const itemQuantities: { [key: string]: number } = {}
+        for (const item of items) {
+          itemQuantities[item.inventory_id] = (itemQuantities[item.inventory_id] || 0) + Number(item.quantity)
+        }
 
-        if (saleErr) {
-          throw new Error(`Failed to create sale: ${saleErr.message}`)
+        const inventoryIds = Object.keys(itemQuantities)
+        const { data: inventoryLevels, error: stockErr } = await supabase
+          .from('pharmacy_inventory')
+          .select('id, quantity_in_stock')
+          .in('id', inventoryIds)
+
+        if (stockErr) {
+          throw new Error(`Failed to verify stock: ${stockErr.message}`)
+        }
+
+        for (const inv of inventoryLevels || []) {
+          const requested = itemQuantities[inv.id] || 0
+          if (inv.quantity_in_stock < requested) {
+            throw new Error(`Oversell: insufficient stock for inventory item ${inv.id} (requested ${requested}, available ${inv.quantity_in_stock})`)
+          }
+        }
+
+        if (existingSale) {
+          // Retry logic: delete any existing sale items to prevent conflicts
+          const { error: deleteItemsErr } = await supabase
+            .from('sale_items')
+            .delete()
+            .eq('sale_id', id)
+          if (deleteItemsErr) {
+            throw new Error(`Failed to clean up pending sale items: ${deleteItemsErr.message}`)
+          }
+        } else {
+          // 1. Insert sale record in 'pending' status
+          const { error: saleErr } = await supabase
+            .from('sales')
+            .insert({
+              id,
+              pharmacy_id: pharmacy.id,
+              cashier_id: user.id,
+              subtotal,
+              discount,
+              total,
+              payment_method,
+              status: 'pending',
+              created_at: created_at || new Date().toISOString()
+            })
+
+          if (saleErr) {
+            throw new Error(`Failed to create sale: ${saleErr.message}`)
+          }
         }
 
         // 2. Insert all sale items
@@ -87,8 +121,6 @@ export async function POST(request: NextRequest) {
           .insert(saleItemsToInsert)
 
         if (itemsErr) {
-          // Clean up the pending sale since insertion failed
-          await supabase.from('sales').delete().eq('id', id)
           throw new Error(`Failed to create sale items: ${itemsErr.message}`)
         }
 

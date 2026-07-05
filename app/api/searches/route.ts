@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
-import type { Database } from '@/types/supabase'
 import { NextRequest, NextResponse } from 'next/server'
+import crypto from 'crypto'
 
 function interpretQuery(query: string) {
   const strengthRegex = /\b\d+(?:\.\d+)?\s*(?:mg|g|ml|mcg|ug|capsules|tablets|tabs|s)\b/gi
@@ -52,26 +52,45 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Log search
-    const insertPayload: Database['public']['Tables']['searches']['Insert'] = {
-      user_id: user?.id ?? null,
-      session_id: session_id ?? null,
+    const normalizedQuery = query.trim().toLowerCase()
+    const queryHash = crypto.createHash('sha256').update(normalizedQuery).digest('hex')
+
+    // 1. Log anonymous aggregate record for demand analytics (strictly decoupled from user/session identity)
+    const aggregatePayload = {
+      user_id: null,
+      session_id: null,
       query_text: query,
       location: location ?? null,
-      metadata: (metadata ?? null) as Database['public']['Tables']['searches']['Insert']['metadata'],
+      metadata: null,
       results_count: results_count ?? null,
       interpreted_query: interpretQuery(query) as any,
     }
 
-    const { error: insertError } = await (supabase
-      .from('searches') as any).insert(insertPayload)
+    const { error: aggError } = await (supabase
+      .from('searches') as any).insert(aggregatePayload)
 
-    if (insertError) {
-      console.error('Error logging search:', insertError)
-      return NextResponse.json(
-        { error: 'Failed to log search' },
-        { status: 500 }
-      )
+    if (aggError) {
+      console.error('Error logging aggregate search:', aggError)
+    }
+
+    // 2. If user is logged in, log history record with hashed content to prevent re-identification
+    if (user) {
+      const userPayload = {
+        user_id: user.id,
+        session_id: session_id ?? null,
+        query_text: `hash:${queryHash}`,
+        location: location ?? null,
+        metadata: (metadata ?? null) as any,
+        results_count: results_count ?? null,
+        interpreted_query: null, // do not store plaintext parsed info
+      }
+
+      const { error: userError } = await (supabase
+        .from('searches') as any).insert(userPayload)
+
+      if (userError) {
+        console.error('Error logging user search:', userError)
+      }
     }
 
     return NextResponse.json({ success: true }, { status: 201 })

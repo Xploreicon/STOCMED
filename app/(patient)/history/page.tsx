@@ -113,15 +113,19 @@ export default function History() {
 
       {items.length > 0 ? (
         <div className="border border-border rounded-card overflow-hidden divide-y divide-border mt-6">
-          {items.map((it) => (
-            <Link
-              key={it.id}
-              href={`/chat?q=${encodeURIComponent(it.query_text || '')}`}
-              className="flex items-center justify-between gap-4 p-4 bg-white hover:bg-surface transition-colors"
-            >
-              <div className="min-w-0">
-                <div className="text-[15px] font-medium text-ink truncate">{it.query_text || 'Search'}</div>
-                <div className="text-[13px] text-ink-light mt-0.5 truncate">
+          {items.map((it) => {
+            const isHashed = it.query_text && it.query_text.startsWith('hash:');
+            const displayText = isHashed ? 'Medication Search' : (it.query_text || 'Search');
+            const href = isHashed ? '/chat' : `/chat?q=${encodeURIComponent(it.query_text || '')}`;
+            return (
+              <Link
+                key={it.id}
+                href={href}
+                className="flex items-center justify-between gap-4 p-4 bg-white hover:bg-surface transition-colors"
+              >
+                <div className="min-w-0">
+                  <div className="text-[15px] font-medium text-ink truncate">{displayText}</div>
+                  <div className="text-[13px] text-ink-light mt-0.5 truncate">
                   {it.results_count ? `${it.results_count} ${it.results_count === 1 ? 'pharmacy' : 'pharmacies'} found` : 'Nothing nearby'}
                   {it.location ? ` near ${it.location}` : ''}
                 </div>
@@ -133,7 +137,7 @@ export default function History() {
                 </span>
               </div>
             </Link>
-          ))}
+          ); })}
         </div>
       ) : (
         <div className="mt-6 border border-dashed border-border rounded-card-lg px-8 py-16 flex flex-col items-center text-center gap-2">

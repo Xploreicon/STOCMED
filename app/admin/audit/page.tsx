@@ -13,11 +13,7 @@ export default function AuditLogsPage() {
 
   const supabase = createClient();
 
-  useEffect(() => {
-    fetchLogs();
-  }, [filterTier]);
-
-  const fetchLogs = async () => {
+  const fetchLogs = React.useCallback(async () => {
     setLoading(true);
     try {
       let query = supabase.from('triage_logs').select('*');
@@ -36,7 +32,11 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterTier, supabase]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   const filteredLogs = logs.filter((log) => {
     const searchStr = searchTerm.toLowerCase();

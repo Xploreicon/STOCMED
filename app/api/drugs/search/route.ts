@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Execute query
-    const { data: inventory, error } = await queryBuilder
+    let { data: inventory, error } = await queryBuilder
 
     if (error) {
       console.error('Search error:', error)
@@ -87,6 +87,75 @@ export async function GET(request: NextRequest) {
         { error: 'Failed to search drugs' },
         { status: 500 }
       )
+    }
+
+    // Fuzzy search fallback: if no results found, perform a pg_trgm similarity search
+    if ((!inventory || inventory.length === 0) && query) {
+      const { data: matchedProducts, error: fuzzyError } = await (supabase.rpc as any)('match_catalogue_product', {
+        search_query: query
+      })
+
+      if (!fuzzyError && matchedProducts && matchedProducts.length > 0) {
+        const productIds = matchedProducts
+          .filter((p: any) => Number(p.confidence) > 0.3)
+          .map((p: any) => p.id)
+
+        if (productIds.length > 0) {
+          let fallbackBuilder = supabase
+            .from('pharmacy_inventory')
+            .select(`
+              id,
+              price,
+              quantity_in_stock,
+              low_stock_threshold,
+              updated_at,
+              created_at,
+              products!inner (
+                id,
+                generic_name,
+                brand_name,
+                manufacturer,
+                strength,
+                dosage_form,
+                category,
+                requires_prescription,
+                description,
+                image_url
+              ),
+              pharmacies!inner (
+                id,
+                pharmacy_name,
+                address,
+                city,
+                state,
+                phone,
+                latitude,
+                longitude,
+                is_active,
+                logo_url
+              ),
+              batches (
+                expiry_date
+              )
+            `)
+            .eq('pharmacies.is_active', true)
+            .eq('is_listed', true)
+            .in('product_id', productIds)
+
+          if (category) {
+            fallbackBuilder = fallbackBuilder.eq('products.category', category)
+          }
+
+          if (inStockOnly) {
+            fallbackBuilder = fallbackBuilder.gt('quantity_in_stock', 0)
+          }
+
+          const { data: fallbackInventory, error: fallbackQueryError } = await fallbackBuilder
+          if (!fallbackQueryError && fallbackInventory) {
+            inventory = fallbackInventory
+          }
+        }
+      }
     }
 
     // Map database results to the old flat 'drugs' schema structure

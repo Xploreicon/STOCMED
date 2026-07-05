@@ -18,6 +18,26 @@ export default function SymptomQueuePage() {
 
   const supabase = createClient();
 
+  const fetchIntakes = React.useCallback(async () => {
+    try {
+      let query = (supabase.from('symptom_intakes') as any).select('*');
+      
+      if (filterStatus !== 'all') {
+        query = query.eq('status', filterStatus);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setIntakes(data || []);
+    } catch (err: any) {
+      console.error('Error fetching intakes:', err);
+      toast.error('Failed to load symptom intakes queue.');
+    } finally {
+      setLoading(false);
+    }
+  }, [filterStatus, supabase]);
+
   useEffect(() => {
     fetchIntakes();
     
@@ -36,7 +56,7 @@ export default function SymptomQueuePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [filterStatus]);
+  }, [fetchIntakes, supabase]);
 
   // Fetch signed URL for attachments securely (NDPR Compliance)
   useEffect(() => {
@@ -60,27 +80,7 @@ export default function SymptomQueuePage() {
     };
 
     resolveSignedUrl();
-  }, [selectedIntake]);
-
-  const fetchIntakes = async () => {
-    try {
-      let query = (supabase.from('symptom_intakes') as any).select('*');
-      
-      if (filterStatus !== 'all') {
-        query = query.eq('status', filterStatus);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setIntakes(data || []);
-    } catch (err: any) {
-      console.error('Error fetching intakes:', err);
-      toast.error('Failed to load symptom intakes queue.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [selectedIntake, supabase]);
 
   const handleClaim = async (intakeId: string) => {
     if (!user) return;

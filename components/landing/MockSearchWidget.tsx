@@ -87,7 +87,7 @@ export default function MockSearchWidget() {
       clearInterval(interval);
       clearTimeout(timer);
     };
-  }, [selectedDrugIndex]);
+  }, [selectedDrugIndex, activeDrug.name]);
 
   return (
     <Card className="rounded-card border border-border bg-card shadow-lg p-5 max-w-xl mx-auto overflow-hidden">

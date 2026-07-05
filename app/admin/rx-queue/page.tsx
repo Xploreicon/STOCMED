@@ -117,6 +117,26 @@ export default function RxQueuePage() {
 
   const supabase = createClient();
 
+  const fetchSubmissions = React.useCallback(async () => {
+    try {
+      let query = (supabase.from('rx_submissions') as any).select('*');
+
+      if (filterStatus !== 'all') {
+        query = query.eq('status', filterStatus);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setSubmissions(data || []);
+    } catch (err: any) {
+      console.error('Error fetching submissions:', err);
+      toast.error('Failed to load prescription submissions.');
+    } finally {
+      setLoading(false);
+    }
+  }, [filterStatus, supabase]);
+
   useEffect(() => {
     fetchSubmissions();
 
@@ -135,7 +155,7 @@ export default function RxQueuePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [filterStatus]);
+  }, [fetchSubmissions, supabase]);
 
   // Securely resolve signed URLs for private prescription storage (NDPR Privacy Compliance)
   useEffect(() => {
@@ -159,27 +179,7 @@ export default function RxQueuePage() {
     };
 
     resolveSignedUrl();
-  }, [selectedSub]);
-
-  const fetchSubmissions = async () => {
-    try {
-      let query = (supabase.from('rx_submissions') as any).select('*');
-
-      if (filterStatus !== 'all') {
-        query = query.eq('status', filterStatus);
-      }
-
-      const { data, error } = await query.order('created_at', { ascending: true });
-
-      if (error) throw error;
-      setSubmissions(data || []);
-    } catch (err: any) {
-      console.error('Error fetching submissions:', err);
-      toast.error('Failed to load prescription submissions.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [selectedSub, supabase]);
 
   const handleReview = async (status: 'verified' | 'rejected') => {
     if (!selectedSub || !user) return;
