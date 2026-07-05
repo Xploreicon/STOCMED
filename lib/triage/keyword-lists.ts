@@ -185,3 +185,40 @@ export const POM_MOLECULES_LIST: KeywordConfig = {
     /\bdexamethasone\b/i
   ]
 };
+
+export const OTC_MOLECULES_LIST: KeywordConfig = {
+  terms: [
+    'vitamin c',
+    'vit c',
+    'paracetamol',
+    'panadol',
+    'ibuprofen',
+    'chemiron',
+    'multivitamin',
+    'folic acid',
+    'vitamin d',
+    'saline nasal spray',
+    'antacid',
+    'gaviscon',
+    'aspirin',
+    'actifed',
+    'procold',
+    'coartem',
+    'lonart',
+    'amatem',
+    'vitamin b complex',
+    'zinc'
+  ],
+  patterns: [
+    /\bvit(amin)?\s+c\b/i,
+    /\bparacetamol\b/i,
+    /\bpanadol\b/i,
+    /\bibuprofen\b/i,
+    /\bchemiron\b/i,
+    /\bmultivitamin\b/i,
+    /\bfolic\s+acid\b/i,
+    /\bcoartem\b/i,
+    /\blonart\b/i,
+    /\bamatem\b/i
+  ]
+};

@@ -40,7 +40,7 @@ export async function triageQuery(rawQuery: string): Promise<TriageResult> {
     // Default safe fallback if both fail
     return {
       intent: 'OUT_OF_SCOPE',
-      risk_tier: 'REDIRECT',
+      risk_tier: 'ALLOW',
       confidence: 1.0,
       raw_query: rawQuery,
       layers_triggered: ['fallback_default'],

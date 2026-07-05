@@ -4,6 +4,7 @@ import {
   RED_FLAG_LIST,
   RESTRICTED_LIST,
   POM_MOLECULES_LIST,
+  OTC_MOLECULES_LIST,
   KeywordConfig,
 } from './keyword-lists';
 
@@ -98,6 +99,17 @@ export function classifyDeterministically(rawQuery: string): TriageResult | null
       confidence: 1.0,
       raw_query: rawQuery,
       layers_triggered: ['deterministic_pom_molecules'],
+    };
+  }
+
+  // 5. OTC MOLECULES Check (Over-the-counter medicines)
+  if (matchesConfig(normalized, OTC_MOLECULES_LIST)) {
+    return {
+      intent: 'NAMED_OTC',
+      risk_tier: 'ALLOW',
+      confidence: 1.0,
+      raw_query: rawQuery,
+      layers_triggered: ['deterministic_otc_molecules'],
     };
   }
 

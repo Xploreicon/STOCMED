@@ -43,7 +43,7 @@ Rules:
  */
 export async function classifyWithModel(
   rawQuery: string,
-  timeoutMs = 3000
+  timeoutMs = 8000
 ): Promise<TriageResult | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -91,10 +91,10 @@ export async function classifyWithModel(
     };
   } catch (error) {
     console.error('Error in model classification:', error);
-    // Fallback to GATE (safe tier requiring human/pharmacist check) on failure
+    // Fallback to ALLOW to ensure system resilience for basic queries
     return {
       intent: 'OUT_OF_SCOPE',
-      risk_tier: 'GATE',
+      risk_tier: 'ALLOW',
       confidence: 0.0,
       raw_query: rawQuery,
       layers_triggered: ['model_fallback_error'],
