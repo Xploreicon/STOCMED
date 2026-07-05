@@ -26,7 +26,7 @@ export function ChatInput({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-4 h-20">
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-border px-4 py-4 h-20 z-30">
       <div className="max-w-4xl mx-auto flex gap-2 items-center">
         <Input
           value={value}

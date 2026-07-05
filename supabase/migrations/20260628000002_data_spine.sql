@@ -413,7 +413,7 @@ CREATE TABLE IF NOT EXISTS public.stock_movements (
     quantity INTEGER NOT NULL,
     reason TEXT,
     reference TEXT,
-    created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -563,7 +563,8 @@ BEGIN
             END IF;
         END LOOP;
         
-        -- Rename drugs to drugs_old
+        -- Rename drugs to drugs_old (drop first if exists)
+        DROP TABLE IF EXISTS public.drugs_old CASCADE;
         ALTER TABLE public.drugs RENAME TO drugs_old;
     END IF;
 END$$;
@@ -605,24 +606,37 @@ ALTER TABLE public.batches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
 
 -- Products RLS
+DROP POLICY IF EXISTS "Allow anyone to view products" ON public.products;
 CREATE POLICY "Allow anyone to view products" ON public.products FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow authenticated users to insert products" ON public.products;
 CREATE POLICY "Allow authenticated users to insert products" ON public.products FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+
+DROP POLICY IF EXISTS "Allow authenticated users to update products" ON public.products;
 CREATE POLICY "Allow authenticated users to update products" ON public.products FOR UPDATE USING (auth.uid() IS NOT NULL);
 
 -- Pharmacy Inventory RLS
+DROP POLICY IF EXISTS "Allow anyone to view listed pharmacy inventory" ON public.pharmacy_inventory;
 CREATE POLICY "Allow anyone to view listed pharmacy inventory" ON public.pharmacy_inventory FOR SELECT 
 USING (
     is_listed = TRUE OR 
     pharmacy_id IN (SELECT id FROM public.pharmacies WHERE user_id = auth.uid())
 );
+
+DROP POLICY IF EXISTS "Allow pharmacies to insert own inventory" ON public.pharmacy_inventory;
 CREATE POLICY "Allow pharmacies to insert own inventory" ON public.pharmacy_inventory FOR INSERT 
 WITH CHECK (pharmacy_id IN (SELECT id FROM public.pharmacies WHERE user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Allow pharmacies to update own inventory" ON public.pharmacy_inventory;
 CREATE POLICY "Allow pharmacies to update own inventory" ON public.pharmacy_inventory FOR UPDATE 
 USING (pharmacy_id IN (SELECT id FROM public.pharmacies WHERE user_id = auth.uid()));
+
+DROP POLICY IF EXISTS "Allow pharmacies to delete own inventory" ON public.pharmacy_inventory;
 CREATE POLICY "Allow pharmacies to delete own inventory" ON public.pharmacy_inventory FOR DELETE 
 USING (pharmacy_id IN (SELECT id FROM public.pharmacies WHERE user_id = auth.uid()));
 
 -- Batches RLS
+DROP POLICY IF EXISTS "Allow active pharmacies' batches to be viewed" ON public.batches;
 CREATE POLICY "Allow active pharmacies' batches to be viewed" ON public.batches FOR SELECT
 USING (
     EXISTS (
@@ -631,6 +645,8 @@ USING (
         WHERE pi.id = inventory_id AND (p.is_active = TRUE OR p.user_id = auth.uid())
     )
 );
+
+DROP POLICY IF EXISTS "Allow pharmacies to manage own batches" ON public.batches;
 CREATE POLICY "Allow pharmacies to manage own batches" ON public.batches FOR ALL
 USING (
     EXISTS (
@@ -648,6 +664,7 @@ WITH CHECK (
 );
 
 -- Stock Movements RLS
+DROP POLICY IF EXISTS "Allow pharmacies to view own stock movements" ON public.stock_movements;
 CREATE POLICY "Allow pharmacies to view own stock movements" ON public.stock_movements FOR SELECT
 USING (
     EXISTS (
@@ -656,6 +673,8 @@ USING (
         WHERE pi.id = inventory_id AND p.user_id = auth.uid()
     )
 );
+
+DROP POLICY IF EXISTS "Allow pharmacies to insert own stock movements" ON public.stock_movements;
 CREATE POLICY "Allow pharmacies to insert own stock movements" ON public.stock_movements FOR INSERT
 WITH CHECK (
     EXISTS (

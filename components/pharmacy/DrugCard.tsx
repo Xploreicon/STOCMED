@@ -14,22 +14,22 @@ function getStockBadge(stock: number) {
     return {
       icon: CheckCircle,
       text: 'In Stock',
-      colorClass: 'text-green-600',
-      bgClass: 'bg-green-100'
+      colorClass: 'text-success',
+      bgClass: 'bg-success/10'
     }
   } else if (stock >= 5) {
     return {
       icon: AlertTriangle,
       text: 'Low Stock',
-      colorClass: 'text-orange-600',
-      bgClass: 'bg-orange-100'
+      colorClass: 'text-warning',
+      bgClass: 'bg-warning/10'
     }
   } else {
     return {
       icon: XCircle,
       text: 'Out of Stock',
-      colorClass: 'text-red-600',
-      bgClass: 'bg-red-100'
+      colorClass: 'text-danger',
+      bgClass: 'bg-danger/10'
     }
   }
 }
@@ -45,8 +45,8 @@ export function DrugCard({ drug, onEdit, onDelete }: DrugCardProps) {
           {/* Header with name and stock badge */}
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 text-lg">{drug.name}</h3>
-              <p className="text-sm text-gray-500 mt-1">{drug.category}</p>
+              <h3 className="font-semibold text-ink text-lg">{drug.name}</h3>
+              <p className="text-sm text-ink-muted mt-1">{drug.category}</p>
             </div>
             <div className={`flex items-center gap-1 px-2 py-1 rounded-full ${stockBadge.bgClass}`}>
               <StockIcon className={`w-4 h-4 ${stockBadge.colorClass}`} />
@@ -59,25 +59,25 @@ export function DrugCard({ drug, onEdit, onDelete }: DrugCardProps) {
           {/* Drug details */}
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <span className="text-gray-500">Form:</span>
-              <p className="font-medium text-gray-900">{drug.form}</p>
+              <span className="text-ink-muted">Form:</span>
+              <p className="font-medium text-ink">{drug.form}</p>
             </div>
             <div>
-              <span className="text-gray-500">Strength:</span>
-              <p className="font-medium text-gray-900">{drug.strength}</p>
+              <span className="text-ink-muted">Strength:</span>
+              <p className="font-medium text-ink">{drug.strength}</p>
             </div>
             <div>
-              <span className="text-gray-500">Price:</span>
-              <p className="font-medium text-gray-900">₦{drug.price.toLocaleString()}</p>
+              <span className="text-ink-muted">Price:</span>
+              <p className="font-medium text-ink">₦{drug.price.toLocaleString()}</p>
             </div>
             <div>
-              <span className="text-gray-500">Status:</span>
+              <span className="text-ink-muted">Status:</span>
               <p className={`font-medium ${stockBadge.colorClass}`}>{stockBadge.text}</p>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 pt-2 border-t border-gray-100">
+          <div className="flex gap-2 pt-2 border-t border-border">
             <Button
               variant="outline"
               size="sm"

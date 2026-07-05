@@ -1,0 +1,178 @@
+
+
+<div style="width:100%; min-height:100vh; background:#FFFFFF; color:#1A1A1A;">
+
+  <!-- TOP BAR -->
+  <div style="border-bottom:1px solid #E6EEF7; padding:16px 24px;">
+    <div style="max-width:1200px; margin:0 auto; display:flex; align-items:center; justify-content:space-between;">
+      <a href="./StocMed Landing.dc.html" style="display:flex; align-items:center; gap:8px;">
+        <div style="width:32px; height:32px; border-radius:8px; background:#0066CC; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <div style="width:18px; height:9px; border-radius:4.5px; transform:rotate(45deg); display:flex; overflow:hidden;">
+            <div style="width:50%; height:100%; background:#FFFFFF;"></div>
+            <div style="width:50%; height:100%; background:#FFFFFF; opacity:0.55; border-left:1px solid #0066CC;"></div>
+          </div>
+        </div>
+        <span style="font-size:18px; font-weight:500; color:#1A1A1A; letter-spacing:-0.2px;">StocMed</span>
+      </a>
+      <span style="font-size:14px; font-weight:400; color:#4A4A4A;">Already have an account? <a href="./StocMed Login.dc.html" style="color:#0066CC; font-weight:500;">Log in</a></span>
+    </div>
+  </div>
+
+  <!-- STEP 1: ROLE SELECT -->
+  <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ true }}">
+    <div data-screen-label="Signup / Step 1 - Role select" style="max-width:760px; margin:0 auto; padding:72px 24px 96px;">
+      <div style="text-align:center; margin-bottom:48px;">
+        <h1 style="font-family:'Source Serif 4', serif; font-weight:500; font-size:36px; color:#1A1A1A; line-height:1.2;">Create your account</h1>
+        <p style="font-size:16px; font-weight:400; color:#4A4A4A; margin-top:12px;">Choose how you'll use StocMed</p>
+      </div>
+      <div class="stocmed-role-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+        <div onclick="{{ selectPatient }}" style="cursor:pointer; border:1.5px solid #E6EEF7; border-radius:12px; padding:32px; display:flex; flex-direction:column; gap:8px;">
+          <div style="width:48px; height:48px; border-radius:12px; background:#F0F7FF; display:flex; align-items:center; justify-content:center; font-size:22px; margin-bottom:8px;">🧑</div>
+          <h3 style="font-size:19px; font-weight:500; color:#1A1A1A;">I'm a patient</h3>
+          <p style="font-size:14px; font-weight:400; line-height:1.55; color:#4A4A4A;">Search for medication and find nearby pharmacies with stock.</p>
+          <span style="margin-top:16px; font-size:14px; font-weight:500; color:#0066CC;">Continue as patient →</span>
+        </div>
+        <div onclick="{{ selectPharmacy }}" style="cursor:pointer; border:1.5px solid #E6EEF7; border-radius:12px; padding:32px; display:flex; flex-direction:column; gap:8px;">
+          <div style="width:48px; height:48px; border-radius:12px; background:#F0F7FF; display:flex; align-items:center; justify-content:center; font-size:22px; margin-bottom:8px;">🏥</div>
+          <h3 style="font-size:19px; font-weight:500; color:#1A1A1A;">I'm a pharmacy</h3>
+          <p style="font-size:14px; font-weight:400; line-height:1.55; color:#4A4A4A;">List and manage your inventory so patients can find you.</p>
+          <span style="margin-top:16px; font-size:14px; font-weight:500; color:#0066CC;">Continue as pharmacy →</span>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- STEP 2: PATIENT FORM -->
+  <sc-if value="{{ isPatientForm }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Signup / Step 2 - Patient form" style="max-width:520px; margin:0 auto; padding:56px 24px 96px;">
+      <a onclick="{{ goBack }}" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:500; color:#4A4A4A; margin-bottom:24px;">← Back</a>
+      <h1 style="font-family:'Source Serif 4', serif; font-weight:500; font-size:30px; color:#1A1A1A;">Create your patient account</h1>
+      <p style="font-size:15px; font-weight:400; color:#4A4A4A; margin-top:8px; margin-bottom:32px;">Find medication and reserve it at nearby pharmacies.</p>
+
+      <div style="display:flex; flex-direction:column; gap:20px;">
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Full name</label>
+          <input type="text" placeholder="Ada Nwosu" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Email address</label>
+          <input type="email" placeholder="ada@email.com" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Phone number</label>
+          <div style="display:flex; gap:8px;">
+            <div style="width:72px; height:48px; border:1px solid #E6EEF7; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:500; color:#4A4A4A; background:#F0F7FF; flex-shrink:0;">+234</div>
+            <input type="tel" placeholder="801 234 5678" style="flex:1; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF; min-width:0;">
+          </div>
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Password</label>
+          <input type="password" placeholder="At least 8 characters" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Location</label>
+          <input type="text" placeholder="e.g. Ikeja, Lagos" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+          <p style="font-size:13px; font-weight:400; color:#888; margin-top:6px;">Used to show pharmacies nearest to you</p>
+        </div>
+        <label style="display:flex; align-items:flex-start; gap:10px; font-size:14px; font-weight:400; color:#4A4A4A; cursor:pointer;">
+          <input type="checkbox" style="margin-top:3px; width:16px; height:16px; accent-color:#0066CC; flex-shrink:0;">
+          <span>I agree to StocMed's Terms of Service and Privacy Policy</span>
+        </label>
+        <button style="height:48px; width:100%; background:#0066CC; color:#FFFFFF; font-size:16px; font-weight:500; border:none; border-radius:8px; cursor:pointer; margin-top:8px;">Create account</button>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- STEP 2: PHARMACY FORM -->
+  <sc-if value="{{ isPharmacyForm }}" hint-placeholder-val="{{ false }}">
+    <div data-screen-label="Signup / Step 2 - Pharmacy form" style="max-width:640px; margin:0 auto; padding:56px 24px 96px;">
+      <a onclick="{{ goBack }}" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:500; color:#4A4A4A; margin-bottom:24px;">← Back</a>
+      <h1 style="font-family:'Source Serif 4', serif; font-weight:500; font-size:30px; color:#1A1A1A;">Register your pharmacy</h1>
+      <p style="font-size:15px; font-weight:400; color:#4A4A4A; margin-top:8px; margin-bottom:32px;">List your inventory and get discovered by patients searching nearby.</p>
+
+      <div style="display:flex; flex-direction:column; gap:20px;">
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Pharmacy name</label>
+          <input type="text" placeholder="MedPlus Pharmacy" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">PCN license number</label>
+          <input type="text" placeholder="PCN/PREM/000000" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+          <p style="font-size:13px; font-weight:400; color:#888; margin-top:6px;">We verify every pharmacy against the Pharmacists Council of Nigeria register</p>
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Street address</label>
+          <input type="text" placeholder="14 Allen Avenue" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+        </div>
+        <div class="stocmed-form-row" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div>
+            <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">City</label>
+            <input type="text" placeholder="Ikeja" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+          </div>
+          <div>
+            <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">State</label>
+            <select style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 14px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+              <option>Lagos</option>
+              <option>Abuja (FCT)</option>
+              <option>Rivers</option>
+              <option>Oyo</option>
+              <option>Kano</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Phone number</label>
+          <div style="display:flex; gap:8px;">
+            <div style="width:72px; height:48px; border:1px solid #E6EEF7; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:500; color:#4A4A4A; background:#F0F7FF; flex-shrink:0;">+234</div>
+            <input type="tel" placeholder="801 234 5678" style="flex:1; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF; min-width:0;">
+          </div>
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Work email</label>
+          <input type="email" placeholder="owner@medplus.ng" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+        </div>
+        <div>
+          <label style="display:block; font-size:14px; font-weight:500; color:#1A1A1A; margin-bottom:8px;">Password</label>
+          <input type="password" placeholder="At least 8 characters" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF;">
+        </div>
+        <label style="display:flex; align-items:flex-start; gap:10px; font-size:14px; font-weight:400; color:#4A4A4A; cursor:pointer;">
+          <input type="checkbox" style="margin-top:3px; width:16px; height:16px; accent-color:#0066CC; flex-shrink:0;">
+          <span>I confirm I'm authorized to register this pharmacy and agree to the Terms of Service</span>
+        </label>
+        <button style="height:48px; width:100%; background:#0066CC; color:#FFFFFF; font-size:16px; font-weight:500; border:none; border-radius:8px; cursor:pointer; margin-top:8px;">Register pharmacy</button>
+        <p style="font-size:13px; font-weight:400; color:#888; text-align:center;">Your account will be active once your PCN license is verified, usually within 1 business day.</p>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="">
+class Component extends DCLogic {
+  state = { step: 1, role: null };
+
+  selectRole(role) {
+    this.setState({ role, step: 2 });
+  }
+
+  goBack() {
+    this.setState({ step: 1, role: null });
+  }
+
+  renderVals() {
+    return {
+      isStep1: this.state.step === 1,
+      isPatientForm: this.state.step === 2 && this.state.role === 'patient',
+      isPharmacyForm: this.state.step === 2 && this.state.role === 'pharmacy',
+      selectPatient: () => this.selectRole('patient'),
+      selectPharmacy: () => this.selectRole('pharmacy'),
+      goBack: () => this.goBack(),
+    };
+  }
+}
+
+</script>
+
+
+</body></html>

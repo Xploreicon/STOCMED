@@ -20,13 +20,13 @@ export const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({
 }) => {
   const spinner = (
     <Loader2
-      className={cn('animate-spin text-blue-600', sizeClasses[size], className)}
+      className={cn('animate-spin text-primary', sizeClasses[size], className)}
     />
   );
 
   if (fullScreen) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <div className="flex items-center justify-center min-h-screen bg-surface">
         {spinner}
       </div>
     );

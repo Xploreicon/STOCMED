@@ -1,0 +1,139 @@
+
+
+<div data-screen-label="Search results" style="width:100%; min-height:100vh; background:#FFFFFF; color:#1A1A1A;">
+
+  <!-- TOP NAV -->
+  <div style="position:sticky; top:0; z-index:40; background:#FFFFFF; border-bottom:1px solid #E6EEF7;">
+    <div style="padding:14px 24px; display:flex; align-items:center; justify-content:space-between;">
+      <a href="./StocMed Landing.dc.html" style="display:flex; align-items:center; gap:8px;">
+        <div style="width:30px; height:30px; border-radius:8px; background:#0066CC; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <div style="width:17px; height:8.5px; border-radius:4.5px; transform:rotate(45deg); display:flex; overflow:hidden;">
+            <div style="width:50%; height:100%; background:#FFFFFF;"></div>
+            <div style="width:50%; height:100%; background:#FFFFFF; opacity:0.55; border-left:1px solid #0066CC;"></div>
+          </div>
+        </div>
+        <span style="font-size:17px; font-weight:500; color:#1A1A1A; letter-spacing:-0.2px;">StocMed</span>
+      </a>
+      <div style="width:36px; height:36px; border-radius:50%; background:#F0F7FF; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:500; color:#0066CC; border:1px solid #E6EEF7;">AN</div>
+    </div>
+  </div>
+
+  <div style="max-width:760px; margin:0 auto; padding:32px 24px 96px;">
+    <a href="./StocMed Chat.dc.html" style="display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:500; color:#4A4A4A; margin-bottom:20px;">← Back to chat</a>
+    <h1 style="font-family:'Source Serif 4', serif; font-weight:500; font-size:28px; color:#1A1A1A;">Coartem 80/480mg near Yaba</h1>
+    <p style="font-size:15px; font-weight:400; color:#4A4A4A; margin-top:8px;">3 pharmacies found within 3km · sorted by distance</p>
+
+    <div style="display:flex; flex-direction:column; gap:16px; margin-top:28px;">
+      <sc-for list="{{ results }}" as="r" hint-placeholder-count="3">
+        <div class="stocmed-result-card" onclick="{{ r.open }}" style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:20px; border:1px solid #E6EEF7; border-radius:12px; padding:20px; background:#FFFFFF;">
+          <div style="min-width:0;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span style="font-size:16px; font-weight:500; color:#1A1A1A;">{{ r.drug }}</span>
+              <span style="font-size:13px; font-weight:400; color:#888;">{{ r.strength }}</span>
+            </div>
+            <div style="font-size:14px; font-weight:400; color:#4A4A4A; margin-top:6px;">{{ r.pharmacy }}</div>
+            <div style="font-size:13px; font-weight:400; color:#888; margin-top:2px;">{{ r.address }} · {{ r.distance }}</div>
+          </div>
+          <div class="stocmed-result-right" style="display:flex; flex-direction:column; align-items:flex-end; gap:8px; flex-shrink:0; text-align:right;">
+            <span style="font-size:12px; font-weight:500; color: {{ r.badgeColor }}; background: {{ r.badgeBg }}; padding:6px 10px; border-radius:8px; white-space:nowrap;">{{ r.stockLabel }}</span>
+            <span style="font-size:17px; font-weight:500; color:#042C53; white-space:nowrap;">{{ r.price }}</span>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:28px; background:#F0F7FF; border:1px solid #E6EEF7; border-radius:12px; padding:16px 20px; display:flex; align-items:center; gap:12px;">
+      <span style="font-size:18px;">💡</span>
+      <p style="font-size:14px; font-weight:400; color:#4A4A4A; line-height:1.5;">Lonart DS is a generic alternative with the same active ingredients, from ₦2,400 nearby. <a href="./StocMed Chat.dc.html" style="color:#0066CC; font-weight:500;">Ask StocMed about it</a></p>
+    </div>
+  </div>
+
+  <!-- DETAIL MODAL -->
+  <sc-if value="{{ hasSelection }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ closeModal }}" style="position:fixed; inset:0; background:rgba(4,44,83,0.4); z-index:100; display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div onclick="{{ stopClick }}" style="width:100%; max-width:440px; background:#FFFFFF; border-radius:16px; padding:28px; max-height:85vh; overflow-y:auto;">
+        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+          <div>
+            <h2 style="font-size:20px; font-weight:500; color:#1A1A1A;">{{ sel.pharmacy }}</h2>
+            <p style="font-size:14px; font-weight:400; color:#4A4A4A; margin-top:4px;">{{ sel.address }} · {{ sel.distance }}</p>
+          </div>
+          <div onclick="{{ closeModal }}" style="cursor:pointer; width:32px; height:32px; border-radius:8px; background:#F0F7FF; display:flex; align-items:center; justify-content:center; font-size:14px; color:#4A4A4A; flex-shrink:0;">✕</div>
+        </div>
+
+        <div style="margin-top:20px; border:1px solid #E6EEF7; border-radius:12px; padding:16px; display:flex; align-items:center; justify-content:space-between; gap:12px;">
+          <div>
+            <div style="font-size:15px; font-weight:500; color:#1A1A1A;">{{ sel.drug }} {{ sel.strength }}</div>
+            <div style="font-size:13px; font-weight:400; color:#888; margin-top:2px;">per pack</div>
+          </div>
+          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
+            <span style="font-size:12px; font-weight:500; color: {{ sel.badgeColor }}; background: {{ sel.badgeBg }}; padding:5px 10px; border-radius:8px; white-space:nowrap;">{{ sel.stockLabel }}</span>
+            <span style="font-size:18px; font-weight:500; color:#042C53;">{{ sel.price }}</span>
+          </div>
+        </div>
+
+        <div style="margin-top:20px; display:flex; flex-direction:column; gap:14px;">
+          <div style="display:flex; justify-content:space-between; gap:16px;">
+            <span style="font-size:14px; font-weight:400; color:#888;">Opening hours</span>
+            <span style="font-size:14px; font-weight:500; color:#1A1A1A; text-align:right;">{{ sel.hours }}</span>
+          </div>
+          <div style="height:1px; background:#E6EEF7;"></div>
+          <div style="display:flex; justify-content:space-between; gap:16px;">
+            <span style="font-size:14px; font-weight:400; color:#888;">PCN license</span>
+            <span style="font-size:14px; font-weight:500; color:#1A1A1A; text-align:right;">{{ sel.license }} <span style="color:#639922;">✓ verified</span></span>
+          </div>
+          <div style="height:1px; background:#E6EEF7;"></div>
+          <div style="display:flex; justify-content:space-between; gap:16px;">
+            <span style="font-size:14px; font-weight:400; color:#888;">Phone</span>
+            <span style="font-size:14px; font-weight:500; color:#1A1A1A; text-align:right;">{{ sel.phone }}</span>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:12px; margin-top:24px;">
+          <div style="flex:1; height:48px; background:#0066CC; color:#FFFFFF; font-size:15px; font-weight:500; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer;">Reserve this medication</div>
+          <div style="width:48px; height:48px; border:1.5px solid #0066CC; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:17px; cursor:pointer;">📞</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="">
+class Component extends DCLogic {
+  state = { selected: null };
+
+  data() {
+    return [
+      { drug: 'Coartem', strength: '80/480mg', pharmacy: 'Medbase Pharmacy', address: 'Herbert Macaulay Way, Yaba', distance: '0.8 km away', price: '\u20a63,800', stock: 'in', hours: 'Mon\u2013Sat, 8am \u2013 9pm', license: 'PCN/PREM/48213', phone: '+234 802 441 7890' },
+      { drug: 'Coartem', strength: '80/480mg', pharmacy: 'HealthPlus \u2013 Sabo', address: 'Commercial Avenue, Sabo, Yaba', distance: '1.6 km away', price: '\u20a64,100', stock: 'in', hours: 'Daily, 8am \u2013 10pm', license: 'PCN/PREM/31967', phone: '+234 701 555 2034' },
+      { drug: 'Coartem', strength: '80/480mg', pharmacy: 'Tona Pharmacy', address: 'Murtala Muhammed Way, Ebute Metta', distance: '2.7 km away', price: '\u20a63,650', stock: 'low', hours: 'Mon\u2013Sat, 9am \u2013 8pm', license: 'PCN/PREM/55402', phone: '+234 809 233 6671' },
+    ];
+  }
+
+  decorate(r, i) {
+    const styles = {
+      in:  { stockLabel: 'In stock',     badgeColor: '#639922', badgeBg: '#F2F7EA' },
+      low: { stockLabel: 'Low stock',    badgeColor: '#BA7517', badgeBg: '#FBF2E6' },
+      out: { stockLabel: 'Out of stock', badgeColor: '#E24B4A', badgeBg: '#FBEDEC' },
+    };
+    return Object.assign({}, r, styles[r.stock], { open: () => this.setState({ selected: i }) });
+  }
+
+  renderVals() {
+    const results = this.data().map((r, i) => this.decorate(r, i));
+    const sel = this.state.selected == null ? null : results[this.state.selected];
+    return {
+      results,
+      hasSelection: sel != null,
+      sel: sel || {},
+      closeModal: () => this.setState({ selected: null }),
+      stopClick: (e) => e.stopPropagation(),
+    };
+  }
+}
+
+</script>
+
+
+</body></html>

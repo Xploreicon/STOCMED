@@ -1,64 +1,44 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
-import { Package, CheckCircle2, AlertTriangle, XCircle, Clock } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import InventoryTable from '@/components/pharmacy/InventoryTable';
 import AddDrugModal from '@/components/pharmacy/AddDrugModal';
-import EditDrugModal from '@/components/pharmacy/EditDrugModal';
-import DeleteConfirmDialog from '@/components/pharmacy/DeleteConfirmDialog';
-import AdjustStockModal from '@/components/pharmacy/AdjustStockModal';
-import BulkImportModal from '@/components/pharmacy/BulkImportModal';
-import PosModal from '@/components/pharmacy/PosModal';
-import UnmetDemandCard from '@/components/pharmacy/UnmetDemandCard';
-import { STATUS_FILTERS, matchesFilter, type StatusFilterKey } from '@/lib/inventoryUi';
-import type { EnrichedInventoryRow, InventoryStats } from '@/lib/pharmacyInventory';
 
 export const dynamic = 'force-dynamic';
-
-const PER_PAGE = 8;
-
-// Legacy query param values linked from the pharmacy dashboard's quick actions.
-const LEGACY_FILTER_MAP: Record<string, StatusFilterKey> = {
-  in_stock: 'in',
-  low_stock: 'low',
-  out_of_stock: 'out',
-};
-
-type Modal = { type: 'add' | 'edit' | 'delete' | 'adjust' | 'bulk' | 'pos'; row?: EnrichedInventoryRow } | null;
-
-function useOnlineStatus() {
-  const [isOnline, setIsOnline] = useState(true);
-  useEffect(() => {
-    setIsOnline(typeof navigator === 'undefined' ? true : navigator.onLine);
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
-  }, []);
-  return isOnline;
-}
 
 export default function PharmacyInventory() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isLoading: authLoading, isPharmacy } = useUser();
-  const isOnline = useOnlineStatus();
 
-  const rawFilterParam = searchParams.get('filter') || 'all';
-  const [filter, setFilter] = useState<StatusFilterKey>(
-    (LEGACY_FILTER_MAP[rawFilterParam] ?? (rawFilterParam as StatusFilterKey)) || 'all'
-  );
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
-  const [modal, setModal] = useState<Modal>(null);
-  const [prefillName, setPrefillName] = useState<string | undefined>(undefined);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  const addProductId = searchParams.get('add_product_id');
+  const addProductName = searchParams.get('name');
+  const addProductStrength = searchParams.get('strength');
+  const addProductDosageForm = searchParams.get('dosage_form');
+  const addProductCategory = searchParams.get('category');
+
+  const preselectedProduct = addProductId ? {
+    id: addProductId,
+    generic_name: addProductName || '',
+    strength: addProductStrength || '',
+    dosage_form: addProductDosageForm || '',
+    category: addProductCategory || 'Others'
+  } : null;
+
+  useEffect(() => {
+    if (addProductId) {
+      setIsAddModalOpen(true);
+    }
+  }, [addProductId]);
 
   useEffect(() => {
     if (!authLoading && (!user || !isPharmacy)) {
@@ -66,312 +46,244 @@ export default function PharmacyInventory() {
     }
   }, [user, authLoading, isPharmacy, router]);
 
-  const {
-    data: drugsData,
-    isLoading,
-    isError,
-    refetch,
-  } = useQuery<{ drugs: EnrichedInventoryRow[]; stats: InventoryStats }>({
+  const { data: drugsData, isLoading, refetch } = useQuery({
     queryKey: ['pharmacy-drugs'],
     queryFn: async () => {
       const response = await fetch('/api/pharmacy/drugs');
-      if (!response.ok) throw new Error('Failed to fetch drugs');
+      if (!response.ok) {
+        throw new Error('Failed to fetch drugs');
+      }
       return response.json();
     },
     enabled: !!user && isPharmacy,
   });
 
-  const { data: pharmacyProfile } = useQuery({
-    queryKey: ['pharmacy-profile'],
-    queryFn: async () => {
-      const response = await fetch('/api/pharmacy/profile');
-      if (!response.ok) throw new Error('Failed to fetch pharmacy profile');
-      return response.json();
-    },
-    enabled: !!user && isPharmacy,
-  });
-
-  const stats = drugsData?.stats;
-
-  const allRows = useMemo(() => drugsData?.drugs ?? [], [drugsData]);
-
-  const filteredRows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return allRows
-      .filter((row) => matchesFilter(row, filter))
-      .filter((row) => !q || row.generic_name.toLowerCase().includes(q) || row.brand_name?.toLowerCase().includes(q));
-  }, [allRows, filter, query]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PER_PAGE));
-  const currentPage = Math.min(page, totalPages - 1);
-  const pageRows = filteredRows.slice(currentPage * PER_PAGE, (currentPage + 1) * PER_PAGE);
-
-  const closeModal = () => {
-    setModal(null);
-    setPrefillName(undefined);
-  };
-
-  const handleModalSuccess = () => {
-    closeModal();
-    refetch();
-  };
-
-  const openAddFromDemand = (drugName: string) => {
-    setPrefillName(drugName);
-    setModal({ type: 'add' });
-  };
-
-  const isEmpty = !isLoading && !isError && allRows.length === 0;
-  const showMainContent = !isLoading && !isEmpty;
-
-  const statCards = stats
-    ? [
-        { icon: Package, label: 'Total products', value: stats.total, color: 'text-brand-deep' },
-        { icon: CheckCircle2, label: 'In stock', value: stats.in_stock, color: 'text-stock-in' },
-        { icon: AlertTriangle, label: 'Low stock', value: stats.low_stock, color: 'text-stock-low' },
-        { icon: XCircle, label: 'Out of stock', value: stats.out_of_stock, color: 'text-stock-out' },
-        { icon: Clock, label: 'Expiring soon', value: stats.expiring_soon, color: 'text-stock-low' },
-      ]
-    : [];
-
-  if (authLoading) {
-    return <div className="min-h-screen" />;
+  if (authLoading || isLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+        <div className="flex items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-ink-muted text-lg">Loading inventory...</p>
+        </div>
+      </div>
+    );
   }
 
+  const drugs = drugsData?.drugs || [];
+  const totalProducts = drugs.length;
+
+  // Compute stat counts dynamically
+  const today = new Date();
+  const ninetyDaysFromNow = new Date();
+  ninetyDaysFromNow.setDate(today.getDate() + 90);
+
+  const inStock = drugs.filter((d: any) => d.quantity_in_stock > (d.low_stock_threshold || 10)).length;
+  const lowStock = drugs.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= (d.low_stock_threshold || 10)).length;
+  const outOfStock = drugs.filter((d: any) => d.quantity_in_stock === 0).length;
+
+  const expiringSoon = drugs.filter((d: any) => {
+    if (!d.expiry_date) return false;
+    const exp = new Date(d.expiry_date);
+    return exp >= today && exp <= ninetyDaysFromNow;
+  }).length;
+
+  const expired = drugs.filter((d: any) => {
+    if (!d.expiry_date) return false;
+    const exp = new Date(d.expiry_date);
+    return exp < today;
+  }).length;
+
+  // Filter logic
+  const filteredDrugs = drugs.filter((drug: any) => {
+    const matchesSearch = searchQuery
+      ? drug.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        drug.generic_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        drug.brand_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        drug.category?.toLowerCase().includes(searchQuery.toLowerCase())
+      : true;
+
+    let matchesStatus = true;
+    if (filterStatus === 'in_stock') {
+      matchesStatus = drug.quantity_in_stock > (drug.low_stock_threshold || 10);
+    } else if (filterStatus === 'low_stock') {
+      matchesStatus =
+        drug.quantity_in_stock > 0 &&
+        drug.quantity_in_stock <= (drug.low_stock_threshold || 10);
+    } else if (filterStatus === 'out_of_stock') {
+      matchesStatus = drug.quantity_in_stock === 0;
+    } else if (filterStatus === 'expiring_soon') {
+      if (!drug.expiry_date) {
+        matchesStatus = false;
+      } else {
+        const exp = new Date(drug.expiry_date);
+        matchesStatus = exp >= today && exp <= ninetyDaysFromNow;
+      }
+    } else if (filterStatus === 'expired') {
+      if (!drug.expiry_date) {
+        matchesStatus = false;
+      } else {
+        const exp = new Date(drug.expiry_date);
+        matchesStatus = exp < today;
+      }
+    }
+
+    return matchesSearch && matchesStatus;
+  });
+
+  const stats = [
+    { label: 'Total products', value: totalProducts, icon: '📦', color: '#042C53' },
+    { label: 'In stock', value: inStock, icon: '🟢', color: '#639922' },
+    { label: 'Low stock', value: lowStock, icon: '🟡', color: '#BA7517' },
+    { label: 'Out of stock', value: outOfStock, icon: '🔴', color: '#E24B4A' },
+    { label: 'Expiring soon', value: expiringSoon, icon: '⚠️', color: '#BA7517' },
+  ];
+
+  const filterOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'in_stock', label: 'In stock' },
+    { value: 'low_stock', label: 'Low stock' },
+    { value: 'out_of_stock', label: 'Out of stock' },
+    { value: 'expiring_soon', label: 'Expiring soon' },
+    { value: 'expired', label: 'Expired' },
+  ];
+
   return (
-    <div className="w-full">
-      <div className="mx-auto max-w-[1000px]">
-        {/* Header */}
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-2xl font-medium text-ink">Inventory</h1>
-              <span className="whitespace-nowrap rounded-full border border-hairline bg-brand-tint px-2.5 py-1 text-[13px] font-medium text-brand">
-                {stats?.total ?? 0} products
-              </span>
-              {isOnline ? (
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-stock-in-bg px-2.5 py-1 text-xs font-medium text-stock-in">
-                  <span className="h-1.5 w-1.5 rounded-full bg-stock-in" />
-                  Synced
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-stock-low-bg px-2.5 py-1 text-xs font-medium text-stock-low">
-                  <span className="h-1.5 w-1.5 rounded-full bg-stock-low" />
-                  Offline — changes will sync when you reconnect
-                </span>
-              )}
-              {pharmacyProfile?.is_verified && (
-                <span className="whitespace-nowrap rounded-full bg-stock-in-bg px-2.5 py-1 text-xs font-medium text-stock-in">
-                  ✓ Verified · Priority listed
-                </span>
-              )}
-            </div>
-            <p className="mt-1.5 text-sm text-secondary">Manage what&apos;s on your shelves and how patients find it</p>
+    <div className="max-w-[1000px] mx-auto py-2">
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-[24px] font-medium text-ink">Inventory</h1>
+            <span className="text-[13px] font-medium text-primary bg-[#F0F7FF] border border-border px-2.5 py-1 rounded-full whitespace-nowrap">
+              {totalProducts} {totalProducts === 1 ? 'product' : 'products'}
+            </span>
           </div>
-          <div className="flex flex-wrap gap-2.5">
-            <button
-              onClick={() => setModal({ type: 'pos' })}
-              className="flex h-11 items-center justify-center whitespace-nowrap rounded-control border-[1.5px] border-brand px-[18px] text-sm font-medium text-brand"
-            >
-              Open POS
-            </button>
-            <button
-              onClick={() => setModal({ type: 'bulk' })}
-              className="flex h-11 items-center justify-center whitespace-nowrap rounded-control border-[1.5px] border-brand px-[18px] text-sm font-medium text-brand"
-            >
-              Bulk import
-            </button>
-            <button
-              onClick={() => setModal({ type: 'add' })}
-              className="flex h-11 items-center justify-center whitespace-nowrap rounded-control bg-brand px-[18px] text-sm font-medium text-white"
-            >
-              + Add drug
-            </button>
-          </div>
+          <p className="text-[14px] text-ink-muted mt-1.5">
+            Manage what&apos;s on your shelves and how patients find it
+          </p>
         </div>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            onClick={() => alert('POS Interface coming soon!')}
+            className="h-11 flex items-center px-4 bg-white text-primary border-[1.5px] border-primary font-medium text-[14px] rounded-button hover:bg-surface transition-colors"
+          >
+            Open POS
+          </button>
+          <button
+            onClick={() => router.push('/pharmacy/inventory/import')}
+            className="h-11 flex items-center px-4 bg-white text-primary border-[1.5px] border-primary font-medium text-[14px] rounded-button hover:bg-surface transition-colors"
+          >
+            Bulk import
+          </button>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="h-11 flex items-center px-4 bg-primary text-white font-medium text-[14px] rounded-button hover:bg-[#0052A3] transition-colors"
+          >
+            + Add drug
+          </button>
+        </div>
+      </div>
 
-        {/* Loading skeleton */}
-        {isLoading && (
-          <div className="flex flex-col gap-4 py-6">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {[0, 1, 2, 3, 4].map((i) => (
-                <div key={i} className="rounded-card border border-hairline p-4">
-                  <div className="h-3 w-20 animate-pulse rounded bg-hairline" />
-                  <div className="mt-2 h-6 w-12 animate-pulse rounded bg-hairline" />
-                </div>
-              ))}
+      {/* Summary Stat Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+        {stats.map((s, idx) => (
+          <div key={idx} className="border border-border rounded-card p-3.5 bg-white">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[15px]">{s.icon}</span>
+              <span className="text-[12px] text-ink-light whitespace-nowrap">{s.label}</span>
             </div>
-            <div className="overflow-hidden rounded-card border border-hairline">
-              <div className="h-11 bg-brand-tint" />
-              {[0, 1, 2].map((i) => (
-                <div key={i} className="flex gap-8 border-b border-hairline px-4 py-3.5 last:border-b-0">
-                  <div className="h-3.5 w-36 animate-pulse rounded bg-hairline" />
-                  <div className="h-3.5 w-20 animate-pulse rounded bg-hairline" />
-                  <div className="h-3.5 w-12 animate-pulse rounded bg-hairline" />
-                </div>
-              ))}
+            <div
+              style={{ color: s.color }}
+              className="text-[22px] font-medium mt-1.5 tabular-nums"
+            >
+              {s.value}
             </div>
           </div>
-        )}
+        ))}
+      </div>
 
-        {/* Empty inventory state */}
-        {isEmpty && (
-          <div className="mt-2 flex flex-col items-center gap-2 rounded-feature border border-dashed border-hairline px-8 py-16 text-center">
-            <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-feature bg-brand-tint text-2xl">
-              📦
-            </div>
-            <h3 className="text-lg font-medium text-ink">Your inventory is empty</h3>
-            <p className="max-w-[380px] text-sm leading-relaxed text-secondary">
-              Import your NAFDAC-registered catalogue to get started. Patients near your pharmacy are already
-              searching — list your stock so they can find you.
-            </p>
-            <div className="mt-5 flex flex-wrap justify-center gap-3">
+      {/* Toolbar */}
+      <div className="flex flex-col md:flex-row gap-3 mb-5">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search medications…"
+          className="flex-1 h-11 border border-border rounded-button px-4 text-[14px] text-ink bg-white focus:outline-none focus:border-primary min-w-[200px]"
+        />
+        <div className="flex gap-2 flex-wrap">
+          {filterOptions.map((f) => {
+            const isActive = filterStatus === f.value;
+            return (
               <button
-                onClick={() => setModal({ type: 'bulk' })}
-                className="flex h-12 items-center justify-center rounded-control border-[1.5px] border-brand px-6 text-[15px] font-medium text-brand"
+                key={f.value}
+                onClick={() => setFilterStatus(f.value)}
+                className={`h-11 flex items-center px-3.5 text-[13px] font-medium border rounded-button whitespace-nowrap transition-colors ${
+                  isActive
+                    ? 'text-primary bg-[#F0F7FF] border-primary/45'
+                    : 'text-ink-muted bg-white border-border hover:bg-surface'
+                }`}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main Inventory Content */}
+      {filteredDrugs.length === 0 ? (
+        <div className="border border-dashed border-border rounded-card-lg p-16 flex flex-col items-center justify-center text-center gap-2 bg-white">
+          <div className="w-14 h-14 rounded-card bg-[#F0F7FF] flex items-center justify-center text-[24px] mb-2">
+            📦
+          </div>
+          <h3 className="text-[18px] font-medium text-ink">
+            {drugs.length === 0 ? 'Your inventory is empty' : 'No matching medications'}
+          </h3>
+          <p className="text-[14px] text-ink-muted max-w-[380px] leading-relaxed">
+            {drugs.length === 0
+              ? 'Import your NAFDAC-registered catalogue to get started. Patients near your pharmacy are already searching.'
+              : 'Try adjusting your search query or filter selections above.'}
+          </p>
+          {drugs.length === 0 && (
+            <div className="flex gap-3 mt-5 flex-wrap justify-center">
+              <button
+                onClick={() => router.push('/pharmacy/inventory/import')}
+                className="h-12 flex items-center px-6 bg-white text-primary border-[1.5px] border-primary font-medium text-[15px] rounded-button hover:bg-surface transition-colors"
               >
                 Bulk import catalogue
               </button>
               <button
-                onClick={() => setModal({ type: 'add' })}
-                className="flex h-12 items-center justify-center rounded-control bg-brand px-6 text-[15px] font-medium text-white"
+                onClick={() => setIsAddModalOpen(true)}
+                className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[#0052A3] transition-colors"
               >
                 + Add your first drug
               </button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      ) : (
+        <InventoryTable
+          drugs={filteredDrugs}
+          onRefetch={refetch}
+          viewMode={viewMode}
+        />
+      )}
 
-        {isError && !isLoading && (
-          <div className="mt-2 rounded-card border border-hairline p-6 text-center text-sm text-secondary">
-            Couldn&apos;t load your inventory. Check your connection and try again.
-          </div>
-        )}
-
-        {showMainContent && (
-          <>
-            {/* Summary stat row */}
-            <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              {statCards.map((s) => {
-                const Icon = s.icon;
-                return (
-                  <div key={s.label} className="rounded-card border border-hairline p-3.5">
-                    <div className="flex items-center gap-1.5">
-                      <Icon className={`h-3.5 w-3.5 ${s.color}`} />
-                      <span className="whitespace-nowrap text-xs text-muted">{s.label}</span>
-                    </div>
-                    <div className={`mt-1.5 text-[22px] font-medium tabular-nums ${s.color}`}>{s.value}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Toolbar */}
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-              <input
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setPage(0);
-                }}
-                placeholder="Search medications…"
-                className="h-11 min-w-[200px] flex-1 rounded-control border border-hairline bg-white px-4 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/40"
-              />
-              <div className="flex flex-wrap gap-2">
-                {STATUS_FILTERS.map((f) => {
-                  const active = filter === f.key;
-                  return (
-                    <button
-                      key={f.key}
-                      onClick={() => {
-                        setFilter(f.key);
-                        setPage(0);
-                      }}
-                      className="flex h-11 items-center whitespace-nowrap rounded-control border px-3.5 text-[13px] font-medium"
-                      style={{
-                        color: active ? '#FFFFFF' : '#4A4A4A',
-                        background: active ? '#0066CC' : '#FFFFFF',
-                        borderColor: active ? '#0066CC' : '#E6EEF7',
-                      }}
-                    >
-                      {f.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {filteredRows.length === 0 ? (
-              <div className="rounded-card border border-hairline p-10 text-center text-sm text-secondary">
-                No medications match your search or filter.
-              </div>
-            ) : (
-              <InventoryTable
-                rows={pageRows}
-                onEdit={(row) => setModal({ type: 'edit', row })}
-                onAdjust={(row) => setModal({ type: 'adjust', row })}
-                onDelete={(row) => setModal({ type: 'delete', row })}
-              />
-            )}
-
-            {/* Pagination */}
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-              <span className="text-[13px] text-muted">
-                Showing {filteredRows.length === 0 ? 0 : currentPage * PER_PAGE + 1}–
-                {Math.min((currentPage + 1) * PER_PAGE, filteredRows.length)} of {filteredRows.length}
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
-                  className="flex h-10 w-10 items-center justify-center rounded-control border border-hairline text-sm text-secondary"
-                >
-                  ←
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPage(i)}
-                    className="flex h-10 w-10 items-center justify-center rounded-control border text-sm font-medium"
-                    style={{
-                      background: i === currentPage ? '#0066CC' : '#FFFFFF',
-                      color: i === currentPage ? '#FFFFFF' : '#4A4A4A',
-                      borderColor: i === currentPage ? '#0066CC' : '#E6EEF7',
-                    }}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                  className="flex h-10 w-10 items-center justify-center rounded-control border border-hairline text-sm text-secondary"
-                >
-                  →
-                </button>
-              </div>
-            </div>
-
-            <UnmetDemandCard onAdd={openAddFromDemand} />
-          </>
-        )}
-      </div>
-
+      {/* Add Drug Modal */}
       <AddDrugModal
-        isOpen={modal?.type === 'add'}
-        onClose={closeModal}
-        onSuccess={handleModalSuccess}
-        prefillName={prefillName}
+        isOpen={isAddModalOpen}
+        onClose={() => {
+          setIsAddModalOpen(false);
+          if (addProductId) router.replace('/pharmacy/inventory');
+        }}
+        onSuccess={() => {
+          refetch();
+          setIsAddModalOpen(false);
+          if (addProductId) router.replace('/pharmacy/inventory');
+        }}
+        preselectedProduct={preselectedProduct}
       />
-      {modal?.type === 'edit' && modal.row && (
-        <EditDrugModal isOpen row={modal.row} onClose={closeModal} onSuccess={handleModalSuccess} />
-      )}
-      {modal?.type === 'delete' && modal.row && (
-        <DeleteConfirmDialog isOpen row={modal.row} onClose={closeModal} onSuccess={handleModalSuccess} />
-      )}
-      {modal?.type === 'adjust' && modal.row && (
-        <AdjustStockModal isOpen row={modal.row} onClose={closeModal} onSuccess={handleModalSuccess} />
-      )}
-      <BulkImportModal isOpen={modal?.type === 'bulk'} onClose={closeModal} onSuccess={handleModalSuccess} />
-      <PosModal isOpen={modal?.type === 'pos'} onClose={closeModal} rows={allRows} />
     </div>
   );
 }

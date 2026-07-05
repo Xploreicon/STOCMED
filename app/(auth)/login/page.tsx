@@ -2,14 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
+import { Logo } from '@/components/brand/Logo';
 
 export const dynamic = 'force-dynamic'
 
@@ -68,17 +63,12 @@ export default function Login() {
       });
 
       if (error) {
-        setErrors({
-          general: error.message,
-        });
+        setErrors({ general: error.message });
         return;
       }
 
       if (data.user) {
-        // Get user role from metadata
         const role = data.user.user_metadata?.role || 'patient';
-
-        // Redirect based on role or to the original destination
         if (redirectTo) {
           router.push(redirectTo);
         } else {
@@ -95,136 +85,95 @@ export default function Login() {
     }
   };
 
-  const handleBlur = (field: 'email' | 'password') => {
-    const newErrors: typeof errors = { ...errors };
-
-    if (field === 'email') {
-      if (!formData.email) {
-        newErrors.email = 'Email is required';
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-        newErrors.email = 'Please enter a valid email address';
-      } else {
-        delete newErrors.email;
-      }
-    }
-
-    if (field === 'password') {
-      if (!formData.password) {
-        newErrors.password = 'Password is required';
-      } else if (formData.password.length < 6) {
-        newErrors.password = 'Password must be at least 6 characters';
-      } else {
-        delete newErrors.password;
-      }
-    }
-
-    setErrors(newErrors);
-  };
+  const inputCls =
+    'w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-60';
 
   return (
-    <div className="min-h-screen bg-light-blue-bg flex items-center justify-center p-4">
-      <Card className="w-full max-w-[500px]">
-        <CardHeader className="space-y-1">
-          <div className="flex justify-center mb-2">
-            <Image
-              src="/logo.png"
-              alt="StocMed"
-              width={180}
-              height={60}
-              className="h-14 w-auto"
-              priority
-            />
-          </div>
-          <CardTitle className="text-2xl font-bold text-center">Welcome Back</CardTitle>
-          <CardDescription className="text-center">
-            Sign in to your StocMed account
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="w-full min-h-screen flex flex-col text-ink bg-page-wash">
+      <div className="p-6">
+        <Logo size={32} wordSize={18} href="/" />
+      </div>
+
+      <div className="flex-1 flex items-center justify-center px-6 pb-[72px]">
+        <div className="w-full max-w-[420px] bg-white border border-border rounded-card-lg shadow-lg p-8 sm:p-10">
+          <h1 className="font-display font-medium text-[28px] text-ink text-center">Welcome back</h1>
+          <p className="text-[15px] text-ink-muted text-center mt-2 mb-8">Log in to continue to StocMed</p>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {errors.general && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
+              <div className="rounded-button border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger font-medium">
                 {errors.general}
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
+            <div>
+              <label htmlFor="email" className="block text-[14px] font-medium text-ink mb-2">Email address</label>
+              <input
                 id="email"
                 type="email"
-                placeholder="Enter your email"
+                placeholder="you@email.com"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                onBlur={() => handleBlur('email')}
                 disabled={isLoading}
-                className={errors.email ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                className={`${inputCls} ${errors.email ? 'border-danger focus:border-danger focus:ring-danger/15' : ''}`}
               />
-              {errors.email && (
-                <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-              )}
+              {errors.email && <p className="text-xs text-danger font-medium mt-1.5">{errors.email}</p>}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
+            <div>
+              <label htmlFor="password" className="block text-[14px] font-medium text-ink mb-2">Password</label>
+              <input
                 id="password"
                 type="password"
                 placeholder="Enter your password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                onBlur={() => handleBlur('password')}
                 disabled={isLoading}
-                className={errors.password ? 'border-red-500 focus-visible:ring-red-500' : ''}
+                className={`${inputCls} ${errors.password ? 'border-danger focus:border-danger focus:ring-danger/15' : ''}`}
               />
-              {errors.password && (
-                <p className="text-red-500 text-xs mt-1">{errors.password}</p>
-              )}
+              {errors.password && <p className="text-xs text-danger font-medium mt-1.5">{errors.password}</p>}
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="remember"
+              <label className="flex items-center gap-2 text-[14px] text-ink-muted cursor-pointer">
+                <input
+                  type="checkbox"
                   checked={rememberMe}
-                  onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                  onChange={(e) => setRememberMe(e.target.checked)}
                   disabled={isLoading}
+                  className="w-4 h-4"
+                  style={{ accentColor: '#0066CC' }}
                 />
-                <Label
-                  htmlFor="remember"
-                  className="text-sm font-normal cursor-pointer"
-                >
-                  Remember me
-                </Label>
-              </div>
-              <Link
-                href="/forgot-password"
-                className="text-sm text-primary-blue hover:underline"
-              >
-                Forgot Password?
+                <span>Remember me</span>
+              </label>
+              <Link href="/forgot-password" className="text-[14px] font-medium text-primary hover:underline">
+                Forgot password?
               </Link>
             </div>
 
-            <Button
+            <button
               type="submit"
-              className="w-full"
               disabled={isLoading}
+              className="h-12 w-full bg-primary text-white text-[16px] font-medium rounded-button mt-2 hover:bg-[#0052A3] disabled:opacity-60"
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
-            </Button>
-
-            <div className="text-center text-sm">
-            <span className="text-gray-600">Don&apos;t have an account? </span>
-              <Link
-                href="/signup"
-                className="text-primary-blue hover:underline font-medium"
-              >
-                Sign Up
-              </Link>
-            </div>
+              {isLoading ? 'Signing in...' : 'Sign in'}
+            </button>
           </form>
-        </CardContent>
-      </Card>
+
+          <div className="flex items-center gap-3 my-7">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-[13px] text-ink-light">New to StocMed?</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          <Link
+            href="/signup"
+            className="h-12 w-full flex items-center justify-center bg-white text-primary border-[1.5px] border-primary text-[15px] font-medium rounded-button hover:bg-surface"
+          >
+            Create an account
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

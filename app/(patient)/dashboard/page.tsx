@@ -1,207 +1,145 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Search, Clock, Pill } from 'lucide-react'
-import RecentSearches from '@/components/patient/RecentSearches'
-import SearchChips from '@/components/patient/SearchChips'
+import { formatDistanceToNow } from 'date-fns'
+
+export const dynamic = 'force-dynamic'
+
+const SUGGESTIONS = [
+  { icon: '🦟', label: 'Malaria treatment', q: 'Malaria treatment' },
+  { icon: '❤️', label: 'Blood pressure medication', q: 'Blood pressure medication' },
+  { icon: '🤰', label: 'Prenatal vitamins', q: 'Prenatal vitamins' },
+  { icon: '💉', label: 'Diabetes management', q: 'Diabetes management' },
+]
+
+function greeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
+}
 
 export default async function PatientDashboard() {
   const supabase = await createClient()
-
-  // Get authenticated user
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   if (authError || !user) {
     redirect('/login')
   }
 
-  // Fetch user details from users table
   const { data: userData } = await supabase
     .from('users')
     .select('full_name')
     .eq('user_id', user.id)
     .single()
 
-  // Fetch recent searches
   const { data: recentSearchesData } = await supabase
     .from('searches')
-    .select('id, query_text, location, timestamp, metadata')
+    .select('id, query_text, location, timestamp, results_count, metadata')
     .eq('user_id', user.id)
     .order('timestamp', { ascending: false })
-    .limit(5)
+    .limit(3)
 
-  type RecentSearchRow = {
+  type Row = {
     id: string
     query_text: string | null
     location: string | null
     timestamp: string
+    results_count: number | null
     metadata: Record<string, unknown> | null
   }
 
-  const recentSearchRows = (recentSearchesData ?? []) as RecentSearchRow[]
-
-  const recentSearches: Array<{
-    id: string
-    query: string
-    displayName: string
-    location?: string | null
-    timestamp: string
-  }> = recentSearchRows.map((search) => {
-    let displayName = '';
-
-    if (typeof search.metadata === 'object' && search.metadata !== null) {
-      const metadata = search.metadata as { drug_name?: string; query?: string };
-      displayName = metadata.drug_name ?? metadata.query ?? '';
+  const recent = ((recentSearchesData ?? []) as Row[]).map((s) => {
+    let name = ''
+    if (s.metadata && typeof s.metadata === 'object') {
+      const m = s.metadata as { drug_name?: string; query?: string }
+      name = m.drug_name ?? m.query ?? ''
     }
-
-    if (!displayName) {
-      displayName = search.query_text ?? '';
-    }
-
+    if (!name) name = s.query_text ?? 'Search'
+    const count = s.results_count ?? 0
+    const dot = count === 0 ? 'bg-danger' : count <= 1 ? 'bg-warning' : 'bg-success'
+    const meta =
+      count === 0
+        ? 'No pharmacies with stock nearby'
+        : `${count} ${count === 1 ? 'pharmacy' : 'pharmacies'} with stock${s.location ? ` near ${s.location}` : ''}`
     return {
-      id: search.id,
-      query: search.query_text ?? '',
-      displayName,
-      location: search.location,
-      timestamp: search.timestamp,
-    };
+      id: s.id,
+      name,
+      meta,
+      dot,
+      when: formatDistanceToNow(new Date(s.timestamp), { addSuffix: true }),
+      q: s.query_text ?? name,
+    }
   })
 
-  const userName = (userData as any)?.full_name || user.email?.split('@')[0] || 'there'
+  const firstName = (userData as { full_name?: string } | null)?.full_name?.split(' ')[0]
+    || user.email?.split('@')[0]
+    || 'there'
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Welcome back, {userName}!
-          </h1>
-          <p className="text-gray-600 mt-2">
-            Find medications quickly with our AI-powered search
-          </p>
-        </div>
+    <div className="w-full max-w-[760px] mx-auto">
+      <h1 className="font-display font-medium text-[30px] text-ink">{greeting()}, {firstName}</h1>
+      <p className="text-[15px] text-ink-muted mt-2">What are you looking for today?</p>
 
-        {/* Main CTA Card */}
-        <Card className="mb-8 border-2 border-primary-blue bg-gradient-to-br from-blue-50 to-white">
-          <CardContent className="p-8">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-3 bg-primary-blue rounded-lg">
-                    <Search className="h-6 w-6 text-white" />
+      {/* Chat launch */}
+      <div className="mt-7 bg-surface border border-border rounded-card-lg p-6">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/chat"
+            className="flex-1 h-[52px] bg-white border border-border rounded-button flex items-center px-4 text-[15px] text-ink-light min-w-0"
+          >
+            <span className="truncate">Ask about a medication or describe a symptom…</span>
+          </Link>
+          <Link
+            href="/chat"
+            className="w-[52px] h-[52px] flex-shrink-0 rounded-button bg-primary flex items-center justify-center text-white text-lg hover:bg-[#0052A3]"
+            aria-label="Start chat search"
+          >
+            →
+          </Link>
+        </div>
+        <p className="text-[13px] text-ink-muted mt-3">e.g. &ldquo;Where can I get Coartem near Yaba?&rdquo; or &ldquo;I have a fever and body pain&rdquo;</p>
+      </div>
+
+      {/* Recent searches */}
+      {recent.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-[16px] font-medium text-ink mb-4">Recent searches</h2>
+          <div className="border border-border rounded-card overflow-hidden divide-y divide-border">
+            {recent.map((r) => (
+              <Link
+                key={r.id}
+                href={`/chat?q=${encodeURIComponent(r.q)}`}
+                className="flex items-center justify-between p-4 bg-white hover:bg-surface transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${r.dot}`} />
+                  <div className="min-w-0">
+                    <div className="text-[15px] font-medium text-ink truncate">{r.name}</div>
+                    <div className="text-[13px] text-ink-light mt-0.5 truncate">{r.meta}</div>
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    Search for Medications
-                  </h2>
                 </div>
-                <p className="text-gray-600 text-lg">
-                  Our AI assistant will help you find medications and pharmacies near you
-                </p>
-              </div>
-              <Link href="/chat">
-                <Button
-                  size="lg"
-                  className="bg-primary-blue hover:bg-blue-700 text-white px-8 py-6 text-lg"
-                >
-                  Start Search
-                  <Search className="ml-2 h-5 w-5" />
-                </Button>
+                <span className="text-[13px] text-ink-light whitespace-nowrap ml-3">{r.when}</span>
               </Link>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Recent Searches */}
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-5 w-5 text-gray-600" />
-                    <CardTitle>Recent Searches</CardTitle>
-                  </div>
-                  <Link href="/history">
-                    <Button variant="ghost" size="sm">
-                      View All
-                    </Button>
-                  </Link>
-                </div>
-                <CardDescription>
-                  Your recent medication searches
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <RecentSearches searches={recentSearches} />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Quick Search Suggestions */}
-          <div>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Pill className="h-5 w-5 text-gray-600" />
-                  <CardTitle>Quick Search</CardTitle>
-                </div>
-                <CardDescription>
-                  Common medications
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <SearchChips />
-              </CardContent>
-            </Card>
+            ))}
           </div>
         </div>
+      )}
 
-        {/* Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">
-                <div className="inline-flex p-4 bg-blue-100 rounded-full mb-4">
-                  <Search className="h-8 w-8 text-primary-blue" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">AI-Powered Search</h3>
-                <p className="text-gray-600 text-sm">
-                  Describe your needs and let our AI find the right medication
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">
-                <div className="inline-flex p-4 bg-green-100 rounded-full mb-4">
-                  <Pill className="h-8 w-8 text-green-600" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">Real-Time Availability</h3>
-                <p className="text-gray-600 text-sm">
-                  See which pharmacies have your medication in stock
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="text-center">
-                <div className="inline-flex p-4 bg-purple-100 rounded-full mb-4">
-                  <Clock className="h-8 w-8 text-purple-600" />
-                </div>
-                <h3 className="font-semibold text-lg mb-2">Save Time</h3>
-                <p className="text-gray-600 text-sm">
-                  Find medications in minutes, not hours of calling around
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Suggested */}
+      <div className="mt-10">
+        <h2 className="text-[16px] font-medium text-ink mb-4">Suggested for you</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {SUGGESTIONS.map((s) => (
+            <Link
+              key={s.label}
+              href={`/chat?q=${encodeURIComponent(s.q)}`}
+              className="border border-border rounded-card p-4 flex items-center gap-3 hover:border-primary/40 hover:bg-surface transition-colors"
+            >
+              <span className="text-xl">{s.icon}</span>
+              <span className="text-[14px] font-medium text-ink">{s.label}</span>
+            </Link>
+          ))}
         </div>
       </div>
     </div>

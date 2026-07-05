@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, ShieldCheck, Bell, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function PatientSettingsPage() {
   const router = useRouter();
@@ -21,6 +22,22 @@ export default function PatientSettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [consented, setConsented] = useState<boolean | null>(null);
+  const [savingConsent, setSavingConsent] = useState(false);
+
+  const [notifStock, setNotifStock] = useState(false);
+  const [notifPrice, setNotifPrice] = useState(false);
+  const [notifRefills, setNotifRefills] = useState(false);
+  const [notifReservation, setNotifReservation] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setNotifStock(localStorage.getItem('stocmed:notif_stock') === 'true');
+      setNotifPrice(localStorage.getItem('stocmed:notif_price') === 'true');
+      setNotifRefills(localStorage.getItem('stocmed:notif_refills') === 'true');
+      setNotifReservation(localStorage.getItem('stocmed:notif_reservation') === 'true');
+    }
+  }, []);
 
   useEffect(() => {
     const init = async () => {
@@ -34,6 +51,23 @@ export default function PatientSettingsPage() {
       }
 
       setUserExists(true);
+
+      // Fetch research consent status
+      try {
+        const { data: consentData } = await (supabase.from('research_consent') as any)
+          .select('consented')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (consentData) {
+          setConsented(consentData.consented);
+        } else {
+          setConsented(false);
+        }
+      } catch (err) {
+        console.error('Failed to load consent:', err);
+      }
+
       setLoading(false);
     };
 
@@ -82,7 +116,7 @@ export default function PatientSettingsPage() {
   if (loading || !userExists) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-blue" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -90,18 +124,20 @@ export default function PatientSettingsPage() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-semibold text-gray-900">Settings</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <h1 className="text-3xl font-display font-bold text-ink">Settings</h1>
+        <p className="mt-1 text-sm text-ink-muted">
           Manage account security, notifications, and account visibility.
         </p>
       </div>
 
-      <Card>
+      <Card className="shadow-card">
         <CardHeader className="flex flex-row items-start gap-3">
-          <ShieldCheck className="mt-1 h-5 w-5 text-primary-blue" />
+          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center mt-0.5">
+            <ShieldCheck className="h-5 w-5 text-primary" />
+          </div>
           <div>
             <CardTitle>Change password</CardTitle>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-ink-muted">
               Update your password to secure your account.
             </p>
           </div>
@@ -134,10 +170,10 @@ export default function PatientSettingsPage() {
             </div>
 
             {passwordError && (
-              <p className="text-sm text-red-600">{passwordError}</p>
+              <p className="text-sm text-danger">{passwordError}</p>
             )}
             {passwordMessage && (
-              <p className="text-sm text-emerald-600">{passwordMessage}</p>
+              <p className="text-sm text-success">{passwordMessage}</p>
             )}
 
             <Button type="submit" disabled={changingPassword}>
@@ -154,44 +190,150 @@ export default function PatientSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-card text-left">
         <CardHeader className="flex flex-row items-start gap-3">
-          <Bell className="mt-1 h-5 w-5 text-amber-500" />
+          <div className="h-9 w-9 rounded-lg bg-warning/10 flex items-center justify-center mt-0.5">
+            <Bell className="h-5 w-5 text-warning" />
+          </div>
           <div>
-            <CardTitle>Notifications</CardTitle>
-            <p className="mt-1 text-sm text-gray-500">
-              Choose how you would like to receive updates. (Coming soon)
+            <CardTitle>Notifications & Alerts</CardTitle>
+            <p className="mt-1 text-sm text-ink-muted">
+              Choose how you would like to receive supply and pricing updates.
             </p>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-start gap-3">
-            <Checkbox id="notify-email" disabled className="mt-1" />
+            <Checkbox
+              id="notify-stock"
+              checked={notifStock}
+              onCheckedChange={(checked) => {
+                setNotifStock(!!checked);
+                localStorage.setItem('stocmed:notif_stock', String(!!checked));
+                toast.success('Back-in-stock alerts preference updated');
+              }}
+              className="mt-1"
+            />
             <div>
-              <Label htmlFor="notify-email">Email alerts</Label>
-              <p className="text-sm text-gray-500">
-                Get notified when pharmacies restock medications you follow.
+              <Label htmlFor="notify-stock">Back-in-stock alerts</Label>
+              <p className="text-sm text-ink-muted">
+                Get notified when pharmacies restock critical medications you search.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
-            <Checkbox id="notify-sms" disabled className="mt-1" />
+            <Checkbox
+              id="notify-price"
+              checked={notifPrice}
+              onCheckedChange={(checked) => {
+                setNotifPrice(!!checked);
+                localStorage.setItem('stocmed:notif_price', String(!!checked));
+                toast.success('Price-drop alerts preference updated');
+              }}
+              className="mt-1"
+            />
             <div>
-              <Label htmlFor="notify-sms">SMS reminders</Label>
-              <p className="text-sm text-gray-500">
-                Receive SMS updates for reserved or expiring medications.
+              <Label htmlFor="notify-price">Price-drop alerts</Label>
+              <p className="text-sm text-ink-muted">
+                Receive notifications when the price of saved medications drops.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="notify-refills"
+              checked={notifRefills}
+              onCheckedChange={(checked) => {
+                setNotifRefills(!!checked);
+                localStorage.setItem('stocmed:notif_refills', String(!!checked));
+                toast.success('Chronic med refill reminders preference updated');
+              }}
+              className="mt-1"
+            />
+            <div>
+              <Label htmlFor="notify-refills">Chronic med refill reminders</Label>
+              <p className="text-sm text-ink-muted">
+                Get automated monthly reminders to refill your chronic prescriptions.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="notify-reservation"
+              checked={notifReservation}
+              onCheckedChange={(checked) => {
+                setNotifReservation(!!checked);
+                localStorage.setItem('stocmed:notif_reservation', String(!!checked));
+                toast.success('Reservation status alerts preference updated');
+              }}
+              className="mt-1"
+            />
+            <div>
+              <Label htmlFor="notify-reservation">Call-ahead reservation pings</Label>
+              <p className="text-sm text-ink-muted">
+                Receive instant status updates and verification tokens for reserved medications.
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-card">
         <CardHeader className="flex flex-row items-start gap-3">
-          <Trash2 className="mt-1 h-5 w-5 text-red-500" />
+          <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center mt-0.5">
+            <ShieldCheck className="h-5 w-5 text-blue-600" />
+          </div>
+          <div>
+            <CardTitle>Privacy & Research Consent</CardTitle>
+            <p className="mt-1 text-sm text-ink-muted">
+              Control how your search queries contribute to drug supply research.
+            </p>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="research-consent"
+              checked={consented || false}
+              disabled={savingConsent}
+              onCheckedChange={async (checked) => {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+                setSavingConsent(true);
+                try {
+                  await (supabase.from('research_consent') as any).upsert({
+                    user_id: user.id,
+                    consented: !!checked,
+                    consent_text_version: 'NDPR_V1',
+                    updated_at: new Date().toISOString(),
+                  });
+                  setConsented(!!checked);
+                } catch (err) {
+                  console.error('Failed to update consent:', err);
+                } finally {
+                  setSavingConsent(false);
+                }
+              }}
+              className="mt-1 animate-none"
+            />
+            <div>
+              <Label htmlFor="research-consent">Help improve drug availability in Nigeria</Label>
+              <p className="text-sm text-ink-muted">
+                Allow StocMed to include anonymized, de-identified queries in public health research databases. Your name, location, and account details are completely removed. Under NDPR rules, this is entirely voluntary and you can revoke consent here at any time.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-card">
+        <CardHeader className="flex flex-row items-start gap-3">
+          <div className="h-9 w-9 rounded-lg bg-danger/10 flex items-center justify-center mt-0.5">
+            <Trash2 className="h-5 w-5 text-danger" />
+          </div>
           <div>
             <CardTitle>Delete account</CardTitle>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-ink-muted">
               Permanently remove your account and data. This feature is coming soon.
             </p>
           </div>

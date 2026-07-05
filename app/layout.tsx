@@ -1,13 +1,20 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
+import { Inter, Source_Serif_4 } from 'next/font/google'
 import './globals.css'
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider'
 import { Toaster } from 'sonner'
 
 const inter = Inter({
   subsets: ['latin'],
-  weight: ['400', '500'],
   variable: '--font-inter',
+  display: 'swap',
+})
+
+const sourceSerif = Source_Serif_4({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-source-serif',
+  display: 'swap',
 })
 
 export const metadata: Metadata = {
@@ -55,6 +62,7 @@ export const metadata: Metadata = {
   icons: {
     icon: '/favicon.png',
   },
+  manifest: '/manifest.json',
 }
 
 export default function RootLayout({
@@ -63,8 +71,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="font-sans">
+    <html lang="en" className={`${inter.variable} ${sourceSerif.variable}`}>
+      <body className="font-body antialiased">
         <ReactQueryProvider>
           {children}
           <Toaster position="top-right" richColors />

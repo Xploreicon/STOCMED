@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS public.pharmacies (
 );
 
 -- Create drugs table
+DROP VIEW IF EXISTS public.drugs CASCADE;
 CREATE TABLE IF NOT EXISTS public.drugs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     pharmacy_id UUID NOT NULL REFERENCES public.pharmacies(id) ON DELETE CASCADE,

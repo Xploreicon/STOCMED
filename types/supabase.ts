@@ -19,6 +19,8 @@ export interface Database {
           location: string | null
           created_at: string
           updated_at: string
+          is_admin: boolean
+          is_licensed_pharmacist: boolean
         }
         Insert: {
           id?: string
@@ -29,6 +31,8 @@ export interface Database {
           location?: string | null
           created_at?: string
           updated_at?: string
+          is_admin?: boolean
+          is_licensed_pharmacist?: boolean
         }
         Update: {
           id?: string
@@ -39,6 +43,8 @@ export interface Database {
           location?: string | null
           created_at?: string
           updated_at?: string
+          is_admin?: boolean
+          is_licensed_pharmacist?: boolean
         }
       }
       pharmacies: {
@@ -414,6 +420,213 @@ export interface Database {
         Row: { name: string }
         Insert: { name: string }
         Update: { name?: string }
+      }
+      triage_logs: {
+        Row: {
+          id: string
+          query_hash: string
+          intent: string
+          risk_tier: string
+          confidence: number
+          layers_triggered: string[]
+          matched_product_id: string | null
+          thread_id: string | null
+          user_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          query_hash: string
+          intent: string
+          risk_tier: string
+          confidence: number
+          layers_triggered: string[]
+          matched_product_id?: string | null
+          thread_id?: string | null
+          user_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          query_hash?: string
+          intent?: string
+          risk_tier?: string
+          confidence?: number
+          layers_triggered?: string[]
+          matched_product_id?: string | null
+          thread_id?: string | null
+          user_id?: string | null
+          created_at?: string
+        }
+      }
+      thread_locks: {
+        Row: {
+          thread_id: string
+          locked_at: string
+          lock_reason: string
+          user_id: string | null
+        }
+        Insert: {
+          thread_id: string
+          locked_at?: string
+          lock_reason: string
+          user_id?: string | null
+        }
+        Update: {
+          thread_id?: string
+          locked_at?: string
+          lock_reason?: string
+          user_id?: string | null
+        }
+      }
+      triage_config: {
+        Row: {
+          id: string
+          config_key: string
+          config_value: Json
+          updated_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          config_key: string
+          config_value: Json
+          updated_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          config_key?: string
+          config_value?: Json
+          updated_by?: string | null
+          updated_at?: string
+        }
+      }
+      rx_submissions: {
+        Row: {
+          id: string
+          user_id: string | null
+          thread_id: string | null
+          product_name: string
+          file_url: string
+          status: string
+          reviewed_by: string | null
+          review_notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          thread_id?: string | null
+          product_name: string
+          file_url: string
+          status?: string
+          reviewed_by?: string | null
+          review_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          thread_id?: string | null
+          product_name?: string
+          file_url?: string
+          status?: string
+          reviewed_by?: string | null
+          review_notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      symptom_intakes: {
+        Row: {
+          id: string
+          user_id: string | null
+          thread_id: string | null
+          symptoms: string
+          duration: string | null
+          severity: string | null
+          age: string | null
+          pregnancy_breastfeeding: boolean
+          current_medications: string | null
+          allergies: string | null
+          photo_url: string | null
+          status: string
+          assigned_pharmacist: string | null
+          pharmacist_response: string | null
+          sla_deadline: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          thread_id?: string | null
+          symptoms: string
+          duration?: string | null
+          severity?: string | null
+          age?: string | null
+          pregnancy_breastfeeding?: boolean
+          current_medications?: string | null
+          allergies?: string | null
+          photo_url?: string | null
+          status?: string
+          assigned_pharmacist?: string | null
+          pharmacist_response?: string | null
+          sla_deadline?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          thread_id?: string | null
+          symptoms?: string
+          duration?: string | null
+          severity?: string | null
+          age?: string | null
+          pregnancy_breastfeeding?: boolean
+          current_medications?: string | null
+          allergies?: string | null
+          photo_url?: string | null
+          status?: string
+          assigned_pharmacist?: string | null
+          pharmacist_response?: string | null
+          sla_deadline?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      research_consent: {
+        Row: {
+          id: string
+          user_id: string
+          consented: boolean
+          consent_text_version: string
+          sessions_since_consent: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          consented: boolean
+          consent_text_version: string
+          sessions_since_consent?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          consented?: boolean
+          consent_text_version?: string
+          sessions_since_consent?: number
+          created_at?: string
+          updated_at?: string
+        }
       }
     }
     Views: {

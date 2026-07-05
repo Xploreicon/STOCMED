@@ -167,7 +167,7 @@ export default function PatientProfilePage() {
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-blue" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -175,13 +175,13 @@ export default function PatientProfilePage() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
-        <h1 className="text-3xl font-semibold text-gray-900">Profile</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <h1 className="text-3xl font-display font-bold text-ink">Profile</h1>
+        <p className="mt-1 text-sm text-ink-muted">
           Update your personal information to get more tailored pharmacy recommendations.
         </p>
       </div>
 
-      <Card>
+      <Card className="shadow-card">
         <CardHeader>
           <CardTitle>Personal details</CardTitle>
         </CardHeader>
@@ -207,7 +207,7 @@ export default function PatientProfilePage() {
                 placeholder="jane@example.com"
                 required
               />
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-ink-muted">
                 Changing your email will require confirmation via a verification link.
               </p>
             </div>
@@ -233,7 +233,7 @@ export default function PatientProfilePage() {
               </div>
             </div>
 
-          <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-3 pt-2">
               <Button type="submit" disabled={saving}>
                 {saving ? (
                   <>
@@ -246,13 +246,13 @@ export default function PatientProfilePage() {
               </Button>
 
               {success && (
-                <div className="flex items-center gap-1 text-sm text-emerald-600">
+                <div className="flex items-center gap-1 text-sm text-success">
                   <CheckCircle2 className="h-4 w-4" />
                   {success}
                 </div>
               )}
               {error && (
-                <div className="flex items-center gap-1 text-sm text-red-600">
+                <div className="flex items-center gap-1 text-sm text-danger">
                   <AlertCircle className="h-4 w-4" />
                   {error}
                 </div>

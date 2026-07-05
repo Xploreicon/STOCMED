@@ -1,12 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
-import { getEnrichedInventory } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
 
+    // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
@@ -25,10 +25,31 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const { rows, stats } = await getEnrichedInventory(supabase, pharmacy.id)
+    // Fetch all drugs for this pharmacy
+    const { data: drugs, error: drugsError } = await supabase
+      .from('drugs')
+      .select('*')
+      .eq('pharmacy_id', pharmacy.id)
+      .order('created_at', { ascending: false })
+
+    if (drugsError) {
+      console.error('Error fetching drugs:', drugsError)
+      return NextResponse.json(
+        { error: 'Failed to fetch drugs' },
+        { status: 500 }
+      )
+    }
+
+    // Calculate stats
+    const stats = {
+      total: drugs.length,
+      in_stock: drugs.filter((d: any) => d.quantity_in_stock > d.low_stock_threshold).length,
+      low_stock: drugs.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= d.low_stock_threshold).length,
+      out_of_stock: drugs.filter((d: any) => d.quantity_in_stock === 0).length,
+    }
 
     return NextResponse.json({
-      drugs: rows,
+      drugs,
       stats,
     })
   } catch (error) {
@@ -42,8 +63,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
+    const supabase = (await createClient()) as any
 
+    // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
@@ -62,137 +84,120 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Parse request body
     const body = await request.json()
-    const {
-      product_id,
-      new_product,
-      price,
-      opening_stock,
-      batch_number,
-      expiry_date,
-      low_stock_threshold,
-    } = body
 
-    if (!product_id && !new_product) {
+    // Validate required fields
+    const requiredFields = ['product_id', 'price', 'quantity_in_stock', 'batch_number', 'expiry_date']
+    const missingFields = requiredFields.filter(field => body[field] === undefined || body[field] === null || body[field] === '')
+
+    if (missingFields.length > 0) {
       return NextResponse.json(
-        { error: 'Select a product from the catalogue or provide a new product to add' },
+        { error: `Missing required fields: ${missingFields.join(', ')}` },
         { status: 400 }
       )
     }
 
-    if (price === undefined || price === null || Number.isNaN(Number(price))) {
-      return NextResponse.json({ error: 'Price is required' }, { status: 400 })
-    }
+    // Check if this product is already in the pharmacy's inventory
+    const { data: existingInventory, error: checkError } = await (supabase as any)
+      .from('pharmacy_inventory')
+      .select('id')
+      .eq('pharmacy_id', pharmacy.id)
+      .eq('product_id', body.product_id)
+      .maybeSingle()
 
-    const openingStockNum = opening_stock ? parseInt(opening_stock, 10) : 0
-
-    if (openingStockNum > 0 && (!batch_number || !expiry_date)) {
+    if (existingInventory) {
       return NextResponse.json(
-        { error: 'Batch number and expiry date are required when adding opening stock' },
-        { status: 400 }
+        { error: 'This product is already in your inventory. Update its stock or details instead.' },
+        { status: 409 }
       )
     }
 
-    let resolvedProductId = product_id as string | undefined
-
-    if (!resolvedProductId && new_product) {
-      const requiredFields = ['generic_name', 'strength']
-      const missing = requiredFields.filter((f) => !new_product[f])
-      if (missing.length > 0) {
-        return NextResponse.json(
-          { error: `Missing required product fields: ${missing.join(', ')}` },
-          { status: 400 }
-        )
-      }
-
-      const { data: createdProduct, error: productError } = await (supabase
-        .from('products') as any)
-        .insert({
-          generic_name: new_product.generic_name,
-          brand_name: new_product.brand_name || null,
-          strength: new_product.strength,
-          dosage_form: new_product.dosage_form || null,
-          category: new_product.category || null,
-          pack_size: new_product.pack_size || null,
-          manufacturer: new_product.manufacturer || null,
-          is_verified: false,
-        })
-        .select()
-        .single()
-
-      if (productError) {
-        console.error('Error creating product:', productError)
-        return NextResponse.json(
-          { error: 'Failed to add new product to catalogue' },
-          { status: 500 }
-        )
-      }
-
-      resolvedProductId = createdProduct.id
-    }
-
-    const { data: inventoryRow, error: inventoryError } = await (supabase
-      .from('pharmacy_inventory') as any)
+    // Create transaction manually
+    // 1. Create pharmacy_inventory record
+    const { data: inventory, error: invError } = await (supabase as any)
+      .from('pharmacy_inventory')
       .insert({
         pharmacy_id: pharmacy.id,
-        product_id: resolvedProductId,
-        price: Number(price),
-        low_stock_threshold: low_stock_threshold ? parseInt(low_stock_threshold, 10) : 10,
+        product_id: body.product_id,
+        price: body.price,
+        low_stock_threshold: body.low_stock_threshold !== undefined && body.low_stock_threshold !== null ? Number(body.low_stock_threshold) : 10,
+        quantity_in_stock: 0, // will be updated via trigger
+        is_listed: true
       })
       .select()
       .single()
 
-    if (inventoryError) {
-      console.error('Error creating inventory row:', inventoryError)
-      const isDuplicate = inventoryError.code === '23505'
+    if (invError || !inventory) {
+      console.error('Error inserting pharmacy inventory:', invError)
       return NextResponse.json(
-        {
-          error: isDuplicate
-            ? 'This product is already in your inventory. Use Adjust stock to update its quantity.'
-            : 'Failed to add medication',
-        },
-        { status: isDuplicate ? 409 : 500 }
+        { error: 'Failed to create inventory record' },
+        { status: 500 }
       )
     }
 
-    let batchId: string | null = null
-    if (batch_number && expiry_date) {
-      const { data: batch, error: batchError } = await (supabase
-        .from('batches') as any)
-        .insert({
-          inventory_id: inventoryRow.id,
-          batch_number,
-          expiry_date,
-          quantity_received: openingStockNum,
-        })
-        .select()
-        .single()
+    // 2. Create batch record
+    const { data: batch, error: batchError } = await (supabase as any)
+      .from('batches')
+      .insert({
+        inventory_id: inventory.id,
+        batch_number: body.batch_number,
+        expiry_date: body.expiry_date,
+        quantity_received: Number(body.quantity_in_stock),
+        cost_price: null
+      })
+      .select()
+      .single()
 
-      if (batchError) {
-        console.error('Error creating batch:', batchError)
-        return NextResponse.json({ error: 'Failed to record batch' }, { status: 500 })
-      }
-      batchId = batch.id
+    if (batchError || !batch) {
+      console.error('Error inserting batch:', batchError)
+      // Rollback (delete inventory item)
+      await (supabase as any).from('pharmacy_inventory').delete().eq('id', inventory.id)
+      return NextResponse.json(
+        { error: 'Failed to create batch record' },
+        { status: 500 }
+      )
     }
 
-    if (openingStockNum > 0) {
-      const { error: movementError } = await (supabase.from('stock_movements') as any).insert({
-        inventory_id: inventoryRow.id,
-        batch_id: batchId,
+    // 3. Create opening stock movement
+    const { error: movementError } = await (supabase as any)
+      .from('stock_movements')
+      .insert({
+        inventory_id: inventory.id,
+        batch_id: batch.id,
         type: 'opening',
-        quantity: openingStockNum,
+        quantity: Number(body.quantity_in_stock),
         reason: 'Opening stock',
-        reference: 'ADD_DRUG',
-        created_by: user.id,
+        created_by: user.id
       })
 
-      if (movementError) {
-        console.error('Error recording opening stock movement:', movementError)
-        return NextResponse.json({ error: 'Failed to record opening stock' }, { status: 500 })
-      }
+    if (movementError) {
+      console.error('Error inserting stock movement:', movementError)
+      // Rollback
+      await (supabase as any).from('batches').delete().eq('id', batch.id)
+      await (supabase as any).from('pharmacy_inventory').delete().eq('id', inventory.id)
+      return NextResponse.json(
+        { error: 'Failed to log stock movement' },
+        { status: 500 }
+      )
     }
 
-    return NextResponse.json({ id: inventoryRow.id, product_id: resolvedProductId }, { status: 201 })
+    // Fetch and return the updated view record to keep UI happy
+    const { data: drug, error: fetchError } = await (supabase as any)
+      .from('drugs')
+      .select('*')
+      .eq('id', inventory.id)
+      .single()
+
+    if (fetchError) {
+      console.error('Error fetching new drug view:', fetchError)
+      return NextResponse.json(
+        { error: 'Failed to fetch created drug profile' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(drug, { status: 201 })
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(

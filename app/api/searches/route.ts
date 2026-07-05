@@ -2,6 +2,35 @@ import { createClient } from '@/lib/supabase/server'
 import type { Database } from '@/types/supabase'
 import { NextRequest, NextResponse } from 'next/server'
 
+function interpretQuery(query: string) {
+  const strengthRegex = /\b\d+(?:\.\d+)?\s*(?:mg|g|ml|mcg|ug|capsules|tablets|tabs|s)\b/gi
+  const strengthMatch = query.match(strengthRegex)
+  const strength = strengthMatch ? strengthMatch[0] : null
+
+  let drugName = query
+  if (strengthMatch) {
+    drugName = query.replace(strengthRegex, '').trim()
+  }
+  drugName = drugName.replace(/\s+/g, ' ').trim()
+
+  const categories = [
+    'Analgesics', 'Antibiotics', 'Antimalarials', 'Antihypertensives',
+    'Diabetes', 'Vitamins', 'Gastrointestinal', 'Respiratory', 'Others'
+  ]
+  const matchedCategory = categories.find(cat => 
+    query.toLowerCase().includes(cat.toLowerCase())
+  )
+
+  return {
+    raw_query: query,
+    parsed: {
+      drug_name: drugName || query,
+      strength: strength,
+      category: matchedCategory || null
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -31,6 +60,7 @@ export async function POST(request: NextRequest) {
       location: location ?? null,
       metadata: (metadata ?? null) as Database['public']['Tables']['searches']['Insert']['metadata'],
       results_count: results_count ?? null,
+      interpreted_query: interpretQuery(query) as any,
     }
 
     const { error: insertError } = await (supabase

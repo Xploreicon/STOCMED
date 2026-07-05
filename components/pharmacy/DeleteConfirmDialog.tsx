@@ -1,70 +1,108 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import type { EnrichedInventoryRow } from '@/lib/pharmacyInventory';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  row: EnrichedInventoryRow;
+  drug: any;
   onSuccess: () => void;
 }
 
-export default function DeleteConfirmDialog({ isOpen, onClose, row, onSuccess }: DeleteConfirmDialogProps) {
+export default function DeleteConfirmDialog({
+  isOpen,
+  onClose,
+  drug,
+  onSuccess,
+}: DeleteConfirmDialogProps) {
   const queryClient = useQueryClient();
 
-  const deleteMutation = useMutation({
+  const deleteDrugMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch(`/api/pharmacy/drugs/${row.id}`, { method: 'DELETE' });
+      const response = await fetch(`/api/pharmacy/drugs/${drug.id}`, {
+        method: 'DELETE',
+      });
       if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to delete medication');
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete drug');
       }
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'], refetchType: 'active' });
-      queryClient.invalidateQueries({ queryKey: ['pharmacy-stats'], refetchType: 'active' });
+      queryClient.invalidateQueries({
+        queryKey: ['pharmacy-drugs'],
+        refetchType: 'active',
+      });
+      queryClient.invalidateQueries({
+        queryKey: ['pharmacy-stats'],
+        refetchType: 'active',
+      });
       onSuccess();
     },
   });
 
   const handleConfirm = async () => {
     try {
-      await deleteMutation.mutateAsync();
-    } catch (err: any) {
-      alert(err.message || 'Failed to delete medication');
+      await deleteDrugMutation.mutateAsync();
+    } catch (error: any) {
+      alert(error.message || 'Failed to delete drug');
     }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[400px] rounded-feature p-7">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-card bg-stock-out-bg text-[22px]">
-          ⚠️
-        </div>
-        <DialogTitle className="text-[19px] font-medium text-ink">Delete this medication?</DialogTitle>
-        <p className="mt-2 text-[15px] leading-[1.55] text-secondary">
-          This will permanently remove <strong className="font-medium text-ink">{row.generic_name}</strong> from your
-          inventory. Patients currently searching for it will stop seeing your pharmacy in results.
-        </p>
-        <div className="mt-6 flex gap-3">
-          <button
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <div className="flex items-center justify-center mb-4">
+            <div className="rounded-full bg-danger/10 p-3">
+              <AlertTriangle className="h-6 w-6 text-danger" />
+            </div>
+          </div>
+          <DialogTitle className="text-center">Delete Drug</DialogTitle>
+          <DialogDescription className="text-center">
+            Are you sure you want to delete{' '}
+            <span className="font-semibold text-ink">
+              {drug?.name || drug?.brand_name}
+            </span>
+            ? This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
             onClick={onClose}
-            disabled={deleteMutation.isPending}
-            className="h-12 flex-1 rounded-control border border-hairline text-[15px] font-medium text-secondary"
+            disabled={deleteDrugMutation.isPending}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
             onClick={handleConfirm}
-            disabled={deleteMutation.isPending}
-            className="h-12 flex-1 rounded-control bg-stock-out text-[15px] font-medium text-white disabled:opacity-60"
+            disabled={deleteDrugMutation.isPending}
           >
-            {deleteMutation.isPending ? 'Deleting…' : 'Delete medication'}
-          </button>
-        </div>
+            {deleteDrugMutation.isPending ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Deleting...
+              </>
+            ) : (
+              'Yes, Delete'
+            )}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

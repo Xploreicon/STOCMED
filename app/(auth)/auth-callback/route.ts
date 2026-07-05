@@ -9,13 +9,34 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient()
-    await supabase.auth.exchangeCodeForSession(code)
+    const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code)
+    
+    if (!error && session) {
+      let role = session.user?.user_metadata?.role
+      
+      // If role is missing in metadata, check the database users table
+      if (!role) {
+        const { data: dbUser } = await (supabase
+          .from('users')
+          .select('role')
+          .eq('user_id', session.user.id) as any)
+          .single()
+        role = (dbUser as any)?.role
+      }
+      
+      const userRole = role || 'patient'
+      
+      if (type === 'recovery') {
+        return NextResponse.redirect(`${origin}/update-password`)
+      }
+      return NextResponse.redirect(`${origin}${userRole === 'pharmacy' ? '/pharmacy/dashboard' : '/dashboard'}`)
+    }
   }
 
   if (type === 'recovery') {
     return NextResponse.redirect(`${origin}/update-password`)
   }
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(`${origin}/dashboard`)
+  // Fallback URL if no session is established
+  return NextResponse.redirect(`${origin}/login`)
 }

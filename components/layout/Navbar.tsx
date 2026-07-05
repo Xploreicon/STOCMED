@@ -1,11 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
-import { Menu, X, Search, Bell, ChevronDown, LogOut } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { LogOut } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,31 +13,26 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
+import { Logo } from '@/components/brand/Logo';
 
 interface NavbarProps {
-  patientPoints?: number;
   pharmacyName?: string;
-  onMenuClick?: () => void;
   userRole?: 'patient' | 'pharmacy';
 }
 
-export const Navbar: React.FC<NavbarProps> = ({
-  patientPoints = 0,
-  pharmacyName = 'Pharmacy Name',
-  onMenuClick,
-  userRole,
-}) => {
-  const router = useRouter();
-  const { user, isPatient, isPharmacy, isLoading } = useUser();
-  const resolvedRole = userRole ?? (isPatient ? 'patient' : isPharmacy ? 'pharmacy' : undefined);
-  const shouldShowPatientUI = resolvedRole === 'patient' || (!!user && !resolvedRole);
-  const shouldShowPharmacyUI = resolvedRole === 'pharmacy';
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+function initialsFrom(nameOrEmail?: string | null) {
+  if (!nameOrEmail) return 'ST';
+  const base = nameOrEmail.split('@')[0];
+  const parts = base.split(/[.\s_-]+/).filter(Boolean);
+  const letters = parts.length >= 2 ? parts[0][0] + parts[1][0] : base.slice(0, 2);
+  return letters.toUpperCase();
+}
 
-  const toggleMobileMenu = () => {
-    setIsMobileMenuOpen(!isMobileMenuOpen);
-    onMenuClick?.();
-  };
+export const Navbar: React.FC<NavbarProps> = ({ pharmacyName, userRole }) => {
+  const router = useRouter();
+  const { user, isPatient, isPharmacy } = useUser();
+  const resolvedRole = userRole ?? (isPatient ? 'patient' : isPharmacy ? 'pharmacy' : undefined);
+  const isPharmacyUI = resolvedRole === 'pharmacy';
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -48,166 +41,46 @@ export const Navbar: React.FC<NavbarProps> = ({
     router.refresh();
   };
 
+  const displayName = isPharmacyUI ? pharmacyName : (user?.user_metadata?.full_name as string | undefined);
+  const initials = initialsFrom(displayName || user?.email);
+
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Left side - Logo and Mobile Menu */}
+    <nav className="bg-white border-b border-border sticky top-0 z-50">
+      <div className="px-5 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center py-3.5">
+          <Logo size={30} wordSize={17} href="/" />
+
           <div className="flex items-center gap-4">
-            {user && (
-              <button
-                onClick={toggleMobileMenu}
-                className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
-                aria-label="Toggle menu"
-              >
-                {isMobileMenuOpen ? (
-                  <X className="h-6 w-6 text-gray-600" />
+            {isPharmacyUI && pharmacyName && (
+              <span className="hidden sm:block text-[14px] font-medium text-ink">{pharmacyName}</span>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center text-[14px] font-medium text-primary hover:bg-primary/5 transition-colors"
+                  aria-label="Account menu"
+                >
+                  {initials}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {isPharmacyUI ? (
+                  <>
+                    <DropdownMenuItem onClick={() => router.push('/pharmacy/settings')}>Pharmacy settings</DropdownMenuItem>
+                  </>
                 ) : (
-                  <Menu className="h-6 w-6 text-gray-600" />
+                  <>
+                    <DropdownMenuItem onClick={() => router.push('/profile')}>Profile</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push('/settings')}>Settings</DropdownMenuItem>
+                  </>
                 )}
-              </button>
-            )}
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/logo.png"
-                alt="StocMed"
-                width={120}
-                height={40}
-                className="h-10 w-auto"
-                priority
-              />
-            </Link>
-          </div>
-
-          {/* Right side - Conditional rendering based on auth state */}
-          <div className="flex items-center gap-4">
-            {!user && !isLoading && (
-              <>
-                <Link href="/login">
-                  <Button
-                    variant="ghost"
-                    className="hidden sm:inline-flex"
-                  >
-                    Login
-                  </Button>
-                </Link>
-                <Link href="/signup">
-                  <Button
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    Sign Up
-                  </Button>
-                </Link>
-              </>
-            )}
-
-            {user && shouldShowPatientUI && (
-              <>
-                <button
-                  className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-                  aria-label="Search"
-                >
-                  <Search className="h-5 w-5 text-gray-600" />
-                </button>
-                <div className="hidden sm:flex items-center px-3 py-1 bg-blue-50 rounded-lg">
-                  <span className="text-sm font-medium text-blue-600">
-                    Points: {patientPoints}
-                  </span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSignOut}
-                  className="hidden sm:inline-flex"
-                >
-                  Logout
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleSignOut}
-                  className="sm:hidden"
-                  aria-label="Logout"
-                >
-                  <LogOut className="h-5 w-5 text-gray-600" />
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 transition-colors">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center">
-                        <span className="text-white text-sm font-medium">P</span>
-                      </div>
-                      <ChevronDown className="h-4 w-4 text-gray-600 hidden sm:block" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem
-                      onClick={() => {
-                        router.push('/profile');
-                      }}
-                    >
-                      Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => {
-                        router.push('/settings');
-                      }}
-                    >
-                      Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={handleSignOut}
-                      className="text-red-600"
-                    >
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
-
-            {user && shouldShowPharmacyUI && (
-              <>
-                <div className="hidden sm:flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-700">
-                    {pharmacyName}
-                  </span>
-                </div>
-                <button
-                  className="relative p-2 rounded-md hover:bg-gray-100 transition-colors"
-                  aria-label="Notifications"
-                >
-                  <Bell className="h-5 w-5 text-gray-600" />
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center gap-2 p-2 rounded-md hover:bg-gray-100 transition-colors">
-                      <div className="w-8 h-8 rounded-full bg-green-600 flex items-center justify-center">
-                        <span className="text-white text-sm font-medium">Rx</span>
-                      </div>
-                      <ChevronDown className="h-4 w-4 text-gray-600 hidden sm:block" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
-                    <DropdownMenuItem>
-                      Pharmacy Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem>
-                      Settings
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={handleSignOut}
-                      className="text-red-600"
-                    >
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="text-danger">
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

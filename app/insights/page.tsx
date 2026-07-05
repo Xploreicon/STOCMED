@@ -24,7 +24,7 @@ export default async function InsightsPage() {
   if (!supabase) {
     return (
       <div className="min-h-screen bg-white py-12 px-4 flex items-center justify-center">
-        <p className="text-red-500">Database connection error. Admin client unavailable.</p>
+        <p className="text-danger">Database connection error. Admin client unavailable.</p>
       </div>
     );
   }
@@ -145,13 +145,13 @@ export default async function InsightsPage() {
     <div className="min-h-screen bg-white py-12 px-4">
       <div className="mx-auto flex max-w-5xl flex-col gap-10">
         <header className="flex flex-col gap-4 text-center">
-          <span className="text-sm font-semibold tracking-[0.2em] text-primary-blue uppercase">
+          <span className="text-sm font-semibold tracking-[0.2em] text-primary uppercase">
             StocMed Intelligence
           </span>
-          <h1 className="text-4xl font-bold text-dark-gray sm:text-5xl">
+          <h1 className="text-4xl font-display font-bold text-ink sm:text-5xl">
             Demand Signals & Platform Momentum
           </h1>
-          <p className="text-base text-medium-gray sm:text-lg">
+          <p className="text-base text-ink-muted sm:text-lg">
             Snapshot of patient demand and pharmacy inventory activity across the StocMed network.
           </p>
         </header>
@@ -179,17 +179,17 @@ export default async function InsightsPage() {
               detail: 'Patient intents logged in real time',
             },
           ].map((item) => (
-            <Card key={item.label} className="border-blue-100 bg-blue-50/40">
+            <Card key={item.label} className="border-primary/20 bg-primary/5 shadow-card">
               <CardHeader>
-                <CardTitle className="text-sm font-medium uppercase tracking-wide text-primary-blue">
+                <CardTitle className="text-sm font-medium uppercase tracking-wide text-primary">
                   {item.label}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-dark-gray">
+                <p className="text-3xl font-bold text-ink">
                   {(item.value ?? 0).toLocaleString()}
                 </p>
-                <p className="mt-2 text-xs text-medium-gray leading-relaxed">
+                <p className="mt-2 text-xs text-ink-muted leading-relaxed">
                   {item.detail}
                 </p>
               </CardContent>
@@ -198,7 +198,7 @@ export default async function InsightsPage() {
         </section>
 
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card className="border-gray-200">
+          <Card className="border-border shadow-card">
             <CardHeader>
               <CardTitle>Top 5 searched medications</CardTitle>
             </CardHeader>
@@ -207,24 +207,24 @@ export default async function InsightsPage() {
                 <ol className="space-y-3">
                   {topMedications.map((item, index) => (
                     <li key={item.name} className="flex items-center justify-between">
-                      <span className="font-medium text-gray-800">
+                      <span className="font-medium text-ink">
                         {index + 1}. {item.name}
                       </span>
-                      <span className="text-sm text-medium-gray">
+                      <span className="text-sm text-ink-muted">
                         {item.count.toLocaleString()} searches
                       </span>
                     </li>
                   ))}
                 </ol>
               ) : (
-                <p className="text-sm text-medium-gray">
+                <p className="text-sm text-ink-muted">
                   We’re still gathering search volume—it builds with every patient interaction.
                 </p>
               )}
             </CardContent>
           </Card>
 
-          <Card className="border-gray-200">
+          <Card className="border-border shadow-card">
             <CardHeader>
               <CardTitle>Where searches originate</CardTitle>
             </CardHeader>
@@ -234,22 +234,22 @@ export default async function InsightsPage() {
                   {locationStats.map((item) => (
                     <li
                       key={item.location}
-                      className="flex items-center justify-between border-b border-gray-100 pb-2 last:border-0 last:pb-0"
+                      className="flex items-center justify-between border-b border-border pb-2 last:border-0 last:pb-0"
                     >
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-800">{item.location}</span>
-                        <span className="text-xs text-medium-gray">
+                        <span className="font-medium text-ink">{item.location}</span>
+                        <span className="text-xs text-ink-muted">
                           {item.count.toLocaleString()} searches
                         </span>
                       </div>
-                      <span className="text-sm font-semibold text-primary-blue">
+                      <span className="text-sm font-semibold text-primary">
                         {item.percent}%
                       </span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-medium-gray">
+                <p className="text-sm text-ink-muted">
                   Location data is being collected—early users are teaching us where demand lives.
                 </p>
               )}
@@ -258,25 +258,25 @@ export default async function InsightsPage() {
         </section>
 
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card className="border-gray-200">
+          <Card className="border-border shadow-card">
             <CardHeader>
               <CardTitle>Peak search windows</CardTitle>
             </CardHeader>
             <CardContent>
               {totalSamples > 0 ? (
                 <div className="space-y-3">
-                  <p className="text-2xl font-semibold text-dark-gray">
+                  <p className="text-2xl font-semibold text-ink">
                     {formatHourLabel(peakHourIndex)} · {peakHourShare}% of observed searches
                   </p>
-                  <p className="text-sm text-medium-gray">
+                  <p className="text-sm text-ink-muted">
                     Evening demand (after 6pm) accounts for {eveningShare}% of searches.
                   </p>
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-500">
+                  <div className="flex flex-wrap gap-2 text-xs text-ink-light">
                     {hourCounts.map((count, hour) =>
                       count > 0 ? (
                         <span
                           key={hour}
-                          className="rounded-full bg-light-blue-bg px-3 py-1 font-medium"
+                          className="rounded-full bg-primary/5 px-3 py-1 font-medium"
                         >
                           {formatHourLabel(hour)} • {Math.round((count / totalSamples) * 100)}%
                         </span>
@@ -285,20 +285,20 @@ export default async function InsightsPage() {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-medium-gray">
+                <p className="text-sm text-ink-muted">
                   We’ll surface time-of-day trends as more patients engage with the assistant.
                 </p>
               )}
             </CardContent>
           </Card>
 
-          <Card className="border-gray-200 bg-gradient-to-br from-primary-blue/10 via-white to-white">
+          <Card className="border-border shadow-card bg-gradient-to-br from-primary/10 via-white to-white">
             <CardHeader>
               <CardTitle>Key finding</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-lg font-semibold text-dark-gray">{keyInsight}</p>
-              <p className="mt-4 text-sm text-medium-gray">
+              <p className="text-lg font-semibold text-ink">{keyInsight}</p>
+              <p className="mt-4 text-sm text-ink-muted">
                 Even with early users, we capture demand signals invisible to existing players.
               </p>
             </CardContent>

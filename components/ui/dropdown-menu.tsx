@@ -74,7 +74,7 @@ export const DropdownMenuContent: React.FC<DropdownMenuContentProps> = ({
   return (
     <div
       className={cn(
-        "absolute top-full mt-2 z-50 min-w-[8rem] overflow-hidden rounded-md border border-gray-200 bg-white p-1 shadow-md",
+        "absolute top-full mt-2 z-50 min-w-[8rem] overflow-hidden rounded-card border border-border bg-popover p-1 shadow-dropdown text-popover-foreground animate-in fade-in-80 slide-in-from-top-1",
         alignmentClasses[align],
         className
       )}
@@ -96,7 +96,7 @@ export const DropdownMenuItem: React.FC<DropdownMenuItemProps> = ({
   return (
     <div
       className={cn(
-        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-gray-100 focus:bg-gray-100 focus:text-gray-900",
+        "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-surface focus:bg-surface focus:text-foreground",
         className
       )}
       {...props}
@@ -107,5 +107,5 @@ export const DropdownMenuItem: React.FC<DropdownMenuItemProps> = ({
 }
 
 export const DropdownMenuSeparator: React.FC<{ className?: string }> = ({ className }) => {
-  return <div className={cn("my-1 h-px bg-gray-200", className)} />
+  return <div className={cn("-mx-1 my-1 h-px bg-border", className)} />
 }

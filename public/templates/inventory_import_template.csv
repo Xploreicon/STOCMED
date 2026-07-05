@@ -1,0 +1,5 @@
+generic_name,brand_name,strength,dosage_form,category,pack_size,price,quantity,batch_number,expiry_date
+Paracetamol,Panadol,500mg,Tablet,Analgesics,10x10,1200,100,B12345,2027-12-31
+Amoxicillin,Amoxil,250mg,Capsule,Antibiotics,10x10,2500,50,B98765,2026-09-30
+Artemether/Lumefantrine,Coartem,80/480mg,Tablet,Antimalarials,6s,1800,80,B44321,2026-06-30
+Loratadine,Claritin,10mg,Tablet,Others,10s,1500,30,B22110,2027-03-31

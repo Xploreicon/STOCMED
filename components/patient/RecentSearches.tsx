@@ -123,20 +123,20 @@ export default function RecentSearches({ searches }: RecentSearchesProps) {
 
   if (isLoading) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white px-6 py-10 text-center">
-        <Search className="mx-auto mb-4 h-12 w-12 animate-pulse text-gray-300" />
-        <h3 className="mb-2 text-lg font-semibold text-gray-800">Loading your recent searches...</h3>
-        <p className="text-sm text-gray-500">Hang tight while we gather your latest activity.</p>
+      <div className="rounded-card border border-border bg-card px-6 py-10 text-center">
+        <Search className="mx-auto mb-4 h-12 w-12 animate-pulse text-primary/30" />
+        <h3 className="mb-2 text-lg font-semibold text-ink">Loading your recent searches...</h3>
+        <p className="text-sm text-muted-foreground">Hang tight while we gather your latest activity.</p>
       </div>
     );
   }
 
   if (loadError) {
     return (
-      <div className="rounded-lg border border-dashed border-red-200 bg-white px-6 py-10 text-center">
-        <Search className="mx-auto mb-4 h-12 w-12 text-red-300" />
-        <h3 className="mb-2 text-lg font-semibold text-gray-800">We hit a snag</h3>
-        <p className="mb-6 text-sm text-gray-500">{loadError}</p>
+      <div className="rounded-card border border-dashed border-danger/20 bg-card px-6 py-10 text-center">
+        <Search className="mx-auto mb-4 h-12 w-12 text-danger/30" />
+        <h3 className="mb-2 text-lg font-semibold text-ink">We hit a snag</h3>
+        <p className="mb-6 text-sm text-muted-foreground">{loadError}</p>
         <Button onClick={() => router.refresh()}>Try Again</Button>
       </div>
     );
@@ -144,10 +144,10 @@ export default function RecentSearches({ searches }: RecentSearchesProps) {
 
   if (visibleSearches.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-gray-300 bg-white px-6 py-10 text-center">
-        <Search className="mx-auto mb-4 h-12 w-12 text-gray-300" />
-        <h3 className="mb-2 text-lg font-semibold text-gray-800">No recent searches yet</h3>
-        <p className="mb-6 text-sm text-gray-500">
+      <div className="rounded-card border border-dashed border-border bg-card px-6 py-10 text-center">
+        <Search className="mx-auto mb-4 h-12 w-12 text-muted-foreground/30" />
+        <h3 className="mb-2 text-lg font-semibold text-ink">No recent searches yet</h3>
+        <p className="mb-6 text-sm text-muted-foreground">
           Start exploring medications to see your search history here.
         </p>
         <Button onClick={() => router.push('/chat')}>Start Your First Search</Button>
@@ -160,23 +160,23 @@ export default function RecentSearches({ searches }: RecentSearchesProps) {
       {visibleSearches.map((search) => (
         <div
           key={search.id}
-          className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 transition hover:border-primary-blue hover:bg-blue-50"
+          className="flex items-center justify-between rounded-card border border-border bg-card p-4 transition-all duration-150 hover:border-primary/30 hover:bg-surface hover:shadow-sm"
         >
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-3">
-              <div className="rounded-md bg-blue-100 p-2">
-                <Search className="h-4 w-4 text-primary-blue" />
+              <div className="rounded-lg bg-primary/10 p-2">
+                <Search className="h-4 w-4 text-primary" />
               </div>
               <div>
-                <p className="font-medium text-gray-900">
+                <p className="font-medium text-ink">
                   {search.displayName || search.query || 'Unknown medication'}
                 </p>
                 {search.query && search.query !== search.displayName && (
-                  <p className="text-xs text-gray-500">Search term: {search.query}</p>
+                  <p className="text-xs text-muted-foreground">Search term: {search.query}</p>
                 )}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 pl-[2.75rem] text-sm text-gray-600">
+            <div className="flex flex-wrap items-center gap-3 pl-[2.75rem] text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
                 {formatDistanceToNow(new Date(search.timestamp), { addSuffix: true })}

@@ -29,13 +29,13 @@ export function ChatMessage({ role, content, timestamp }: ChatMessageProps) {
         className={cn(
           'max-w-[80%] px-4 py-3 whitespace-pre-wrap break-words',
           isUser
-            ? 'bg-[#0066CC] text-white rounded-[12px_12px_0_12px]'
-            : 'bg-[#F0F7FF] text-gray-900 rounded-[12px_12px_12px_0]'
+            ? 'bg-primary text-white rounded-[12px_12px_0_12px]'
+            : 'bg-primary/5 text-ink rounded-[12px_12px_12px_0] border border-primary/10'
         )}
       >
         {content}
       </div>
-      <div className="text-xs text-gray-500 mt-1 px-1">
+      <div className="text-xs text-ink-muted mt-1 px-1">
         {formatTimestamp(timestamp)}
       </div>
     </div>

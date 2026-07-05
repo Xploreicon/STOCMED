@@ -1,16 +1,13 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { Button } from '@/components/ui/button';
+import { Logo, LogoMark } from '@/components/brand/Logo';
 
 export default async function Landing() {
-  // Check if user is logged in
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (user) {
-    // Redirect based on user role
     const role = user.user_metadata?.role;
     if (role === 'pharmacy') {
       redirect('/pharmacy/dashboard');
@@ -19,259 +16,223 @@ export default async function Landing() {
     }
   }
 
-  const today = new Date();
-  const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const endOfDay = new Date(startOfDay);
-  endOfDay.setDate(startOfDay.getDate() + 1);
-
-  const [
-    { count: searchesToday = 0 } = {},
-    { count: pharmaciesOnline = 0 } = {},
-    { count: medicationsAvailable = 0 } = {},
-  ] = await Promise.all([
-    supabase
-      .from('searches')
-      .select('id', { count: 'exact', head: true })
-      .gte('timestamp', startOfDay.toISOString())
-      .lt('timestamp', endOfDay.toISOString()),
-    supabase
-      .from('pharmacies')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_active', true),
-    supabase
-      .from('drugs')
-      .select('id', { count: 'exact', head: true })
-      .gt('quantity_in_stock', 0),
-  ]);
-
-  const structuredData = {
-    '@context': 'https://schema.org',
-    '@type': 'MedicalBusiness',
-    name: 'StocMed',
-    description:
-      "Nigeria's first AI-powered medication search platform helping patients discover pharmacies with their medications in stock.",
-    url: 'https://askstocmed.com',
-    logo: 'https://askstocmed.com/logo.png',
-    areaServed: [
-      { '@type': 'AdministrativeArea', name: 'Lagos' },
-      { '@type': 'AdministrativeArea', name: 'Abuja' },
-      { '@type': 'AdministrativeArea', name: 'Nigeria' },
-    ],
-    serviceType: ['Medication search', 'Pharmacy discovery', 'Drug price comparison'],
-    contactPoint: {
-      '@type': 'ContactPoint',
-      contactType: 'customer support',
-      email: 'support@askstocmed.com',
-      availableLanguage: ['English'],
-    },
-  };
-
   return (
-    <div className="min-h-screen bg-white">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
-      />
-      {/* Hero Section */}
-      <section className="bg-gradient-to-b from-light-blue-bg to-white py-16 md:py-24 px-4">
-        <div className="container mx-auto max-w-6xl text-center">
-          <div className="flex justify-center mb-6">
-            <Image
-              src="/logo.png"
-              alt="StocMed"
-              width={240}
-              height={80}
-              className="h-20 w-auto"
-              priority
-            />
-          </div>
-          <h1 className="text-[32px] md:text-5xl lg:text-6xl font-bold text-dark-gray mb-4 md:mb-6">
-            Find Your Medications in Minutes, Not Hours
-          </h1>
-          <p className="text-lg md:text-xl text-medium-gray mb-8 md:mb-10">
-            Nigeria&apos;s First AI-Powered Medication Search Platform
-          </p>
+    <div className="w-full bg-white text-ink overflow-x-hidden">
 
-          {/* CTAs */}
-          <div className="flex flex-col md:flex-row gap-4 justify-center items-center max-w-lg mx-auto">
-            <Link href="/signup?role=patient" className="w-full md:w-auto">
-              <Button className="w-full md:w-auto bg-primary-blue hover:bg-blue-700 text-white px-8 py-6 text-lg font-semibold rounded-lg">
-                Find Medication
-              </Button>
+      {/* NAV */}
+      <header className="sticky top-0 z-50 border-b border-border bg-white/[0.92] backdrop-blur-md">
+        <div className="mx-auto max-w-[1200px] px-6 py-4 flex items-center justify-between gap-6">
+          <Link href="/" className="flex items-center gap-2">
+            <LogoMark size={32} />
+            <span className="text-[18px] font-medium text-ink tracking-[-0.2px]">StocMed</span>
+          </Link>
+          <nav className="hidden lg:flex items-center gap-8">
+            <a href="#find" className="text-[15px] text-ink-muted hover:text-ink">Find medication</a>
+            <a href="#pharmacy" className="text-[15px] text-ink-muted hover:text-ink">For pharmacies</a>
+            <a href="#how" className="text-[15px] text-ink-muted hover:text-ink">How it works</a>
+          </nav>
+          <div className="flex items-center gap-3">
+            <Link href="/login" className="text-[15px] font-medium text-primary px-4 py-2.5">Sign in</Link>
+            <Link
+              href="/signup?role=patient"
+              className="h-11 flex items-center px-5 bg-primary text-white text-[15px] font-medium rounded-button whitespace-nowrap hover:bg-[#0052A3]"
+            >
+              Get started
             </Link>
-            <Link href="/signup?role=pharmacy" className="w-full md:w-auto">
-              <Button
-                variant="outline"
-                className="w-full md:w-auto border-2 border-primary-blue text-primary-blue hover:bg-blue-50 px-8 py-6 text-lg font-semibold rounded-lg"
-              >
-                I&apos;m a Pharmacy
-              </Button>
-            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* HERO */}
+      <section className="px-6 pt-20 pb-24" style={{ background: 'linear-gradient(180deg, #F0F7FF 0%, #FFFFFF 100%)' }}>
+        <div className="mx-auto max-w-[1200px] grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-16 items-center">
+          <div className="order-2 lg:order-1">
+            <div className="inline-flex items-center gap-2 bg-white border border-border rounded-full px-3.5 py-1.5 mb-6">
+              <span className="w-2 h-2 rounded-full bg-success" />
+              <span className="text-[13px] font-medium text-ink-muted">Live across 1,200+ pharmacies in Lagos, Abuja &amp; Port Harcourt</span>
+            </div>
+            <h1 className="font-display font-medium text-[40px] lg:text-[56px] leading-[1.08] tracking-[-0.01em] text-ink max-w-[560px]">
+              Find the medication you need, at a pharmacy that has it
+            </h1>
+            <p className="text-[18px] leading-[1.6] text-ink-muted max-w-[520px] mt-6">
+              StocMed&apos;s AI checks real-time stock across pharmacies near you, compares prices, and tells you exactly where to go — before you leave the house.
+            </p>
+            <div className="flex flex-wrap gap-4 mt-9">
+              <Link href="/signup?role=patient" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button hover:bg-[#0052A3]">
+                Find medication
+              </Link>
+              <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-white text-primary border-[1.5px] border-primary text-[16px] font-medium rounded-button hover:bg-surface">
+                I&apos;m a pharmacy
+              </Link>
+            </div>
+            <div className="flex gap-8 mt-12">
+              {[['1,200+', 'Pharmacies connected'], ['40,000+', 'Medications tracked'], ['<2 min', 'Average search time']].map(([n, l]) => (
+                <div key={l}>
+                  <div className="text-[28px] font-medium text-navy">{n}</div>
+                  <div className="text-[14px] text-ink-light">{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Hero visual — live search result mock */}
+          <div className="order-1 lg:order-2">
+            <div className="bg-white border border-border rounded-card-lg overflow-hidden shadow-lg">
+              <div className="px-5 py-4 border-b border-border flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-surface flex items-center justify-center text-sm">🔍</div>
+                <span className="text-[14px] font-medium text-ink">Searching &ldquo;Amoxicillin 500mg&rdquo; near Ikeja</span>
+              </div>
+              <div className="px-5 py-4 flex flex-col gap-3">
+                {[
+                  { name: 'MedPlus Pharmacy – Allen Avenue', meta: '1.2 km away · ₦1,200 / pack', label: 'In stock', cls: 'badge-success', dim: false },
+                  { name: 'HealthPlus – Opebi Road', meta: '2.4 km away · ₦1,350 / pack', label: 'Low stock', cls: 'badge-warning', dim: false },
+                  { name: 'Alpha Pharmacy – Toyin Street', meta: '1.8 km away', label: 'Out of stock', cls: 'badge-danger', dim: true },
+                ].map((r) => (
+                  <div key={r.name} className={`flex items-center justify-between p-3.5 border border-border rounded-card ${r.dim ? 'opacity-60' : ''}`}>
+                    <div>
+                      <div className="text-[15px] font-medium text-ink">{r.name}</div>
+                      <div className="text-[13px] text-ink-light mt-0.5">{r.meta}</div>
+                    </div>
+                    <span className={`${r.cls} px-2.5 py-1.5 rounded-button whitespace-nowrap`}>{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Live Activity */}
-      <section className="py-12 px-4 bg-white">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex items-center justify-between flex-wrap gap-4 mb-8">
-            <h2 className="text-2xl md:text-3xl font-bold text-dark-gray flex items-center gap-2">
-              <span role="img" aria-label="fire">
-                🔥
-              </span>
-              Live Activity
-            </h2>
-            <p className="text-sm text-medium-gray">
-              Capturing demand signals from patients in real-time.
-            </p>
+      {/* VALUE PROPS */}
+      <section className="px-6 py-24 bg-white">
+        <div className="mx-auto max-w-[1200px]">
+          <div className="max-w-[600px] mb-14">
+            <h2 className="font-display font-medium text-[36px] leading-[1.2] text-ink">Built for how Nigerians actually find medication</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {[
-              {
-                label: 'Searches Today',
-                value: searchesToday,
-                subtext: 'Fresh intents from patients across Nigeria',
-              },
-              {
-                label: 'Pharmacies Online',
-                value: pharmaciesOnline,
-                subtext: 'Active partners sharing inventory data',
-              },
-              {
-                label: 'Medications Available',
-                value: medicationsAvailable,
-                subtext: 'Skus currently in stock on the network',
-              },
-            ].map((card) => (
-              <div
-                key={card.label}
-                className="relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-white via-white to-blue-50/70 shadow-sm transition hover:shadow-md"
-              >
-                <div className="absolute inset-0 bg-gradient-to-br from-primary-blue/5 to-transparent animate-pulse [animation-duration:6s]" />
-                <div className="relative px-6 py-6 sm:px-8 sm:py-8">
-                  <p className="text-sm font-medium uppercase tracking-wide text-primary-blue">
-                    {card.label}
-                  </p>
-                  <p className="mt-3 text-3xl sm:text-4xl font-bold text-dark-gray">
-                    {(card.value ?? 0).toLocaleString()}
-                  </p>
-                  <p className="mt-3 text-sm text-medium-gray leading-relaxed">{card.subtext}</p>
-                </div>
+              { icon: '💬', title: 'Ask in plain language', body: "Describe your symptom or type a brand name — StocMed's AI understands local names, generics, and dosages." },
+              { icon: '📍', title: 'Real-time, nearby stock', body: 'See exactly which pharmacies near you have it in stock right now — not a guess, a live inventory feed.' },
+              { icon: '₦', title: 'Compare prices instantly', body: 'Prices vary a lot between pharmacies. StocMed shows you the cheapest option within your reach.' },
+            ].map((c) => (
+              <div key={c.title} className="border border-border rounded-card p-8">
+                <div className="w-11 h-11 rounded-lg bg-surface flex items-center justify-center text-xl mb-5">{c.icon}</div>
+                <h3 className="text-[19px] font-medium text-ink mb-2.5">{c.title}</h3>
+                <p className="text-[15px] leading-[1.6] text-ink-muted">{c.body}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Value Props Section */}
-      <section className="py-16 px-4 bg-white">
-        <div className="container mx-auto max-w-6xl">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Prop 1 */}
-            <div className="text-center p-6">
-              <div className="text-5xl mb-4">🔍</div>
-              <h3 className="text-xl font-semibold text-dark-gray mb-2">
-                Search 100+ Medications
-              </h3>
-              <p className="text-medium-gray">
-                Find any medication quickly with our comprehensive database
-              </p>
-            </div>
+      {/* HOW IT WORKS */}
+      <section id="how" className="px-6 py-24 bg-surface">
+        <div className="mx-auto max-w-[1200px]">
+          <h2 className="font-display font-medium text-[36px] text-ink mb-14 text-center">How it works</h2>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {[
+              { n: '01', title: 'Tell us what you need', body: 'Type a medication name, upload a prescription photo, or describe your symptom.' },
+              { n: '02', title: 'See who has it', body: 'StocMed checks live inventory across nearby partner pharmacies and ranks results by distance and price.' },
+              { n: '03', title: 'Reserve & go', body: "Reserve your medication so it's held for you, then walk in and pick it up." },
+            ].map((s) => (
+              <div key={s.n} className="bg-white border border-border rounded-card-lg px-7 py-9">
+                <div className="font-display font-medium text-[32px] text-primary mb-4">{s.n}</div>
+                <h3 className="text-[18px] font-medium text-ink mb-2.5">{s.title}</h3>
+                <p className="text-[15px] leading-[1.6] text-ink-muted">{s.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            {/* Prop 2 */}
-            <div className="text-center p-6">
-              <div className="text-5xl mb-4">📍</div>
-              <h3 className="text-xl font-semibold text-dark-gray mb-2">
-                Find Nearest Pharmacy
-              </h3>
-              <p className="text-medium-gray">
-                Locate pharmacies near you with real-time availability
-              </p>
-            </div>
-
-            {/* Prop 3 */}
-            <div className="text-center p-6">
-              <div className="text-5xl mb-4">💬</div>
-              <h3 className="text-xl font-semibold text-dark-gray mb-2">
-                AI-Powered Assistance
-              </h3>
-              <p className="text-medium-gray">
-                Get instant help from our intelligent medication assistant
-              </p>
+      {/* AI CHAT PREVIEW */}
+      <section id="find" className="px-6 py-24 bg-white">
+        <div className="mx-auto max-w-[1200px] grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-16 items-center">
+          <div>
+            <span className="text-[13px] font-medium text-primary uppercase tracking-[0.04em]">AI-powered search</span>
+            <h2 className="font-display font-medium text-[36px] leading-[1.2] text-ink mt-3">Talk to StocMed like you would a pharmacist</h2>
+            <p className="text-[16px] leading-[1.7] text-ink-muted mt-5 max-w-[440px]">
+              No need to know the exact drug name. Describe how you feel, and StocMed suggests the right medication, checks dosage safety, and finds it nearby — in seconds.
+            </p>
+          </div>
+          <div className="bg-surface border border-border rounded-card-lg p-2">
+            <div className="bg-white rounded-card overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-border flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-success" />
+                <span className="text-[13px] font-medium text-ink-muted">StocMed Assistant</span>
+              </div>
+              <div className="px-5 py-6 flex flex-col gap-4 min-h-[280px]">
+                <div className="self-end bg-primary text-white text-[15px] px-4 py-3 rounded-[12px_12px_2px_12px] max-w-[80%]">I have a bad headache and slight fever, what should I take?</div>
+                <div className="self-start bg-surface text-ink text-[15px] leading-[1.55] px-4 py-3 rounded-[12px_12px_12px_2px] max-w-[85%]">That sounds like it could be managed with Paracetamol 500mg. Would you take a quick clerking form so a pharmacy validates before pointing you to the pharmacies near you?</div>
+                <div className="self-end bg-primary text-white text-[15px] px-4 py-3 rounded-[12px_12px_2px_12px] max-w-[80%]">Yes please</div>
+                <div className="self-start flex items-center gap-1.5 px-4 py-3">
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce [animation-delay:0.2s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce [animation-delay:0.4s]" />
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-border flex items-center gap-2.5">
+                <div className="flex-1 h-11 border border-border rounded-button flex items-center px-3.5 text-[14px] text-ink-light">Ask about a medication or symptom…</div>
+                <div className="w-11 h-11 rounded-button bg-primary flex items-center justify-center text-white text-base">→</div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section className="py-16 px-4 bg-light-blue-bg">
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-3xl md:text-4xl font-bold text-dark-gray text-center mb-12">
-            How It Works
-          </h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Step 1 */}
-            <div className="bg-white rounded-lg p-8 shadow-sm">
-              <div className="w-12 h-12 bg-primary-blue text-white rounded-full flex items-center justify-center text-xl font-bold mb-4">
-                1
-              </div>
-              <h3 className="text-xl font-semibold text-dark-gray mb-3">
-                Tell our AI what you need
-              </h3>
-              <p className="text-medium-gray">
-                Simply describe your medication or health concern to our intelligent assistant
-              </p>
+      {/* PHARMACY CTA BAND */}
+      <section id="pharmacy" className="bg-navy px-6 py-20">
+        <div className="mx-auto max-w-[1200px] flex flex-wrap items-center justify-between gap-12">
+          <div className="max-w-[560px]">
+            <div className="flex items-center gap-2 mb-6">
+              <LogoMark size={28} onDark />
+              <span className="text-[16px] font-medium text-white tracking-[-0.2px]">StocMed</span>
             </div>
-
-            {/* Step 2 */}
-            <div className="bg-white rounded-lg p-8 shadow-sm">
-              <div className="w-12 h-12 bg-primary-blue text-white rounded-full flex items-center justify-center text-xl font-bold mb-4">
-                2
-              </div>
-              <h3 className="text-xl font-semibold text-dark-gray mb-3">
-                See which pharmacies have it
-              </h3>
-              <p className="text-medium-gray">
-                Get instant results showing nearby pharmacies with your medication in stock
-              </p>
-            </div>
-
-            {/* Step 3 */}
-            <div className="bg-white rounded-lg p-8 shadow-sm">
-              <div className="w-12 h-12 bg-primary-blue text-white rounded-full flex items-center justify-center text-xl font-bold mb-4">
-                3
-              </div>
-              <h3 className="text-xl font-semibold text-dark-gray mb-3">
-                Visit or call to purchase
-              </h3>
-              <p className="text-medium-gray">
-                Contact the pharmacy directly or visit to get your medication quickly
-              </p>
-            </div>
+            <span className="text-[13px] font-medium uppercase tracking-[0.04em]" style={{ color: '#8FC7FF' }}>For pharmacies</span>
+            <h2 className="font-display font-medium text-[28px] lg:text-[34px] leading-[1.25] text-white mt-3">List your inventory. Reach patients searching for stock right now.</h2>
+            <p className="text-[16px] leading-[1.6] mt-4" style={{ color: '#C9DCEF' }}>
+              Join 1,200+ pharmacies already using StocMed to manage inventory and get discovered by nearby patients.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button whitespace-nowrap hover:bg-[#0052A3]">
+              Register your pharmacy
+            </Link>
+            <a href="#find" className="h-12 flex items-center justify-center px-7 bg-transparent text-white text-[16px] font-medium rounded-button whitespace-nowrap" style={{ border: '1.5px solid #4A79A8' }}>
+              Learn more
+            </a>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 py-8 px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex flex-wrap justify-center items-center gap-6 text-medium-gray">
-            <Link href="/about" className="hover:text-primary-blue transition-colors">
-              About
-            </Link>
-            <span className="text-gray-300">|</span>
-            <Link href="/contact" className="hover:text-primary-blue transition-colors">
-              Contact
-            </Link>
-            <span className="text-gray-300">|</span>
-            <Link href="/privacy" className="hover:text-primary-blue transition-colors">
-              Privacy
-            </Link>
-            <span className="text-gray-300">|</span>
-            <Link href="/terms" className="hover:text-primary-blue transition-colors">
-              Terms
-            </Link>
+      {/* FOOTER */}
+      <footer className="bg-white px-6 pt-16 pb-8 border-t border-border">
+        <div className="mx-auto max-w-[1200px]">
+          <div className="grid grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr] gap-8 pb-12">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <LogoMark size={28} />
+                <span className="text-[18px] font-medium text-ink tracking-[-0.2px]">StocMed</span>
+              </div>
+              <p className="text-[14px] text-ink-light leading-[1.6] max-w-[260px]">AI-powered medication search and pharmacy inventory for Nigeria.</p>
+            </div>
+            {[
+              { h: 'Patients', links: [['Find medication', '/signup?role=patient'], ['How it works', '#how'], ['Safety & sourcing', '#']] },
+              { h: 'Pharmacies', links: [['Register your pharmacy', '/signup?role=pharmacy'], ['Inventory dashboard', '/login'], ['Pricing', '#']] },
+              { h: 'Company', links: [['About', '#'], ['Contact', '#'], ['Privacy policy', '#']] },
+            ].map((col) => (
+              <div key={col.h}>
+                <div className="text-[13px] font-medium text-ink mb-4">{col.h}</div>
+                <div className="flex flex-col gap-3">
+                  {col.links.map(([label, href]) => (
+                    <Link key={label} href={href} className="text-[14px] text-ink-muted hover:text-ink">{label}</Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-6 border-t border-border">
+            <span className="text-[13px] text-ink-light">© 2026 StocMed. All rights reserved.</span>
+            <span className="text-[13px] text-ink-light">Lagos, Nigeria</span>
           </div>
         </div>
       </footer>

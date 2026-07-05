@@ -53,13 +53,13 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
   const getStockStatusColor = (status: string) => {
     switch (status) {
       case 'in-stock':
-        return 'text-green-600 bg-green-50';
+        return 'text-success bg-success/5 border border-success/20';
       case 'low-stock':
-        return 'text-orange-600 bg-orange-50';
+        return 'text-warning bg-warning/5 border border-warning/20';
       case 'out-of-stock':
-        return 'text-red-600 bg-red-50';
+        return 'text-danger bg-danger/5 border border-danger/20';
       default:
-        return 'text-gray-600 bg-gray-50';
+        return 'text-muted-foreground bg-surface border border-border';
     }
   };
 
@@ -134,10 +134,13 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
       }
     };
 
-    fetchAssistantDetails();
+    const timer = setTimeout(() => {
+      fetchAssistantDetails();
+    }, 150);
 
     return () => {
       isMounted = false;
+      clearTimeout(timer);
     };
   }, [detailError, detailMessage, drug, isDetailLoading, isDetailOpen, pharmacy]);
 
@@ -147,9 +150,9 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
 
   return (
     <>
-    <Card className="min-w-[320px] max-w-xs snap-start flex flex-col justify-between border border-gray-200 hover:shadow-md transition-shadow">
+    <Card className="min-w-[310px] max-w-xs snap-start flex flex-col justify-between border border-border hover:shadow-md transition-all duration-250 bg-card">
       <div className="p-4 space-y-4">
-        <div className="flex items-start gap-3">
+        <div className="flex items-start gap-2.5">
           <div className="flex-1 space-y-1.5">
             <div className="flex items-center gap-2">
               {pharmacy.logo_url ? (
@@ -158,139 +161,130 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                   alt={`${pharmacy.pharmacy_name} logo`}
                   width={32}
                   height={32}
-                  className="h-8 w-8 rounded-full border border-gray-200 object-cover"
+                  className="h-8 w-8 rounded-full border border-border object-cover"
                   unoptimized
                 />
               ) : (
-                <div className="h-8 w-8 rounded-full bg-blue-50 text-primary-blue flex items-center justify-center text-sm font-semibold">
+                <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold flex-shrink-0">
                   {pharmacy.pharmacy_name?.charAt(0)?.toUpperCase() || 'P'}
                 </div>
               )}
-              <div>
-                <p className="font-semibold text-gray-900 leading-tight">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-ink leading-tight truncate">
                   {pharmacy.pharmacy_name}
                 </p>
-                <p className="text-xs text-gray-500">Pharmacy</p>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pharmacy</p>
               </div>
-              {pharmacy.p2p_verified && (
-                <span className="ml-auto inline-flex items-center gap-1 text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                  <ShieldCheck className="h-3 w-3" />
-                  Verified
+              {(pharmacy.p2p_verified || pharmacy.license_number) && (
+                <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] font-bold text-success bg-success/10 border border-success/20 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  <ShieldCheck className="h-2.5 w-2.5" />
+                  PCN Checked
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-600 flex items-start gap-1 leading-snug">
-              <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0" />
-              <span>
+            
+            <p className="text-xs text-muted-foreground flex items-start gap-1 leading-snug">
+              <MapPin className="h-3 w-3 mt-0.5 flex-shrink-0 text-muted-foreground/60" />
+              <span className="line-clamp-2">
                 {pharmacy.address}
                 {pharmacy.city ? `, ${pharmacy.city}` : ''}
-                {pharmacy.state ? `, ${pharmacy.state}` : ''}
               </span>
             </p>
-            {distanceText && (
-              <p className="text-xs text-gray-500">{distanceText}</p>
-            )}
+
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              {distanceText && (
+                <span className="font-semibold text-ink">{distanceText}</span>
+              )}
+              {distanceText && pharmacy.operating_hours && <span>•</span>}
+              {pharmacy.operating_hours && (
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="h-3 w-3 text-muted-foreground/60" />
+                  {pharmacy.operating_hours}
+                </span>
+              )}
+            </div>
           </div>
-          {drug.image_url && (
-            <Image
-              src={drug.image_url}
-              alt={drug.name || drug.brand_name || 'Drug image'}
-              width={64}
-              height={64}
-              className="h-16 w-16 rounded-lg object-cover border border-gray-200"
-              unoptimized
-            />
-          )}
         </div>
 
-        <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="font-semibold text-gray-900 leading-tight">
+        <div className="bg-surface rounded-lg p-3 space-y-2 border border-border/40">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-ink leading-tight truncate">
                 {drug.name || drug.brand_name}
                 {drug.strength ? ` ${drug.strength}` : ''}
               </p>
               {drug.generic_name && drug.name !== drug.generic_name && (
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-muted-foreground truncate">
                   Generic: {drug.generic_name}
                 </p>
               )}
-              <p className="text-xs text-gray-500 capitalize">
+              <p className="text-xs text-muted-foreground capitalize">
                 {drug.dosage_form || 'Dosage form not set'}
               </p>
-              {drug.manufacturer && (
-                <p className="text-[11px] text-gray-400">
-                  by {drug.manufacturer}
-                </p>
-              )}
             </div>
-            <div className="text-right">
+            
+            <div className="text-right flex-shrink-0">
               {priceMin !== null && priceMax !== null ? (
                 <>
-                  <p className="text-[11px] uppercase tracking-wide text-gray-400">
+                  <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
                     Est. price
                   </p>
-                  <p className="text-lg font-semibold text-primary-blue">
+                  <p className="text-sm font-bold text-primary tabular-nums font-mono">
                     ₦{priceMin.toLocaleString()} - ₦{priceMax.toLocaleString()}
                   </p>
                 </>
               ) : (
-                <p className="text-lg font-semibold text-primary-blue">
+                <p className="text-sm font-bold text-primary tabular-nums font-mono">
                   ₦{drug.price ? Number(drug.price).toLocaleString() : 'Ask'}
                 </p>
               )}
               {drug.requires_prescription && (
-                <p className="text-[11px] text-red-600 mt-1">
-                  Requires prescription
-                </p>
+                <span className="inline-block text-[9px] font-bold uppercase tracking-wider text-danger bg-danger/10 border border-danger/20 px-1 rounded mt-1">
+                  Rx Required
+                </span>
               )}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+
+          <div className="flex flex-wrap gap-1.5 pt-1">
             <span
               className={cn(
-                'inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium',
+                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold',
                 getStockStatusColor(stockStatus)
               )}
             >
               <Package className="h-3 w-3" />
               {getStockStatusText(stockStatus)}
               {drug.quantity_in_stock > 0 &&
-                ` (${drug.quantity_in_stock} available)`}
+                ` (${drug.quantity_in_stock})`}
             </span>
             {(drug.quantity_in_stock ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-600">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-success/10 text-success border border-success/20">
                 <Clock className="h-3 w-3" />
-                Ready for pickup
-              </span>
-            )}
-            {drug.category && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-primary-blue">
-                <Info className="h-3 w-3" />
-                {drug.category}
+                Ready
               </span>
             )}
           </div>
         </div>
       </div>
 
-      <div className="px-4 pb-4 pt-0 flex flex-col gap-2">
+      <div className="px-4 pb-4 pt-0 flex gap-2">
         <Button
           variant="outline"
           size="sm"
           onClick={() => setIsDetailOpen(true)}
-          className="w-full"
+          className="flex-1 text-xs border-border hover:bg-surface"
         >
           View details
         </Button>
-        <Button size="sm" asChild className="w-full">
+        <Button size="sm" asChild className="flex-1 text-xs shadow-sm">
           <a
             href={pharmacy.phone ? `tel:${pharmacy.phone}` : '#'}
-            className="flex items-center justify-center gap-2"
+            className="flex items-center justify-center gap-1.5"
             aria-disabled={!pharmacy.phone}
           >
-            <Phone className="h-4 w-4" />
-            Call Pharmacy
+            <Phone className="h-3.5 w-3.5" />
+            Call Outlet
           </a>
         </Button>
       </div>
@@ -317,25 +311,25 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                   alt={`${pharmacy.pharmacy_name} logo`}
                   width={48}
                   height={48}
-                  className="h-12 w-12 rounded-full border border-gray-200 object-cover"
+                  className="h-12 w-12 rounded-full border border-border object-cover"
                   unoptimized
                 />
               ) : (
-                <div className="h-12 w-12 rounded-full bg-blue-50 text-primary-blue flex items-center justify-center text-lg font-semibold">
+                <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-lg font-semibold">
                   {pharmacy.pharmacy_name?.charAt(0)?.toUpperCase() || 'P'}
                 </div>
               )}
               <div>
-                <p className="font-semibold text-gray-900">
+                <p className="font-semibold text-ink">
                   {pharmacy.pharmacy_name}
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-muted-foreground">
                   {pharmacy.address}
                   {pharmacy.city ? `, ${pharmacy.city}` : ''}
                   {pharmacy.state ? `, ${pharmacy.state}` : ''}
                 </p>
                 {distanceText && (
-                  <p className="text-xs text-gray-500">{distanceText}</p>
+                  <p className="text-xs text-muted-foreground">{distanceText}</p>
                 )}
               </div>
             </div>
@@ -345,18 +339,18 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                 alt={drug.name || drug.brand_name || 'Drug image'}
                 width={112}
                 height={112}
-                className="mt-4 sm:mt-0 h-28 w-28 rounded-lg border border-gray-200 object-cover"
+                className="mt-4 sm:mt-0 h-28 w-28 rounded-lg border border-border object-cover"
                 unoptimized
               />
             )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-              <p className="text-xs font-semibold uppercase text-gray-500">
+            <div className="rounded-card border border-border p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
                 Price range
               </p>
-              <p className="text-2xl font-bold text-primary-blue">
+              <p className="text-2xl font-bold text-primary">
                 {priceMin !== null && priceMax !== null
                   ? `₦${priceMin.toLocaleString()} – ₦${priceMax.toLocaleString()}`
                   : drug.price
@@ -364,13 +358,13 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                   : 'Ask in-store'}
               </p>
               {drug.requires_prescription && (
-                <p className="text-xs text-red-600">
+                <p className="text-xs text-danger">
                   Prescription required
                 </p>
               )}
             </div>
-            <div className="rounded-lg border border-gray-200 p-4 space-y-2">
-              <p className="text-xs font-semibold uppercase text-gray-500">
+            <div className="rounded-card border border-border p-4 space-y-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
                 Stock information
               </p>
               <div
@@ -385,18 +379,18 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                   ` • ${drug.quantity_in_stock} units`}
               </div>
               {pharmacy.operating_hours && (
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-muted-foreground">
                   Hours: {pharmacy.operating_hours}
                 </p>
               )}
             </div>
           </div>
 
-          <div className="space-y-3 rounded-lg border border-gray-200 p-4 bg-gray-50">
-            <p className="text-sm font-semibold text-gray-900">
+          <div className="space-y-3 rounded-card border border-border p-4 bg-surface">
+            <p className="text-sm font-semibold text-ink">
               Medication details
             </p>
-            <ul className="text-sm text-gray-700 list-disc pl-5 space-y-1.5">
+            <ul className="text-sm text-muted-foreground list-disc pl-5 space-y-1.5">
               <li>Form: {drug.dosage_form || 'Not specified'}</li>
               <li>
                 Manufacturer:{' '}
@@ -414,20 +408,20 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
               {drug.category && <li>Category: {drug.category}</li>}
             </ul>
             {drug.description && (
-              <p className="text-sm text-gray-600 leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed">
                 Notes: {drug.description}
               </p>
             )}
 
             {(isDetailLoading || detailMessage || detailError) && (
-              <div className="mt-4 rounded-lg border border-gray-200 bg-white p-3 sm:p-4">
-                <p className="text-sm font-semibold text-gray-900">
+              <div className="mt-4 rounded-card border border-border bg-card p-3 sm:p-4">
+                <p className="text-sm font-semibold text-ink">
                   Assistant insights
                 </p>
-                <div className="mt-2 text-sm text-gray-700 whitespace-pre-line">
+                <div className="mt-2 text-sm text-muted-foreground whitespace-pre-line">
                   {isDetailLoading && 'Fetching tailored guidance...'}
                   {!isDetailLoading && detailError && (
-                    <span className="text-red-600">{detailError}</span>
+                    <span className="text-danger">{detailError}</span>
                   )}
                   {!isDetailLoading && !detailError && detailMessage}
                 </div>
@@ -439,7 +433,7 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
             <Button
               size="sm"
               asChild
-              className="w-full sm:w-auto bg-primary-blue hover:bg-primary-blue/90"
+              className="w-full sm:w-auto bg-primary hover:bg-primary/90"
             >
               <a
                 href={pharmacy.phone ? `tel:${pharmacy.phone}` : '#'}
@@ -450,7 +444,7 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                 Call {pharmacy.pharmacy_name || 'pharmacy'}
               </a>
             </Button>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               Tip: Call ahead to confirm stock or schedule pickup. Always
               follow your prescriber’s instructions.
             </p>

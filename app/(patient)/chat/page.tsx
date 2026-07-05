@@ -6,14 +6,22 @@ import {
   useMemo,
   useCallback,
   useRef,
+  Fragment,
 } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Send, Loader2, MapPin, Bot, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { Send, Loader2, MapPin } from 'lucide-react';
 import { useUser } from '@/hooks/useUser';
-import DrugResultCard from '@/components/chat/DrugResultCard';
+import { Button } from '@/components/ui/button';
+import { createClient } from '@/lib/supabase/client';
+
+import EmergencyScreen from '@/components/chat/EmergencyScreen';
+import RestrictedScreen from '@/components/chat/RestrictedScreen';
+import CrisisScreen from '@/components/chat/CrisisScreen';
+import PrescriptionUpload from '@/components/chat/PrescriptionUpload';
+import SymptomIntakeForm from '@/components/chat/SymptomIntakeForm';
+import IntakeStatusTracker from '@/components/chat/IntakeStatusTracker';
+import ConsentPrompt from '@/components/chat/ConsentPrompt';
 
 export const dynamic = 'force-dynamic';
 
@@ -178,7 +186,7 @@ const extractMedicationKeyword = (input: string): string | null => {
 const resolveLocationLabel = (value: string) => {
   const text = normalize(value);
   if (!text) return null;
-  if (['ikeja', 'victoria island', 'lekki'].some((loc) => text.startsWith(loc))) {
+  if (['ikeja', 'victoria island', 'lekki', 'yaba'].some((loc) => text.startsWith(loc))) {
     return value.trim();
   }
   if (text.length >= 3) {
@@ -234,21 +242,27 @@ const formatResultBullet = (item: any) => {
 };
 
 const quickActionsIntro = [
-  { label: '🔍 Search by name', token: '__SEARCH_NAME__' },
-  { label: '📍 Update my location', token: '__UPDATE_LOCATION__' },
-  { label: '💊 Browse suggestions', token: '__BROWSE_SUGGESTIONS__' },
+  { label: 'Find a cheaper generic', token: 'Find a cheaper generic' },
+  { label: 'Reserve medication', token: 'Reserve medication' },
+  { label: 'Dosage instructions', token: 'Dosage instructions' },
 ] as const;
 
 const quickActionsFollowUp = [
-  { label: '🔁 Show results again', token: '__SHOW_RESULTS__' },
-  { label: '💰 Compare prices', token: '__COMPARE_PRICES__' },
-  { label: '🆕 New medication', token: '__NEW_SEARCH__' },
+  { label: 'Show results again', token: '__SHOW_RESULTS__' },
+  { label: 'Compare prices', token: '__COMPARE_PRICES__' },
+  { label: 'New medication', token: '__NEW_SEARCH__' },
 ] as const;
 
 export default function Chat() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
-  const { user } = useUser();
+  const { user, isLoading: isUserLoading } = useUser();
+
+  const [threadId] = useState(() => generateMessageId());
+  const [activeSafetyScreen, setActiveSafetyScreen] = useState<'emergency' | 'restricted' | 'crisis' | 'symptom_intake' | 'prescription_upload' | 'intake_tracker' | null>(null);
+  const [selectedProductName, setSelectedProductName] = useState('');
+  const [currentIntakeId, setCurrentIntakeId] = useState<string | null>(null);
+  const [manualLocationInput, setManualLocationInput] = useState('');
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
@@ -264,27 +278,57 @@ export default function Chat() {
   const [pendingLocationLabel, setPendingLocationLabel] = useState<string | null>(null);
   const [lastResults, setLastResults] = useState<any[]>([]);
   const [lastQueryText, setLastQueryText] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string>('');
+  const [isNameLoading, setIsNameLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-const welcomeSuggestions = useMemo(
-    () => ['Paracetamol', 'Amatem', 'Hypertension meds'],
-    []
-  );
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  const welcomeMessage = useMemo(
-    () =>
-      [
-        '👋 Hi, I’m your StocMed assistant.',
-        '',
-        'Tell me what medication you need + your area, and I’ll find nearby pharmacies.',
-        '',
-        'Example: “Paracetamol 500mg in Ikeja”',
-        '',
-        '⚠️ I find medications, not prescribe them.',
-      ].join('\n'),
-    []
-  );
+  useEffect(() => {
+    if (isUserLoading) return;
+    if (!user) {
+      setIsNameLoading(false);
+      return;
+    }
+
+    const name = user.user_metadata?.full_name?.split(' ')[0] || '';
+    if (name) {
+      setUserName(name);
+      setIsNameLoading(false);
+      return;
+    }
+
+    const fetchName = async () => {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('users')
+          .select('full_name')
+          .eq('user_id', user.id)
+          .single();
+
+        if (error) throw error;
+
+        const fullName = (data as any)?.full_name;
+        if (fullName) {
+          setUserName(fullName.split(' ')[0]);
+        } else {
+          setUserName(user.email?.split('@')[0] || '');
+        }
+      } catch (err) {
+        console.error('Error fetching user profile name:', err);
+        setUserName(user.email?.split('@')[0] || '');
+      } finally {
+        setIsNameLoading(false);
+      }
+    };
+
+    fetchName();
+  }, [user, isUserLoading]);
 
   const greetingReply = useMemo(
     () => 'Hi! What medication are you looking for today?',
@@ -352,11 +396,14 @@ const welcomeSuggestions = useMemo(
   );
 
   useEffect(() => {
+    if (isUserLoading || isNameLoading) return;
     if (!welcomeShownRef.current && messages.length === 0) {
-      pushAssistantMessage(welcomeMessage);
+      const nameToUse = userName || 'there';
+      const welcome = `Hi ${nameToUse} 👋 I'm your StocMed assistant. Tell me what medication you need, or describe how you're feeling.`;
+      pushAssistantMessage(welcome);
       welcomeShownRef.current = true;
     }
-  }, [messages.length, pushAssistantMessage, welcomeMessage]);
+  }, [isUserLoading, isNameLoading, messages.length, pushAssistantMessage, userName]);
 
   const requestAssistantMessage = useCallback(
     async (payload: {
@@ -451,42 +498,23 @@ const welcomeSuggestions = useMemo(
           userLocation,
         });
 
-        const summaryParts: string[] = [];
+        const locationHint = locationOverride || userLocation?.label || '';
+        let finalMessage = `Found it. ${trimmedMedication} is in stock at ${results.length} pharmacies within 3km of ${locationHint || 'your area'}.`;
 
         if (results.length > 0) {
-          const locationHint =
-            locationOverride || userLocation?.label
-              ? ` around ${locationOverride ?? userLocation?.label}`
-              : '';
-          summaryParts.push(`Here’s what I found for “${trimmedMedication}”${locationHint}:`);
-          const bulletLines = results.slice(0, 3).map(formatResultBullet);
-          summaryParts.push(bulletLines.join('\n'));
-          summaryParts.push(
-            'Need another option? Ask for a different strength, brand, or location and I’ll keep searching.'
-          );
+          const closest = results[0];
+          const closestName = closest.pharmacies?.pharmacy_name || 'partner pharmacy';
+          const closestAddr = closest.pharmacies?.address || '';
+          const closestPrice = closest.price ? `₦${Number(closest.price).toLocaleString()}` : 'estimable price';
+          const closestDist = closest.distance_km ? `${closest.distance_km.toFixed(1)}km away` : '';
+          
+          finalMessage += ` The closest is ${closestName} ${closestAddr ? `on ${closestAddr}` : ''} — ${closestPrice} per pack${closestDist ? `, ${closestDist}` : ''}.`;
         } else {
-          summaryParts.push(`I couldn’t find pharmacies stocking “${trimmedMedication}” right now.`);
-          summaryParts.push(
-            [
-              'Let’s try these next steps:',
-              '• Double-check the spelling or share another brand name.',
-              '• Tell me the generic ingredient if you know it.',
-              '• Describe the condition so I can look for alternatives.',
-              'I’m here to help—just give me more details.',
-            ].join('\n')
-          );
+          finalMessage = `I couldn’t find pharmacies stocking “${trimmedMedication}” right now. Try double-checking the spelling or checking for a generic alternative.`;
         }
 
-        const summaryText = summaryParts.join('\n\n');
-        let finalMessage =
-          assistantReply && assistantReply.trim().length ? assistantReply.trim() : summaryText;
-
-        if (results.length === 0 && assistantReply && assistantReply.trim().length) {
-          finalMessage = `${assistantReply.trim()}\n\n${summaryText}`;
-        }
-
-        if (results.length > 0 && !finalMessage.toLowerCase().includes('tap a card')) {
-          finalMessage = `${finalMessage}\n\nTap a card below to view pharmacy details or let me refine the search.`;
+        if (assistantReply && assistantReply.trim().length) {
+          finalMessage = assistantReply.trim();
         }
 
         pushAssistantMessage(finalMessage, { results });
@@ -591,6 +619,57 @@ const welcomeSuggestions = useMemo(
         return;
       }
 
+      setIsLoading(true);
+      try {
+        const triageRes = await fetch('/api/triage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: trimmed, thread_id: threadId }),
+        });
+        if (!triageRes.ok) throw new Error('Triage failed');
+        const triageData = await triageRes.json();
+
+        // 1. Handle CRISIS
+        if (triageData.risk_tier === 'CRISIS') {
+          setActiveSafetyScreen('crisis');
+          setIsLoading(false);
+          return;
+        }
+
+        // 2. Handle REDIRECT (Emergency RED_FLAG)
+        if (triageData.risk_tier === 'REDIRECT') {
+          setActiveSafetyScreen('emergency');
+          setIsLoading(false);
+          return;
+        }
+
+        // 3. Handle BLOCK_SOURCING (Restricted drugs)
+        if (triageData.risk_tier === 'BLOCK_SOURCING') {
+          setActiveSafetyScreen('restricted');
+          setIsLoading(false);
+          return;
+        }
+
+        // 4. Handle SYMPTOM_GENERIC
+        if (triageData.intent === 'SYMPTOM_GENERIC') {
+          setActiveSafetyScreen('symptom_intake');
+          setIsLoading(false);
+          return;
+        }
+
+        // 5. Handle GATE (Prescription Only Medicine)
+        if (triageData.risk_tier === 'GATE') {
+          setSelectedProductName(triageData.matched_product_id || trimmed);
+          setActiveSafetyScreen('prescription_upload');
+          setIsLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Triage check error, falling back:', err);
+      } finally {
+        setIsLoading(false);
+      }
+
       switch (stage) {
         case 'AWAITING_LOCATION':
           await handleLocationInput(trimmed);
@@ -605,6 +684,7 @@ const welcomeSuggestions = useMemo(
     },
     [
       stage,
+      threadId,
       handleLocationInput,
       handleFollowUpInput,
       handleMedicationInput,
@@ -633,19 +713,6 @@ const welcomeSuggestions = useMemo(
 
   const handleQuickAction = (token: string) => {
     switch (token) {
-      case '__SEARCH_NAME__':
-        pushAssistantMessage('Share the medication name, for example “Amatem softgel” or “Ibuprofen”.');
-        setStage('AWAITING_MEDICATION');
-        break;
-      case '__UPDATE_LOCATION__':
-        pushAssistantMessage('Tell me your area (e.g. Ikeja, Lekki) and I will rank pharmacies accordingly.');
-        setStage('AWAITING_LOCATION');
-        break;
-      case '__BROWSE_SUGGESTIONS__':
-        pushAssistantMessage(
-          'Here are ideas to get started:\n• Malaria treatment\n• Blood pressure medication\n• Pain relief\nWhich should we explore?'
-        );
-        break;
       case '__SHOW_RESULTS__':
         if (pendingMedication) {
           runSearch({
@@ -683,163 +750,195 @@ const welcomeSuggestions = useMemo(
       : quickActionsIntro;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-4 sm:py-8 pb-28">
-        <Card className="mb-5 border border-blue-100 bg-gradient-to-br from-white via-white to-blue-50/70 p-4 sm:p-6 shadow-sm">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-sm font-semibold text-primary-blue">
-                {userLocation ? 'Using your saved location' : 'Share your location'}
-              </h2>
-              <p className="text-xs sm:text-sm text-gray-600 mt-2 leading-relaxed">
-                {userLocation
-                  ? `Results are ranked near ${userLocation.label} (${userLocation.latitude}, ${userLocation.longitude}).`
-                  : 'Send your device location or tell me your area so I can show nearby pharmacies.'}
-              </p>
-              {locationError && (
-                <p className="text-xs text-red-600 mt-2">{locationError}</p>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  if (typeof window === 'undefined' || !navigator.geolocation) {
-                    setLocationError('Your device does not support geolocation.');
-                    return;
-                  }
-                  setIsLocating(true);
-                  setLocationError(null);
-                  navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                      const location: UserLocation = {
-                        latitude: Math.round(position.coords.latitude * 1e6) / 1e6,
-                        longitude: Math.round(position.coords.longitude * 1e6) / 1e6,
-                        label: 'your current location',
-                        timestamp: Date.now(),
-                      };
-                      setUserLocation(location);
-                      if (typeof window !== 'undefined') {
-                        window.localStorage.setItem(
-                          'stocmed:userLocation',
-                          JSON.stringify(location)
-                        );
-                      }
-                      setIsLocating(false);
-                      if (pendingMedication) {
-                        runSearch({ medication: pendingMedication });
-                      }
-                    },
-                    (error) => {
-                      setLocationError(
-                        error.message || 'Unable to fetch your location.'
-                      );
-                      setIsLocating(false);
-                    },
-                    { enableHighAccuracy: true, timeout: 10000 }
-                  );
-                }}
-                disabled={isLocating}
-                className="rounded-full border-blue-200 bg-white text-primary-blue shadow-sm transition hover:bg-blue-100"
-              >
-                {isLocating ? 'Fetching...' : userLocation ? 'Update location' : 'Share my location'}
-              </Button>
-              {userLocation && (
+    <div className="flex-1 flex flex-col h-full min-h-0 bg-white relative">
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto px-6 py-8 min-h-0">
+        <div className="max-w-[720px] mx-auto flex flex-col gap-5">
+          {/* Centered initial timestamp */}
+          <div className="text-center mb-2">
+            <span className="text-[12px] font-normal text-ink-muted bg-[#F0F7FF] px-3.5 py-1.5 rounded-full">
+              Today, {mounted ? new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase() : ''}
+            </span>
+          </div>
+
+          {/* Location status / sharing widget (Compact style) */}
+          {!userLocation && (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-card border border-border bg-[#F0F7FF] shadow-sm text-left">
+              <div className="flex items-start gap-2.5">
+                <MapPin className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+                <div>
+                  <h4 className="text-[14px] font-medium text-ink">Share your location</h4>
+                  <p className="text-[13px] text-ink-muted mt-0.5">
+                    Allow device location or type your area to rank nearby pharmacies.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Type area (e.g. Ikeja)"
+                  value={manualLocationInput}
+                  onChange={(e) => setManualLocationInput(e.target.value)}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && manualLocationInput.trim()) {
+                      await handleLocationInput(manualLocationInput.trim());
+                      setManualLocationInput('');
+                    }
+                  }}
+                  className="h-9 text-xs border border-border rounded-button px-3 bg-white outline-none focus:border-primary"
+                />
                 <Button
                   type="button"
-                  variant="ghost"
                   onClick={() => {
-                    setUserLocation(null);
-                    if (typeof window !== 'undefined') {
-                      window.localStorage.removeItem('stocmed:userLocation');
+                    if (typeof window === 'undefined' || !navigator.geolocation) {
+                      setLocationError('Your device does not support geolocation.');
+                      return;
                     }
-                    setStage('AWAITING_LOCATION');
+                    setIsLocating(true);
+                    setLocationError(null);
+                    navigator.geolocation.getCurrentPosition(
+                      (position) => {
+                        const location: UserLocation = {
+                          latitude: Math.round(position.coords.latitude * 1e6) / 1e6,
+                          longitude: Math.round(position.coords.longitude * 1e6) / 1e6,
+                          label: 'your current location',
+                          timestamp: Date.now(),
+                        };
+                        setUserLocation(location);
+                        if (typeof window !== 'undefined') {
+                          window.localStorage.setItem(
+                            'stocmed:userLocation',
+                            JSON.stringify(location)
+                          );
+                        }
+                        setIsLocating(false);
+                        if (pendingMedication) {
+                          runSearch({ medication: pendingMedication });
+                        }
+                      },
+                      (error) => {
+                        setLocationError(error.message || 'Unable to fetch location.');
+                        setIsLocating(false);
+                      },
+                      { enableHighAccuracy: true, timeout: 10000 }
+                    );
                   }}
-                  className="rounded-full px-4 text-xs sm:text-sm text-gray-500 hover:text-gray-700"
+                  disabled={isLocating}
+                  className="rounded-button bg-primary text-white text-[13px] font-medium h-9 px-4 hover:bg-[#0052A3]"
                 >
-                  Clear
+                  {isLocating ? 'Locating...' : 'Share location'}
                 </Button>
-              )}
+              </div>
             </div>
-          </div>
-        </Card>
+          )}
 
-        <div className="space-y-5 sm:space-y-6">
-          {messages.map((message) => {
-            const isAssistant = message.role === 'assistant';
-            return (
-              <div
-                key={message.id}
-                className={`flex ${isAssistant ? 'justify-start' : 'justify-end'}`}
+          {/* NDPR Consent Prompt */}
+          <ConsentPrompt />
+
+          {/* Active Safety Screens & Workflow Overlays */}
+          {activeSafetyScreen === 'emergency' && (
+            <EmergencyScreen
+              onBack={() => setActiveSafetyScreen(null)}
+              userState={userLocation?.label}
+            />
+          )}
+          {activeSafetyScreen === 'restricted' && (
+            <RestrictedScreen
+              onBack={() => setActiveSafetyScreen(null)}
+            />
+          )}
+          {activeSafetyScreen === 'crisis' && (
+            <CrisisScreen
+              onBack={() => setActiveSafetyScreen(null)}
+            />
+          )}
+          {activeSafetyScreen === 'symptom_intake' && (
+            <SymptomIntakeForm
+              threadId={threadId}
+              onSuccess={(intakeId) => {
+                setCurrentIntakeId(intakeId);
+                setActiveSafetyScreen('intake_tracker');
+              }}
+              onCancel={() => setActiveSafetyScreen(null)}
+            />
+          )}
+          {activeSafetyScreen === 'prescription_upload' && (
+            <PrescriptionUpload
+              productName={selectedProductName}
+              threadId={threadId}
+              onSuccess={() => {
+                setActiveSafetyScreen(null);
+                pushAssistantMessage(`Your prescription for ${selectedProductName} has been submitted to our duty pharmacist for verification. You will be notified once it is approved.`);
+              }}
+            />
+          )}
+          {activeSafetyScreen === 'intake_tracker' && currentIntakeId && (
+            <div className="space-y-4">
+              <IntakeStatusTracker intakeId={currentIntakeId} />
+              <button
+                onClick={() => setActiveSafetyScreen(null)}
+                className="py-2.5 px-4 bg-slate-150 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-250 transition-colors"
               >
+                Close Status Tracker
+              </button>
+            </div>
+          )}
+
+          {/* Message Thread */}
+          {!activeSafetyScreen && messages.map((message) => {
+            const isAssistant = message.role === 'assistant';
+            const showCard = message.results && message.results.length > 0;
+
+            // Generate search parameters for inline card
+            const query = lastQueryText || pendingMedication || 'medication';
+            const loc = pendingLocationLabel || userLocation?.label || 'nearby';
+            const count = message.results?.length || 0;
+            const prices = message.results?.map((r: any) => Number(r.price)).filter((p: number) => !isNaN(p)) || [];
+            const minPrice = prices.length ? Math.min(...prices) : null;
+            const priceText = minPrice ? `From ₦${minPrice.toLocaleString()}` : '';
+
+            return (
+              <Fragment key={message.id}>
                 {isAssistant ? (
-                  <div className="flex max-w-3xl gap-3">
-                    <div className="mt-1 hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-blue/10 text-primary-blue sm:flex">
-                      <Bot className="h-4 w-4" />
-                    </div>
-                    <div className="flex flex-col gap-3">
-                      <div className="rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-gray-900 shadow-sm sm:px-5 sm:py-4 sm:text-[15px]">
-                        <p className="whitespace-pre-line leading-relaxed">
-                          {message.content}
-                        </p>
-                      </div>
-                      <span className="text-xs font-medium uppercase tracking-wide text-blue-400">
-                        {formatTimestamp(message.createdAt)}
-                      </span>
-                      {message.results && message.results.length > 0 && (
-                        <div className="-mx-1 overflow-x-auto">
-                          <div className="flex gap-4 px-1 pb-1 snap-x snap-mandatory">
-                            {message.results.map((drug: any) => (
-                              <DrugResultCard key={`${message.id}-${drug.id}`} drug={drug} />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                  <div className="self-start bg-[#F0F7FF] text-[#1A1A1A] text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_12px_2px] max-w-[85%] whitespace-pre-line text-left">
+                    {message.content}
                   </div>
                 ) : (
-                  <div className="flex max-w-3xl flex-col items-end gap-2 text-right">
-                    <div className="rounded-2xl bg-gradient-to-r from-primary-blue to-blue-600 px-4 py-3 text-sm text-white shadow-md sm:px-5 sm:py-4 sm:text-base">
-                      <p className="whitespace-pre-line leading-relaxed">{message.content}</p>
-                    </div>
-                    <span className="text-xs font-medium uppercase tracking-wide text-blue-200">
-                      {formatTimestamp(message.createdAt)}
-                    </span>
+                  <div className="self-end bg-[#0066CC] text-white text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_2px_12px] max-w-[80%] whitespace-pre-line text-left">
+                    {message.content}
                   </div>
                 )}
-              </div>
+
+                {/* Inline Search Results Card */}
+                {isAssistant && showCard && (
+                  <div className="self-start max-w-[85%] w-full">
+                    <Link
+                       href={`/search-results?q=${encodeURIComponent(query)}&location=${encodeURIComponent(loc)}`}
+                      className="flex items-center justify-between gap-3 border border-border rounded-card p-4 bg-white hover:bg-surface transition-colors w-full shadow-xs text-left"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[15px] font-medium text-ink truncate">
+                          {query} · {count} {count === 1 ? 'result' : 'results'} near {loc}
+                        </div>
+                        <div className="text-[13px] text-ink-light mt-0.5 truncate">
+                          {priceText ? `${priceText} ` : ''}
+                          {message.results?.[0]?.distance_km ? `· nearest ${message.results[0].distance_km.toFixed(1)}km` : ''}
+                        </div>
+                      </div>
+                      <span className="text-[14px] font-medium text-primary whitespace-nowrap flex-shrink-0">View results →</span>
+                    </Link>
+                  </div>
+                )}
+              </Fragment>
             );
           })}
 
-          {messages.length === 0 && (
-            <Card className="p-6 sm:p-8 text-center">
-              <h2 className="text-lg sm:text-xl font-semibold mb-2">
-                How can I help you today?
-              </h2>
-              <p className="text-sm sm:text-base text-gray-600">
-                Type a medication name or describe your symptoms
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                {welcomeSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => handleInput(suggestion)}
-                    className="px-3 py-2 rounded-full bg-blue-50 text-primary-blue text-sm font-medium transition hover:bg-blue-100"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            </Card>
-          )}
-
+          {/* Typing Indicator */}
           {isLoading && (
-            <div className="flex justify-start">
-              <div className="bg-white rounded-2xl px-4 py-3 shadow-sm flex items-center gap-3">
-                <Loader2 className="h-4 w-4 animate-spin text-primary-blue" />
-                <p className="text-sm text-gray-600">Searching pharmacies...</p>
-              </div>
+            <div className="self-start flex items-center gap-1.5 px-[18px] py-[14px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce" />
+              <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce [animation-delay:0.2s]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce [animation-delay:0.4s]" />
             </div>
           )}
 
@@ -847,55 +946,49 @@ const welcomeSuggestions = useMemo(
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 sm:p-4">
-        <div className="max-w-4xl mx-auto space-y-3">
-          <div className="flex flex-wrap gap-2">
+      {/* Input bar */}
+      <div className="flex-shrink-0 bg-white border-t border-border px-6 py-3 pb-4">
+        <div className="max-w-[720px] mx-auto">
+          {/* Quick chips */}
+          <div className="flex gap-2 flex-wrap mb-3">
             {activeQuickActions.map((action) => (
-              <Button
+              <button
                 key={action.token}
-                variant="outline"
-                size="sm"
                 onClick={() => handleQuickAction(action.token)}
-                className="flex items-center gap-2 rounded-full border-blue-200 bg-white text-primary-blue shadow-sm transition hover:bg-blue-100"
+                className="text-[13px] font-medium text-primary border border-border bg-white px-3.5 py-2 rounded-full cursor-pointer hover:bg-surface transition-colors"
               >
                 {action.label}
-              </Button>
+              </button>
             ))}
           </div>
-          <form onSubmit={handleSubmit} className="flex items-center gap-2">
-            <Input
+
+          {/* Text Input */}
+          <form onSubmit={handleSubmit} className="flex items-center gap-2.5">
+            <input
+              type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
               placeholder={
                 stage === 'AWAITING_LOCATION'
                   ? 'Type your area or city...'
-                  : 'Ask about medications...'
+                  : 'Ask about a medication or symptom…'
               }
               disabled={isLoading}
-              className="flex-1 h-11 sm:h-12 text-sm sm:text-base"
+              className="flex-1 h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-60 min-w-0"
             />
-            <Button
+            <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="h-11 w-11 sm:h-12 sm:w-12 p-0"
+              className="w-12 h-12 rounded-button bg-primary flex items-center justify-center text-white text-[17px] flex-shrink-0 cursor-pointer hover:bg-[#0052A3] transition-colors disabled:opacity-60"
             >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
+              →
+            </button>
           </form>
-          <div className="flex flex-col gap-1 text-xs sm:text-sm text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5" />
-              Results ranked by your saved location when available.
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5 text-primary-blue" />
-              Ask for strength, form, or a pharmacist connection anytime.
-            </span>
-          </div>
+
+          {/* Disclaimer */}
+          <p className="text-[12px] font-normal text-[#888] mt-2 text-center">
+            StocMed gives guidance, not a diagnosis. Always confirm with a licensed pharmacist.
+          </p>
         </div>
       </div>
     </div>

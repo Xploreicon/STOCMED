@@ -76,29 +76,29 @@ const ToastItem = ({ toast, onClose }: ToastItemProps) => {
   const getToastStyles = () => {
     switch (toast.type) {
       case "success":
-        return "bg-green-50 text-green-900 border-green-200"
+        return "bg-success/5 text-success border-success/20 shadow-sm"
       case "error":
-        return "bg-red-50 text-red-900 border-red-200"
+        return "bg-danger/5 text-danger border-danger/20 shadow-sm"
       case "info":
-        return "bg-blue-50 text-blue-900 border-blue-200"
+        return "bg-primary/5 text-primary border-primary/20 shadow-sm"
     }
   }
 
   const getIcon = () => {
     switch (toast.type) {
       case "success":
-        return <CheckCircle2 className="w-5 h-5 text-green-600" />
+        return <CheckCircle2 className="w-5 h-5 text-success" />
       case "error":
-        return <AlertCircle className="w-5 h-5 text-red-600" />
+        return <AlertCircle className="w-5 h-5 text-danger" />
       case "info":
-        return <Info className="w-5 h-5 text-blue-600" />
+        return <Info className="w-5 h-5 text-primary" />
     }
   }
 
   return (
     <div
       className={cn(
-        "flex items-center gap-3 p-4 rounded-lg border shadow-lg animate-in slide-in-from-top-5",
+        "flex items-center gap-3 p-4 rounded-card border animate-in slide-in-from-top-5",
         getToastStyles()
       )}
     >
@@ -106,7 +106,7 @@ const ToastItem = ({ toast, onClose }: ToastItemProps) => {
       <p className="flex-1 text-sm font-medium">{toast.message}</p>
       <button
         onClick={onClose}
-        className="text-gray-400 hover:text-gray-600 transition-colors"
+        className="text-ink-light hover:text-ink transition-colors"
       >
         <X className="w-4 h-4" />
       </button>

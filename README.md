@@ -81,3 +81,17 @@ OPENAI_API_KEY=sk-proj-your-openai-api-key
 - **Row Level Security (RLS)** is enabled on all tables (`users`, `pharmacies`, `drugs`, `searches`, `chat_messages`).
 - All schema alterations and security policies are tracked as version-controlled SQL files in `supabase/migrations/`.
 - **Public Search Protection**: The public drug search route (`/api/drugs/search`) runs under standard client privilege to enforce public read RLS constraints rather than bypassing it via the service-role client.
+
+---
+
+## 🧾 POS + Offline Sync & Regulatory Landscape
+
+StocMed features a high-speed, local-first Point of Sale (POS) checkout terminal designed to handle connectivity disruptions (e.g. offline environments, bandwidth throttles):
+
+1. **Local-First indexedDB Storage**: Checkout carts and offline sales are queued client-side using `Dexie.js` in IndexedDB.
+2. **Idempotent Sync Route**: Offline queues are synced to `/api/pharmacy/pos/sync` once connectivity is restored, featuring client-side UUID idempotency verification to prevent duplicate sale logs.
+3. **PWA Capability**: Registers a custom service worker (`public/sw.js`) and web app manifest (`public/manifest.json`) to cache core layout files, enabling pages to load and function fully offline.
+4. **Regulatory Payment Configuration**:
+   - `NEXT_PUBLIC_STOCMED_MEDIATED_COLLECTION=false`: Defaults StocMed strictly as a software of record. In this mode, payment collections (Cash, Bank Transfer, POS Terminal) only record the transaction method to log sale events without processing monetary funds. This keeps StocMed clear of Payment Service Provider (PSP) and Pharmacists Council of Nigeria (PCN) legal licenses for monetary clearing.
+   - If set to `true`, the platform triggers stubs for API mediated banking integrations.
+

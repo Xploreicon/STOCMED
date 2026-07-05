@@ -26,12 +26,29 @@ export async function GET(request: NextRequest) {
 
     const supabase = await createClient()
 
-    // Build the query
+    // Query pharmacy_inventory joined with products and pharmacies
     let queryBuilder = supabase
-      .from('drugs')
+      .from('pharmacy_inventory')
       .select(`
-        *,
-        pharmacies:pharmacy_id (
+        id,
+        price,
+        quantity_in_stock,
+        low_stock_threshold,
+        updated_at,
+        created_at,
+        products!inner (
+          id,
+          generic_name,
+          brand_name,
+          manufacturer,
+          strength,
+          dosage_form,
+          category,
+          requires_prescription,
+          description,
+          image_url
+        ),
+        pharmacies!inner (
           id,
           pharmacy_name,
           address,
@@ -42,23 +59,27 @@ export async function GET(request: NextRequest) {
           longitude,
           is_active,
           logo_url
+        ),
+        batches (
+          expiry_date
         )
       `)
-      .order('updated_at', { ascending: false })
-      .or(`name.ilike.%${query}%,generic_name.ilike.%${query}%,brand_name.ilike.%${query}%`)
       .eq('pharmacies.is_active', true)
+      .eq('is_listed', true)
+      .or(`search_vector.plfts.${query},generic_name.ilike.%${query}%,brand_name.ilike.%${query}%`, { foreignTable: 'products' })
 
-    // Apply filters
+    // Apply category filter
     if (category) {
-      queryBuilder = queryBuilder.eq('category', category)
+      queryBuilder = queryBuilder.eq('products.category', category)
     }
 
+    // Apply in stock filter
     if (inStockOnly) {
       queryBuilder = queryBuilder.gt('quantity_in_stock', 0)
     }
 
     // Execute query
-    const { data: drugs, error } = await queryBuilder
+    const { data: inventory, error } = await queryBuilder
 
     if (error) {
       console.error('Search error:', error)
@@ -68,11 +89,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Filter by pharmacy location if provided
-    let results = (drugs || []).map((drug: any) => {
-      const price = typeof drug.price === 'number' ? drug.price : Number(drug.price)
+    // Map database results to the old flat 'drugs' schema structure
+    let results = (inventory || []).map((row: any) => {
+      const price = typeof row.price === 'number' ? row.price : Number(row.price)
       const priceDelta = Number.isFinite(price) ? price * 0.05 : null
-      const pharmacy = drug.pharmacies
+      const pharmacy = row.pharmacies
+      const product = row.products
+      
       let distanceKm: number | null = null
 
       if (
@@ -96,20 +119,45 @@ export async function GET(request: NextRequest) {
         distanceKm = Math.round(earthRadiusKm * c * 10) / 10
       }
 
+      // Find earliest expiry date
+      const expiryDate = row.batches && row.batches.length > 0
+        ? row.batches.map((b: any) => b.expiry_date).sort()[0]
+        : null
+
       return {
-        ...drug,
+        id: row.id,
+        pharmacy_id: pharmacy?.id || null,
+        name: product?.brand_name || product?.generic_name || '',
+        generic_name: product?.generic_name || null,
+        brand_name: product?.brand_name || null,
+        category: product?.category || '',
+        dosage_form: product?.dosage_form || '',
+        strength: product?.strength || null,
+        description: product?.description || null,
+        price: price,
+        quantity_in_stock: row.quantity_in_stock,
+        low_stock_threshold: row.low_stock_threshold,
+        requires_prescription: product?.requires_prescription || false,
+        manufacturer: product?.manufacturer || null,
+        expiry_date: expiryDate,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        image_url: product?.image_url || null,
+        pharmacies: pharmacy || null,
         price_range_min: Number.isFinite(price) ? Math.max(Math.round((price - (priceDelta ?? 0)) / 10) * 10, 0) : null,
         price_range_max: Number.isFinite(price) ? Math.round((price + (priceDelta ?? 0)) / 10) * 10 : null,
         distance_km: distanceKm,
       }
     })
 
+    // Filter by pharmacy location if provided
     if (location) {
       results = results.filter((drug: any) => {
         const pharmacy = drug.pharmacies
         return pharmacy && (
           pharmacy.city?.toLowerCase().includes(location.toLowerCase()) ||
-          pharmacy.state?.toLowerCase().includes(location.toLowerCase())
+          pharmacy.state?.toLowerCase().includes(location.toLowerCase()) ||
+          pharmacy.address?.toLowerCase().includes(location.toLowerCase())
         )
       })
     }

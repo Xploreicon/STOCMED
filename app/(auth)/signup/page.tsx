@@ -2,14 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
+import { Logo } from '@/components/brand/Logo';
 
 export const dynamic = 'force-dynamic'
 
@@ -57,14 +52,6 @@ export default function Signup() {
     }
   }, [searchParams]);
 
-  const validateStep1 = () => {
-    if (!selectedRole) {
-      setErrors({ role: 'Please select a role' });
-      return false;
-    }
-    return true;
-  };
-
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -107,10 +94,16 @@ export default function Signup() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleStep1Continue = () => {
-    if (validateStep1()) {
-      setCurrentStep(2);
-    }
+  const selectRole = (role: Role) => {
+    setSelectedRole(role);
+    setCurrentStep(2);
+    setErrors({});
+  };
+
+  const goBack = () => {
+    setCurrentStep(1);
+    setSelectedRole(null);
+    setErrors({});
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -226,278 +219,200 @@ export default function Signup() {
     }
   };
 
+  const inputCls =
+    'w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-60';
+  const labelCls = 'block text-[14px] font-medium text-ink mb-2';
+  const errCls = (f: string) => (errors[f] ? 'border-danger focus:border-danger focus:ring-danger/15' : '');
+
   return (
-    <div className="min-h-screen bg-light-blue-bg flex items-center justify-center p-4">
-      <Card className="w-full max-w-[500px]">
-        <CardHeader className="space-y-3">
-          <div className="flex justify-center">
-            <Image
-              src="/logo.png"
-              alt="StocMed"
-              width={200}
-              height={60}
-              className="h-14 w-auto"
-              priority
-            />
+    <div className="w-full min-h-screen bg-white text-ink">
+      {/* Top bar */}
+      <div className="border-b border-border px-6 py-4">
+        <div className="mx-auto max-w-[1200px] flex items-center justify-between">
+          <Logo size={32} wordSize={18} href="/" />
+          <span className="text-[14px] text-ink-muted">
+            Already have an account? <Link href="/login" className="text-primary font-medium">Log in</Link>
+          </span>
+        </div>
+      </div>
+
+      {/* STEP 1: role select */}
+      {currentStep === 1 && (
+        <div className="mx-auto max-w-[760px] px-6 pt-16 pb-24">
+          <div className="text-center mb-12">
+            <h1 className="font-display font-medium text-[36px] leading-[1.2] text-ink">Create your account</h1>
+            <p className="text-[16px] text-ink-muted mt-3">Choose how you&apos;ll use StocMed</p>
           </div>
-          <CardTitle className="text-xl sm:text-2xl font-bold text-center">Create Account</CardTitle>
-          <CardDescription className="text-center">
-            {currentStep === 1 ? 'Choose your account type' : 'Fill in your details'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {currentStep === 1 ? (
-            <div className="space-y-4">
-              {errors.role && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
-                  {errors.role}
-                </div>
-              )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <button
+              onClick={() => selectRole('patient')}
+              className="text-left cursor-pointer border-[1.5px] border-border rounded-card p-8 flex flex-col gap-2 hover:border-primary/50 transition-colors"
+            >
+              <div className="w-12 h-12 rounded-card bg-surface flex items-center justify-center text-[22px] mb-2">🧑</div>
+              <h3 className="text-[19px] font-medium text-ink">I&apos;m a patient</h3>
+              <p className="text-[14px] leading-[1.55] text-ink-muted">Search for medication and find nearby pharmacies with stock.</p>
+              <span className="mt-4 text-[14px] font-medium text-primary">Continue as patient →</span>
+            </button>
+            <button
+              onClick={() => selectRole('pharmacy')}
+              className="text-left cursor-pointer border-[1.5px] border-border rounded-card p-8 flex flex-col gap-2 hover:border-primary/50 transition-colors"
+            >
+              <div className="w-12 h-12 rounded-card bg-surface flex items-center justify-center text-[22px] mb-2">🏥</div>
+              <h3 className="text-[19px] font-medium text-ink">I&apos;m a pharmacy</h3>
+              <p className="text-[14px] leading-[1.55] text-ink-muted">List and manage your inventory so patients can find you.</p>
+              <span className="mt-4 text-[14px] font-medium text-primary">Continue as pharmacy →</span>
+            </button>
+          </div>
+        </div>
+      )}
 
-              <div className="space-y-3">
-                <Label>Select Account Type</Label>
+      {/* STEP 2: form */}
+      {currentStep === 2 && (
+        <div className={`mx-auto px-6 pt-14 pb-24 ${selectedRole === 'pharmacy' ? 'max-w-[640px]' : 'max-w-[520px]'}`}>
+          <button onClick={goBack} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ink-muted mb-6 hover:text-ink">← Back</button>
+          <h1 className="font-display font-medium text-[30px] text-ink">
+            {selectedRole === 'pharmacy' ? 'Register your pharmacy' : 'Create your patient account'}
+          </h1>
+          <p className="text-[15px] text-ink-muted mt-2 mb-8">
+            {selectedRole === 'pharmacy'
+              ? 'List your inventory and get discovered by patients searching nearby.'
+              : 'Find medication and reserve it at nearby pharmacies.'}
+          </p>
 
-                <div
-                  onClick={() => setSelectedRole('patient')}
-                  className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                    selectedRole === 'patient' ? 'border-primary-blue bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-start space-x-3">
-                    <input type="radio" checked={selectedRole === 'patient'} onChange={() => {}} className="mt-1" />
-                    <div>
-                      <h3 className="font-semibold text-dark-gray">Patient</h3>
-                      <p className="text-sm text-medium-gray">Register as a patient to find and purchase medications</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => setSelectedRole('pharmacy')}
-                  className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
-                    selectedRole === 'pharmacy' ? 'border-primary-blue bg-blue-50' : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-start space-x-3">
-                    <input type="radio" checked={selectedRole === 'pharmacy'} onChange={() => {}} className="mt-1" />
-                    <div>
-                      <h3 className="font-semibold text-dark-gray">Pharmacy</h3>
-                      <p className="text-sm text-medium-gray">Register your pharmacy to manage inventory and sales</p>
-                    </div>
-                  </div>
-                </div>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {errors.general && (
+              <div className="rounded-button border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger font-medium">
+                {errors.general}
               </div>
+            )}
 
-              <Button onClick={handleStep1Continue} className="w-full">Continue</Button>
-
-              <div className="text-center text-sm">
-                <span className="text-gray-600">Already have an account? </span>
-                <Link href="/login" className="text-primary-blue hover:underline font-medium">Sign In</Link>
-              </div>
+            <div>
+              <label htmlFor="full_name" className={labelCls}>Full name</label>
+              <input id="full_name" placeholder="Ada Nwosu" value={formData.full_name}
+                onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                disabled={isLoading} className={`${inputCls} ${errCls('full_name')}`} />
+              {errors.full_name && <p className="text-xs text-danger mt-1.5">{errors.full_name}</p>}
             </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {errors.general && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
-                  {errors.general}
+
+            {selectedRole === 'pharmacy' && (
+              <>
+                <div>
+                  <label htmlFor="pharmacy_name" className={labelCls}>Pharmacy name</label>
+                  <input id="pharmacy_name" placeholder="MedPlus Pharmacy" value={formData.pharmacy_name}
+                    onChange={(e) => setFormData({ ...formData, pharmacy_name: e.target.value })}
+                    disabled={isLoading} className={`${inputCls} ${errCls('pharmacy_name')}`} />
+                  {errors.pharmacy_name && <p className="text-xs text-danger mt-1.5">{errors.pharmacy_name}</p>}
                 </div>
-              )}
-
-              {selectedRole === 'pharmacy' && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="pharmacy_name">Pharmacy Name</Label>
-                    <Input
-                      id="pharmacy_name"
-                      placeholder="Enter pharmacy name"
-                      value={formData.pharmacy_name}
-                      onChange={(e) => setFormData({ ...formData, pharmacy_name: e.target.value })}
-                      disabled={isLoading}
-                      className={errors.pharmacy_name ? 'border-red-500' : ''}
-                    />
-                    {errors.pharmacy_name && <p className="text-red-500 text-xs">{errors.pharmacy_name}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="license_number">License Number</Label>
-                    <Input
-                      id="license_number"
-                      placeholder="Enter license number"
-                      value={formData.license_number}
-                      onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
-                      disabled={isLoading}
-                      className={errors.license_number ? 'border-red-500' : ''}
-                    />
-                    {errors.license_number && <p className="text-red-500 text-xs">{errors.license_number}</p>}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Address</Label>
-                    <Input
-                      id="address"
-                      placeholder="Enter pharmacy address"
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                      disabled={isLoading}
-                      className={errors.address ? 'border-red-500' : ''}
-                    />
-                    {errors.address && <p className="text-red-500 text-xs">{errors.address}</p>}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="city">City</Label>
-                      <Input
-                        id="city"
-                        placeholder="Enter city"
-                        value={formData.city}
-                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                        disabled={isLoading}
-                        className={errors.city ? 'border-red-500' : ''}
-                      />
-                      {errors.city && <p className="text-red-500 text-xs">{errors.city}</p>}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="state">State</Label>
-                      <select
-                        id="state"
-                        value={formData.state}
-                        onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                        disabled={isLoading}
-                        className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ${errors.state ? 'border-red-500' : ''}`}
-                      >
-                        <option value="">Select state</option>
-                        {NIGERIAN_STATES.map((state) => (
-                          <option key={state} value={state}>{state}</option>
-                        ))}
-                      </select>
-                      {errors.state && <p className="text-red-500 text-xs">{errors.state}</p>}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="full_name">Full Name</Label>
-                <Input
-                  id="full_name"
-                  placeholder="Enter your full name"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  disabled={isLoading}
-                  className={errors.full_name ? 'border-red-500' : ''}
-                />
-                {errors.full_name && <p className="text-red-500 text-xs">{errors.full_name}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  disabled={isLoading}
-                  className={errors.email ? 'border-red-500' : ''}
-                />
-                {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input
-                  id="phone"
-                  placeholder="+234XXXXXXXXXX"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  disabled={isLoading}
-                  className={errors.phone ? 'border-red-500' : ''}
-                />
-                {errors.phone && <p className="text-red-500 text-xs">{errors.phone}</p>}
-              </div>
-
-              {selectedRole === 'patient' && (
-                <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
-                  <select
-                    id="location"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    disabled={isLoading}
-                    className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ${errors.location ? 'border-red-500' : ''}`}
-                  >
-                    <option value="">Select location</option>
-                    {LOCATIONS.map((loc) => (
-                      <option key={loc} value={loc}>{loc}</option>
-                    ))}
-                  </select>
-                  {errors.location && <p className="text-red-500 text-xs">{errors.location}</p>}
+                <div>
+                  <label htmlFor="license_number" className={labelCls}>PCN license number</label>
+                  <input id="license_number" placeholder="PCN/PREM/000000" value={formData.license_number}
+                    onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
+                    disabled={isLoading} className={`${inputCls} ${errCls('license_number')}`} />
+                  <p className="text-[13px] text-ink-light mt-1.5">We verify every pharmacy against the Pharmacists Council of Nigeria register</p>
+                  {errors.license_number && <p className="text-xs text-danger mt-1.5">{errors.license_number}</p>}
                 </div>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Create a password (min. 8 characters)"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  disabled={isLoading}
-                  className={errors.password ? 'border-red-500' : ''}
-                />
-                {errors.password && <p className="text-red-500 text-xs">{errors.password}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">Confirm Password</Label>
-                <Input
-                  id="confirmPassword"
-                  type="password"
-                  placeholder="Confirm your password"
-                  value={formData.confirmPassword}
-                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  disabled={isLoading}
-                  className={errors.confirmPassword ? 'border-red-500' : ''}
-                />
-                {errors.confirmPassword && <p className="text-red-500 text-xs">{errors.confirmPassword}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-start space-x-2">
-                  <Checkbox
-                    id="terms"
-                    checked={acceptedTerms}
-                    onCheckedChange={(checked) => setAcceptedTerms(checked as boolean)}
-                    disabled={isLoading}
-                  />
-                  <Label htmlFor="terms" className="text-sm font-normal leading-tight cursor-pointer">
-                    I agree to the <Link href="/terms" className="text-primary-blue hover:underline">Terms and Conditions</Link> and{' '}
-                    <Link href="/privacy" className="text-primary-blue hover:underline">Privacy Policy</Link>
-                  </Label>
+                <div>
+                  <label htmlFor="address" className={labelCls}>Street address</label>
+                  <input id="address" placeholder="14 Allen Avenue" value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    disabled={isLoading} className={`${inputCls} ${errCls('address')}`} />
+                  {errors.address && <p className="text-xs text-danger mt-1.5">{errors.address}</p>}
                 </div>
-                {errors.terms && <p className="text-red-500 text-xs">{errors.terms}</p>}
-              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="city" className={labelCls}>City</label>
+                    <input id="city" placeholder="Ikeja" value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      disabled={isLoading} className={`${inputCls} ${errCls('city')}`} />
+                    {errors.city && <p className="text-xs text-danger mt-1.5">{errors.city}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="state" className={labelCls}>State</label>
+                    <select id="state" value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                      disabled={isLoading} className={`${inputCls} ${errCls('state')}`}>
+                      <option value="">Select state</option>
+                      {NIGERIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    {errors.state && <p className="text-xs text-danger mt-1.5">{errors.state}</p>}
+                  </div>
+                </div>
+              </>
+            )}
 
-              <div className="flex space-x-2">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} disabled={isLoading} className="w-1/3">
-                  Back
-                </Button>
-                <Button type="submit" disabled={isLoading} className="w-2/3">
-                  {isLoading ? 'Creating account...' : 'Create Account'}
-                </Button>
-              </div>
+            <div>
+              <label htmlFor="email" className={labelCls}>{selectedRole === 'pharmacy' ? 'Work email' : 'Email address'}</label>
+              <input id="email" type="email" placeholder="you@email.com" value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                disabled={isLoading} className={`${inputCls} ${errCls('email')}`} />
+              {errors.email && <p className="text-xs text-danger mt-1.5">{errors.email}</p>}
+            </div>
 
-              <div className="text-center text-sm">
-                <span className="text-gray-600">Already have an account? </span>
-                <Link href="/login" className="text-primary-blue hover:underline font-medium">Sign In</Link>
+            <div>
+              <label htmlFor="phone" className={labelCls}>Phone number</label>
+              <input id="phone" placeholder="+234XXXXXXXXXX" value={formData.phone}
+                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                disabled={isLoading} className={`${inputCls} ${errCls('phone')}`} />
+              {errors.phone && <p className="text-xs text-danger mt-1.5">{errors.phone}</p>}
+            </div>
+
+            {selectedRole === 'patient' && (
+              <div>
+                <label htmlFor="location" className={labelCls}>Location</label>
+                <select id="location" value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  disabled={isLoading} className={`${inputCls} ${errCls('location')}`}>
+                  <option value="">Select location</option>
+                  {LOCATIONS.map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+                </select>
+                <p className="text-[13px] text-ink-light mt-1.5">Used to show pharmacies nearest to you</p>
+                {errors.location && <p className="text-xs text-danger mt-1.5">{errors.location}</p>}
               </div>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+            )}
+
+            <div>
+              <label htmlFor="password" className={labelCls}>Password</label>
+              <input id="password" type="password" placeholder="At least 8 characters" value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                disabled={isLoading} className={`${inputCls} ${errCls('password')}`} />
+              {errors.password && <p className="text-xs text-danger mt-1.5">{errors.password}</p>}
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className={labelCls}>Confirm password</label>
+              <input id="confirmPassword" type="password" placeholder="Re-enter your password" value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                disabled={isLoading} className={`${inputCls} ${errCls('confirmPassword')}`} />
+              {errors.confirmPassword && <p className="text-xs text-danger mt-1.5">{errors.confirmPassword}</p>}
+            </div>
+
+            <label className="flex items-start gap-2.5 text-[14px] text-ink-muted cursor-pointer">
+              <input type="checkbox" checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                disabled={isLoading} className="mt-0.5 w-4 h-4 flex-shrink-0" style={{ accentColor: '#0066CC' }} />
+              <span>
+                {selectedRole === 'pharmacy'
+                  ? "I confirm I'm authorized to register this pharmacy and agree to the "
+                  : "I agree to StocMed's "}
+                <Link href="/terms" className="text-primary font-medium">Terms of Service</Link>
+                {' '}and <Link href="/privacy" className="text-primary font-medium">Privacy Policy</Link>
+              </span>
+            </label>
+            {errors.terms && <p className="text-xs text-danger -mt-2">{errors.terms}</p>}
+
+            <button type="submit" disabled={isLoading}
+              className="h-12 w-full bg-primary text-white text-[16px] font-medium rounded-button mt-2 hover:bg-[#0052A3] disabled:opacity-60">
+              {isLoading ? 'Creating account…' : selectedRole === 'pharmacy' ? 'Register pharmacy' : 'Create account'}
+            </button>
+
+            {selectedRole === 'pharmacy' && (
+              <p className="text-[13px] text-ink-light text-center">
+                Your account will be active once your PCN license is verified, usually within 1 business day.
+              </p>
+            )}
+          </form>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import Link from 'next/link';
 import { useUser } from '@/hooks/useUser';
-import { Search, Trash2, Calendar, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface SearchHistory {
@@ -18,271 +16,140 @@ interface SearchHistory {
   metadata?: any;
 }
 
+type Stock = 'in' | 'low' | 'out';
+
+const FILTERS: { key: 'all' | Stock; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'in', label: 'Found in stock' },
+  { key: 'low', label: 'Low stock' },
+  { key: 'out', label: 'Out of stock' },
+];
+
+const BADGE: Record<Stock, { label: string; cls: string }> = {
+  in: { label: 'Found in stock', cls: 'badge-success' },
+  low: { label: 'Low stock', cls: 'badge-warning' },
+  out: { label: 'Out of stock', cls: 'badge-danger' },
+};
+
+function stockOf(count: number | null): Stock {
+  if (!count || count <= 0) return 'out';
+  if (count === 1) return 'low';
+  return 'in';
+}
+
 export default function History() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useUser();
   const [searches, setSearches] = useState<SearchHistory[]>([]);
-  const [filteredSearches, setFilteredSearches] = useState<SearchHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [dateFilter, setDateFilter] = useState<'all' | '7days' | '30days' | 'custom'>('all');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | Stock>('all');
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login?redirectTo=/history');
     } else if (user) {
-      fetchSearchHistory();
+      (async () => {
+        setIsLoading(true);
+        try {
+          const res = await fetch('/api/searches');
+          if (res.ok) setSearches(await res.json());
+        } catch (e) {
+          console.error('Error fetching search history:', e);
+        } finally {
+          setIsLoading(false);
+        }
+      })();
     }
   }, [user, authLoading, router]);
 
-  const fetchSearchHistory = async () => {
-    setIsLoading(true);
-    try {
-      const response = await fetch('/api/searches');
-      if (response.ok) {
-        const data = await response.json();
-        setSearches(data);
-        setFilteredSearches(data);
-      }
-    } catch (error) {
-      console.error('Error fetching search history:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let filtered = [...searches];
-
-    if (dateFilter === '7days') {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      filtered = filtered.filter((search) => new Date(search.timestamp) >= sevenDaysAgo);
-    } else if (dateFilter === '30days') {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      filtered = filtered.filter((search) => new Date(search.timestamp) >= thirtyDaysAgo);
-    } else if (dateFilter === 'custom' && startDate && endDate) {
-      filtered = filtered.filter((search) => {
-        const searchDate = new Date(search.timestamp);
-        return searchDate >= new Date(startDate) && searchDate <= new Date(endDate);
-      });
-    }
-
-    if (searchQuery.trim()) {
-      const normalizedQuery = searchQuery.toLowerCase();
-      filtered = filtered.filter((search) =>
-        (search.query_text || '').toLowerCase().includes(normalizedQuery)
-      );
-    }
-
-    setFilteredSearches(filtered);
-  }, [dateFilter, endDate, searchQuery, searches, startDate]);
-
-  const handleClearHistory = async () => {
-    if (!confirm('Are you sure you want to clear your entire search history? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      // Delete all searches for this user
-      // Note: This requires a DELETE endpoint in /api/searches
-      const deletePromises = searches.map((search) =>
-        fetch(`/api/searches/${search.id}`, { method: 'DELETE' })
-      );
-      await Promise.all(deletePromises);
-
-      setSearches([]);
-      setFilteredSearches([]);
-    } catch (error) {
-      console.error('Error clearing history:', error);
-      alert('Failed to clear history. Please try again.');
-    }
-  };
-
-  const handleSearchAgain = (query: string) => {
-    router.push(`/chat?q=${encodeURIComponent(query)}`);
-  };
+  const items = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return searches
+      .map((s) => ({ ...s, stock: stockOf(s.results_count) }))
+      .filter((s) => filter === 'all' || s.stock === filter)
+      .filter((s) => !q || (s.query_text || '').toLowerCase().includes(q));
+  }, [searches, filter, query]);
 
   if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-blue" />
-          <p className="text-gray-600 text-lg">Loading search history...</p>
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Search History</h1>
-          <p className="text-gray-600 mt-2">
-            View and manage your medication search history
-          </p>
-        </div>
+    <div className="w-full max-w-[760px] mx-auto">
+      <h1 className="font-display font-medium text-[30px] text-ink">Search history</h1>
+      <p className="text-[15px] text-ink-muted mt-2">Every medication you&apos;ve looked up, and what we found</p>
 
-        {/* Filters */}
-        <Card className="p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Search filter */}
-            <div className="lg:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search queries
-              </label>
-              <Input
-                placeholder="Filter by search term..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full"
-              />
-            </div>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search your history…"
+        className="w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white mt-6 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+      />
 
-            {/* Date range filter */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Time period
-              </label>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value as any)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-              >
-                <option value="all">All time</option>
-                <option value="7days">Last 7 days</option>
-                <option value="30days">Last 30 days</option>
-                <option value="custom">Custom range</option>
-              </select>
-            </div>
-
-            {/* Clear history button */}
-            <div className="flex items-end">
-              <Button
-                onClick={handleClearHistory}
-                variant="outline"
-                className="w-full text-red-600 border-red-300 hover:bg-red-50"
-                disabled={searches.length === 0}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Clear History
-              </Button>
-            </div>
-          </div>
-
-          {/* Custom date range inputs */}
-          {dateFilter === 'custom' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Start date
-                </label>
-                <Input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  End date
-                </label>
-                <Input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-            </div>
-          )}
-        </Card>
-
-        {/* Results count */}
-        <div className="mb-4">
-          <p className="text-gray-600">
-            Showing {filteredSearches.length} of {searches.length} searches
-          </p>
-        </div>
-
-        {/* Search history list */}
-        {filteredSearches.length === 0 ? (
-          <Card className="p-12 text-center">
-            <Calendar className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              {searches.length === 0 ? 'No search history yet' : 'No results found'}
-            </h2>
-            <p className="text-gray-600 mb-6">
-              {searches.length === 0
-                ? 'Start searching for medications to build your history'
-                : 'Try adjusting your filters'}
-            </p>
-            {searches.length === 0 && (
-              <Button onClick={() => router.push('/chat')}>
-                <Search className="h-4 w-4 mr-2" />
-                Start Searching
-              </Button>
-            )}
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {filteredSearches.map((search) => {
-              const query = search.query_text ?? '';
-              const resultCount = search.results_count ?? 0;
-              return (
-                <Card
-                  key={search.id}
-                  className="p-4 hover:border-primary-blue transition-colors cursor-pointer"
-                  onClick={() => handleSearchAgain(query)}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <Search className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {query || 'Unknown query'}
-                        </h3>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 ml-8">
-                        <span className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          {formatDistanceToNow(new Date(search.timestamp), {
-                            addSuffix: true,
-                          })}
-                        </span>
-                        <span>
-                          {resultCount} result{resultCount === 1 ? '' : 's'}
-                        </span>
-                        {search.metadata?.clicked_drug_id && (
-                          <span className="text-primary-blue font-medium">
-                            • Clicked result
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSearchAgain(query);
-                      }}
-                      size="sm"
-                      variant="outline"
-                    >
-                      Search Again
-                    </Button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
+      <div className="flex gap-2 flex-wrap mt-4">
+        {FILTERS.map((f) => {
+          const active = filter === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`text-[13px] font-medium px-4 py-2.5 rounded-full whitespace-nowrap border transition-colors ${
+                active
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-ink-muted border-border hover:border-primary/40'
+              }`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
       </div>
+
+      {items.length > 0 ? (
+        <div className="border border-border rounded-card overflow-hidden divide-y divide-border mt-6">
+          {items.map((it) => (
+            <Link
+              key={it.id}
+              href={`/chat?q=${encodeURIComponent(it.query_text || '')}`}
+              className="flex items-center justify-between gap-4 p-4 bg-white hover:bg-surface transition-colors"
+            >
+              <div className="min-w-0">
+                <div className="text-[15px] font-medium text-ink truncate">{it.query_text || 'Search'}</div>
+                <div className="text-[13px] text-ink-light mt-0.5 truncate">
+                  {it.results_count ? `${it.results_count} ${it.results_count === 1 ? 'pharmacy' : 'pharmacies'} found` : 'Nothing nearby'}
+                  {it.location ? ` near ${it.location}` : ''}
+                </div>
+              </div>
+              <div className="flex items-center gap-3.5 flex-shrink-0">
+                <span className={`${BADGE[it.stock].cls} px-2.5 py-1.5 rounded-button whitespace-nowrap`}>{BADGE[it.stock].label}</span>
+                <span className="text-[13px] text-ink-light whitespace-nowrap hidden sm:block">
+                  {formatDistanceToNow(new Date(it.timestamp), { addSuffix: true })}
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-6 border border-dashed border-border rounded-card-lg px-8 py-16 flex flex-col items-center text-center gap-2">
+          <div className="w-14 h-14 rounded-card-lg bg-surface flex items-center justify-center text-2xl mb-2">🔍</div>
+          <h3 className="text-[17px] font-medium text-ink">No searches here</h3>
+          <p className="text-[14px] text-ink-muted max-w-[320px] leading-[1.55]">
+            Nothing in your history matches this filter. Try a different filter, or start a new search.
+          </p>
+          <Link
+            href="/chat"
+            className="mt-4 h-12 flex items-center justify-center px-6 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[#0052A3]"
+          >
+            Start a new search
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

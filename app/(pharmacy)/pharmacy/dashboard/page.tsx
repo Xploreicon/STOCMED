@@ -4,20 +4,8 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import {
-  Package,
-  PackageCheck,
-  PackageMinus,
-  PackageX,
-  Plus,
-  TrendingUp,
-  AlertTriangle,
-  Loader2
-} from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
 
 interface PharmacyStats {
   total: number;
@@ -29,6 +17,13 @@ interface PharmacyStats {
 interface PharmacyStatsResponse {
   stats: PharmacyStats;
   drugs: any[];
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 export default function PharmacyDashboard() {
@@ -45,24 +40,19 @@ export default function PharmacyDashboard() {
     queryKey: ['pharmacy-stats'],
     queryFn: async () => {
       const response = await fetch('/api/pharmacy/drugs');
-      if (!response.ok) {
-        throw new Error('Failed to fetch stats');
-      }
+      if (!response.ok) throw new Error('Failed to fetch stats');
       return response.json();
     },
     enabled: !!user && isPharmacy,
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always',
-    refetchInterval: 60 * 1000,
   });
 
   const { data: profile, isLoading: isProfileLoading } = useQuery({
     queryKey: ['pharmacy-profile'],
     queryFn: async () => {
       const response = await fetch('/api/pharmacy/profile');
-      if (!response.ok) {
-        throw new Error('Failed to fetch pharmacy profile');
-      }
+      if (!response.ok) throw new Error('Failed to fetch pharmacy profile');
       return response.json();
     },
     enabled: !!user && isPharmacy,
@@ -70,236 +60,148 @@ export default function PharmacyDashboard() {
 
   if (authLoading || isLoading || isProfileLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary-blue" />
-          <p className="text-gray-600 text-lg">Loading dashboard...</p>
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  const pharmacyName = profile?.pharmacy_name || 'Your Pharmacy';
-  const logoUrl = profile?.logo_url || null;
-  const metrics = statsResponse?.stats;
+  const pharmacyName = profile?.pharmacy_name || 'there';
+  const firstName = pharmacyName.split(' ')[0];
+  const drugs = statsResponse?.drugs || [];
+  const total = drugs.length;
 
-  const statCards = [
+  const today = new Date();
+  const ninetyDaysFromNow = new Date();
+  ninetyDaysFromNow.setDate(today.getDate() + 90);
+
+  const inStock = drugs.filter((d: any) => d.quantity_in_stock > (d.low_stock_threshold || 10)).length;
+  const lowStock = drugs.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= (d.low_stock_threshold || 10)).length;
+  const outOfStock = drugs.filter((d: any) => d.quantity_in_stock === 0).length;
+
+  const pct = total ? Math.round((inStock / total) * 100) : 0;
+
+  const stats = [
+    { label: 'Total products', value: total, sub: 'across catalogue', dot: null, valueColor: '#042C53' },
+    { label: 'In stock', value: inStock, sub: `${pct}% of catalogue`, dot: '#639922', valueColor: '#639922' },
+    { label: 'Low stock', value: lowStock, sub: 'reorder suggested', dot: '#BA7517', valueColor: '#BA7517' },
+    { label: 'Out of stock', value: outOfStock, sub: 'restock needed', dot: '#E24B4A', valueColor: '#E24B4A' },
+  ];
+
+  const actions = [
+    { icon: '📥', title: 'Update stock levels', sub: 'Bulk edit or CSV upload', href: '/pharmacy/inventory/import' },
+    { icon: '🏷️', title: 'Update prices', sub: 'Manage margins and pricing', href: '/pharmacy/inventory' },
+    { icon: '📈', title: 'Demand near you', sub: 'What patients searched for', href: '/pharmacy/inventory' }, // links to inventory since insights isn't fully separate
+  ];
+
+  const activity = [
     {
-      title: 'Total Drugs',
-      value: metrics?.total || 0,
-      icon: Package,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50',
+      title: 'New reservation — Coartem 80/480mg',
+      sub: 'Ada N. will pick up before 6pm today',
+      time: '12 min ago',
+      color: '#0066CC',
     },
     {
-      title: 'In Stock',
-      value: metrics?.in_stock || 0,
-      icon: PackageCheck,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50',
+      title: 'Low stock alert — Amoxicillin 500mg',
+      sub: '8 packs left, searched 22 times this week nearby',
+      time: '1 hour ago',
+      color: '#BA7517',
     },
     {
-      title: 'Low Stock',
-      value: metrics?.low_stock || 0,
-      icon: PackageMinus,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50',
+      title: 'Out of stock — Ventolin inhaler 100mcg',
+      sub: '3 patients set restock alerts',
+      time: '3 hours ago',
+      color: '#E24B4A',
     },
     {
-      title: 'Out of Stock',
-      value: metrics?.out_of_stock || 0,
-      icon: PackageX,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50',
+      title: 'Stock updated — 84 items via CSV',
+      sub: 'by Chidi (staff)',
+      time: 'Yesterday',
+      color: '#639922',
     },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center overflow-hidden">
-              {logoUrl ? (
-                <Image
-                  src={logoUrl}
-                  alt={`${pharmacyName} logo`}
-                  width={64}
-                  height={64}
-                  className="h-full w-full object-cover"
-                  unoptimized
+    <div className="max-w-[900px] mx-auto py-2">
+      {/* Header */}
+      <div className="flex items-end justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display font-medium text-[30px] text-ink leading-tight">
+            {greeting()}, {firstName}
+          </h1>
+          <p className="text-[15px] text-ink-muted mt-2">Here&apos;s how your inventory looks today</p>
+        </div>
+        <Link
+          href="/pharmacy/inventory"
+          className="h-12 flex items-center px-6 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[#0052A3] transition-colors whitespace-nowrap"
+        >
+          + Add medication
+        </Link>
+      </div>
+
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-7">
+        {stats.map((s, idx) => (
+          <div key={idx} className="border border-border rounded-card p-5 bg-white shadow-xs">
+            <div className="flex items-center gap-1.5">
+              {s.dot && <span style={{ backgroundColor: s.dot }} className="w-2 h-2 rounded-full" />}
+              <span className="text-[13px] text-ink-light">{s.label}</span>
+            </div>
+            <div
+              style={{ color: s.valueColor }}
+              className="text-[30px] font-medium mt-2 tabular-nums"
+            >
+              {s.value}
+            </div>
+            <div className="text-[13px] text-ink-muted mt-1">{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Quick actions */}
+      <div className="mt-10">
+        <h2 className="text-[16px] font-medium text-ink mb-4">Quick actions</h2>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {actions.map((a) => (
+            <Link
+              key={a.title}
+              href={a.href}
+              className="border border-border rounded-card p-5 flex items-center gap-3.5 hover:border-primary/40 hover:bg-surface transition-all bg-white shadow-xs"
+            >
+              <div className="w-11 h-11 rounded-lg bg-[#F0F7FF] flex items-center justify-center text-[20px] flex-shrink-0">
+                {a.icon}
+              </div>
+              <div>
+                <div className="text-[15px] font-medium text-ink">{a.title}</div>
+                <div className="text-[13px] text-ink-light mt-0.5">{a.sub}</div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent activity */}
+      <div className="mt-10 mb-8">
+        <h2 className="text-[16px] font-medium text-ink mb-4">Recent activity</h2>
+        <div className="border border-border rounded-card bg-white shadow-xs overflow-hidden divide-y divide-border">
+          {activity.map((act, idx) => (
+            <div key={idx} className="flex items-center justify-between gap-4 p-4 hover:bg-surface transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <span
+                  style={{ backgroundColor: act.color }}
+                  className="w-2 h-2 rounded-full flex-shrink-0"
                 />
-              ) : (
-                <span className="text-lg font-semibold text-primary-blue">
-                  {(pharmacyName?.charAt(0) || 'P').toUpperCase()}
-                </span>
-              )}
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Welcome back</p>
-              <h1 className="text-3xl font-bold text-gray-900">
-                {pharmacyName}
-              </h1>
-              <p className="text-gray-600 mt-1">
-                Manage your pharmacy inventory and track performance
-              </p>
-            </div>
-          </div>
-          <Button asChild>
-            <Link href="/pharmacy/inventory">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Drug
-            </Link>
-          </Button>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {statCards.map((stat, index) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={index} className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">
-                      {stat.title}
-                    </p>
-                    <p className="text-3xl font-bold text-gray-900">
-                      {stat.value}
-                    </p>
-                  </div>
-                  <div className={`${stat.bgColor} p-3 rounded-lg`}>
-                    <Icon className={`h-6 w-6 ${stat.color}`} />
-                  </div>
+                <div className="min-w-0">
+                  <div className="text-[15px] font-medium text-ink truncate">{act.title}</div>
+                  <div className="text-[13px] text-ink-light mt-0.5 truncate">{act.sub}</div>
                 </div>
-              </Card>
-            );
-          })}
-        </div>
-
-        {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
-            Quick Actions
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button
-              asChild
-              variant="outline"
-              className="h-auto py-4 justify-start"
-            >
-              <Link href="/pharmacy/inventory">
-                <Package className="h-5 w-5 mr-3" />
-                <div className="text-left">
-                  <p className="font-semibold">View Inventory</p>
-                  <p className="text-xs text-gray-500">
-                    Manage all your drugs
-                  </p>
-                </div>
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="h-auto py-4 justify-start"
-            >
-              <Link href="/pharmacy/inventory?filter=low_stock">
-              <AlertTriangle className="h-5 w-5 mr-3 text-orange-600" />
-              <div className="text-left">
-                <p className="font-semibold">Low Stock Alert</p>
-                <p className="text-xs text-gray-500">
-                  {metrics?.low_stock || 0} items need restocking
-                </p>
               </div>
-            </Link>
-          </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="h-auto py-4 justify-start"
-            >
-              <Link href="/pharmacy/settings">
-                <TrendingUp className="h-5 w-5 mr-3 text-green-600" />
-                <div className="text-left">
-                  <p className="font-semibold">Pharmacy Settings</p>
-                  <p className="text-xs text-gray-500">
-                    Update your profile
-                  </p>
-                </div>
-              </Link>
-            </Button>
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">
-            Recent Activity
-          </h2>
-          <div className="text-center py-8">
-            <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">
-              Activity tracking coming soon
-            </p>
-            <p className="text-sm text-gray-400 mt-1">
-              View recent inventory changes and customer searches
-            </p>
-          </div>
-        </Card>
-
-        {/* Alerts */}
-        {metrics && metrics.low_stock > 0 && (
-          <Card className="p-6 mt-6 border-orange-200 bg-orange-50">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-orange-900 mb-1">
-                  Low Stock Alert
-                </h3>
-                <p className="text-sm text-orange-800">
-                  You have {metrics.low_stock} item{metrics.low_stock !== 1 ? 's' : ''} running low on stock.
-                  Consider restocking to avoid shortages.
-                </p>
-                <Button
-                  asChild
-                  size="sm"
-                  className="mt-3 bg-orange-600 hover:bg-orange-700"
-                >
-                  <Link href="/pharmacy/inventory?filter=low_stock">
-                    View Low Stock Items
-                  </Link>
-                </Button>
-              </div>
+              <span className="text-[13px] text-ink-muted whitespace-nowrap flex-shrink-0">
+                {act.time}
+              </span>
             </div>
-          </Card>
-        )}
-
-        {metrics && metrics.out_of_stock > 0 && (
-          <Card className="p-6 mt-4 border-red-200 bg-red-50">
-            <div className="flex items-start gap-3">
-              <PackageX className="h-5 w-5 text-red-600 mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-red-900 mb-1">
-                  Out of Stock Alert
-                </h3>
-                <p className="text-sm text-red-800">
-                  You have {metrics.out_of_stock} item{metrics.out_of_stock !== 1 ? 's' : ''} out of stock.
-                  Restock immediately to continue serving customers.
-                </p>
-                <Button
-                  asChild
-                  size="sm"
-                  className="mt-3 bg-red-600 hover:bg-red-700"
-                >
-                  <Link href="/pharmacy/inventory?filter=out_of_stock">
-                    View Out of Stock Items
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
+          ))}
+        </div>
       </div>
     </div>
   );

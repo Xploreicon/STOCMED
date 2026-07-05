@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
+import { triageQuery } from '@/lib/triage/classifier'
+import { getSafeResponse } from '@/lib/triage/safe-responses'
 
 type ChatMessage = {
   role: 'system' | 'user' | 'assistant'
@@ -16,29 +19,28 @@ interface AssistantPayload {
   pharmacies?: Array<Record<string, any>>
 }
 
-const SYSTEM_PROMPT = `You are StocMed's friendly pharmacy concierge.
+// Scope-locked clinical-concierge prompt (C.1)
+const SYSTEM_PROMPT = `You are StocMed's scope-locked patient concierge.
 
-Tone & style:
-- Warm, professional, and conversational. Use emojis sparingly (at most one per paragraph) to add warmth.
-- Keep responses concise: no more than 3–4 sentences total.
-- Format pharmacy options as clear bullet points with bold pharmacy names, medication details, price (use the ₦ symbol), stock, and distance.
-- Always close with a helpful nudge or question that keeps the conversation moving.
+CRITICAL MEDICAL COMPLIANCE RULES:
+1. NEVER diagnose the user's condition. If they ask "do I have malaria?" or describe symptoms, refer them to a doctor.
+2. NEVER prescribe or recommend medication. If they ask "what should I take for headache?", list categories of information (e.g. Analgesics) but DO NOT recommend a specific drug.
+3. NEVER provide dosage instructions or medical treatment suggestions. Refer to the product packaging or a pharmacist.
+4. ONLY help locate named medications in our registered pharmacy database, check pricing, and answer basic factual queries about the drugs (manufacturer, pack size) using PROVIDED CONTEXT.
+5. If the drug is a Prescription-Only Medication (POM), explicitly remind the user: "This medication requires a valid prescription to purchase or view pricing/locations."
+6. Refuse to answer queries outside the scope of medication search, pharmacy directory, or basic drug information.
 
-Safety:
-- NEVER prescribe, recommend dosages, or claim medical authority.
-- Always remind users to follow their doctor's advice or speak with a licensed pharmacist for medical questions.
-- If information is missing, ask follow-up questions (e.g., strength, preferred brand, location).
-- If there are no results, offer concrete next steps so the user is never stuck.
-
-Knowledge base:
-- Rely solely on the provided context for pharmacy and product data—do not invent or assume availability beyond what you see.`
+Tone & Style:
+- Professional, concise, supportive, and plain-language (clear for low-literacy users).
+- Max 3 sentences. No fluff.
+- Format pharmacy lists as clean bullet points: bold pharmacy name, price (₦ symbol), stock availability, and distance.`
 
 const GREETING_REGEX =
   /^(hi|hello|hey|hiya|good morning|good afternoon|good evening)(?:[!\.\s]*)$/i
 
 export async function POST(request: NextRequest) {
   try {
-    const apiKey = process.env.OPENAI_API_KEY
+    const apiKey = process.env.ANTHROPIC_API_KEY
 
     if (!apiKey) {
       return NextResponse.json(
@@ -56,23 +58,49 @@ export async function POST(request: NextRequest) {
     const lastUserMessage =
       [...conversation].filter((msg) => msg.role === 'user').pop()?.content || ''
 
+    // Fast-track greetings
     if (
       GREETING_REGEX.test(lastUserMessage.trim()) &&
       (!query || !query.trim())
     ) {
       return NextResponse.json({
         message: 'Hi! What medication are you looking for today?',
+        triage: { intent: 'OUT_OF_SCOPE', risk_tier: 'ALLOW' }
       })
     }
 
+    // 1. Server-Side Triage Gating (C.2)
+    const triageResult = await triageQuery(query || lastUserMessage);
+
+    // If tier is restricted, crisis, or emergency, bypass LLM entirely
+    if (
+      triageResult.risk_tier === 'CRISIS' ||
+      triageResult.risk_tier === 'BLOCK_SOURCING' ||
+      triageResult.risk_tier === 'REDIRECT'
+    ) {
+      const safeResponse = getSafeResponse(triageResult.intent, triageResult.risk_tier);
+      return NextResponse.json({
+        message: safeResponse.message,
+        triage: triageResult
+      });
+    }
+
+    // 2. Prepare Context for ALLOW / GATE queries
     const contextLines: string[] = [
       `Query: ${query}`,
+      `Triage Tier: ${triageResult.risk_tier}`,
+      `Triage Intent: ${triageResult.intent}`,
       userLocation
         ? `User location: ${userLocation.label} (${userLocation.latitude}, ${userLocation.longitude})`
         : 'User location: not provided',
     ]
 
-    if (pharmacies && pharmacies.length > 0) {
+    // If GATE (POM) is active, indicate prescription restriction
+    if (triageResult.risk_tier === 'GATE') {
+      contextLines.push('RESTRICTION: This is a Prescription-Only Medication (POM). Do not list pharmacy details or prices until prescription is uploaded.');
+    }
+
+    if (pharmacies && pharmacies.length > 0 && triageResult.risk_tier === 'ALLOW') {
       const formatCurrency = (value: number | null | undefined) =>
         typeof value === 'number' && !Number.isNaN(value)
           ? `₦${value.toLocaleString()}`
@@ -118,55 +146,45 @@ export async function POST(request: NextRequest) {
       contextLines.push(
         `Nearby pharmacies:\n${topPharmacies || 'No pharmacies available'}`
       )
+    } else if (triageResult.risk_tier === 'GATE') {
+      contextLines.push('Nearby pharmacies: hidden (requires prescription verification)')
     } else {
       contextLines.push('Nearby pharmacies: none supplied')
     }
 
-    const contextMessage: ChatMessage = {
-      role: 'system',
-      content: contextLines.join('\n'),
-    }
+    // Filter and map conversation messages to match Anthropic message format
+    const messages = conversation
+      .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+      .map((msg) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      }))
 
-    const payload = {
-      model: 'gpt-4o-mini',
-      temperature: 0.3,
-      max_tokens: 400,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        contextMessage,
-        ...conversation,
-      ],
-    }
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
+    // Initialize Anthropic client
+    const anthropic = new Anthropic({
+      apiKey: apiKey,
     })
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('Assistant API error:', response.status, errorText)
-      return NextResponse.json(
-        {
-          message:
-            'The assistant service is currently unreachable. Please try again shortly.',
-        },
-        { status: 200 }
-      )
-    }
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 400,
+      temperature: 0.2,
+      system: SYSTEM_PROMPT + '\n\n' + contextLines.join('\n'),
+      messages: messages,
+    })
 
-    const completion = await response.json()
-    const assistantMessage =
-      completion?.choices?.[0]?.message?.content ??
-      'I am unable to provide additional details right now.'
+    const assistantMessage = response.content[0].type === 'text'
+      ? response.content[0].text
+      : 'I am unable to provide additional details right now.'
 
-    return NextResponse.json({ message: assistantMessage })
-  } catch (error) {
-    console.error('Assistant route error:', error)
+    return NextResponse.json({
+      message: assistantMessage,
+      triage: triageResult
+    })
+  } catch (error: any) {
+    const status = error?.status ?? error?.statusCode ?? 'unknown'
+    const errorMessage = error?.message ?? String(error)
+    console.error(`Assistant route error [${status}]:`, errorMessage)
     return NextResponse.json(
       {
         message:

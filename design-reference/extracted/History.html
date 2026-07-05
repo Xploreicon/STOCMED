@@ -1,0 +1,168 @@
+
+
+<div data-screen-label="Search history" style="width:100%; min-height:100vh; background:#FFFFFF; color:#1A1A1A; display:flex; flex-direction:column;">
+
+  <!-- TOP NAV -->
+  <div style="position:sticky; top:0; z-index:50; background:#FFFFFF; border-bottom:1px solid #E6EEF7;">
+    <div style="padding:14px 24px; display:flex; align-items:center; justify-content:space-between;">
+      <a href="./StocMed Landing.dc.html" style="display:flex; align-items:center; gap:8px;">
+        <div style="width:30px; height:30px; border-radius:8px; background:#0066CC; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+          <div style="width:17px; height:8.5px; border-radius:4.5px; transform:rotate(45deg); display:flex; overflow:hidden;">
+            <div style="width:50%; height:100%; background:#FFFFFF;"></div>
+            <div style="width:50%; height:100%; background:#FFFFFF; opacity:0.55; border-left:1px solid #0066CC;"></div>
+          </div>
+        </div>
+        <span style="font-size:17px; font-weight:500; color:#1A1A1A; letter-spacing:-0.2px;">StocMed</span>
+      </a>
+      <div style="width:36px; height:36px; border-radius:50%; background:#F0F7FF; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:500; color:#0066CC; border:1px solid #E6EEF7;">AN</div>
+    </div>
+  </div>
+
+  <div style="flex:1; display:flex; width:100%;">
+
+    <!-- SIDEBAR -->
+    <div class="stocmed-sidebar" style="width:240px; flex-shrink:0; border-right:1px solid #E6EEF7; padding:24px 16px; display:flex; flex-direction:column; gap:4px;">
+      <a href="./StocMed Patient Dashboard.dc.html" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:8px;">
+        <span style="font-size:18px;">🏠</span>
+        <span style="font-size:15px; font-weight:400; color:#4A4A4A;">Home</span>
+      </a>
+      <a href="./StocMed Chat.dc.html" style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:8px;">
+        <span style="font-size:18px;">💬</span>
+        <span style="font-size:15px; font-weight:400; color:#4A4A4A;">Chat search</span>
+      </a>
+      <div style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:8px; background:#F0F7FF;">
+        <span style="font-size:18px;">🕒</span>
+        <span style="font-size:15px; font-weight:500; color:#0066CC;">History</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:8px;">
+        <span style="font-size:18px;">⚙️</span>
+        <span style="font-size:15px; font-weight:400; color:#4A4A4A;">Settings</span>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="stocmed-main" style="flex:1; padding:40px 32px; min-width:0;">
+      <div style="max-width:760px; margin:0 auto;">
+        <h1 style="font-family:'Source Serif 4', serif; font-weight:500; font-size:30px; color:#1A1A1A;">Search history</h1>
+        <p style="font-size:15px; font-weight:400; color:#4A4A4A; margin-top:8px;">Every medication you've looked up, and what we found</p>
+
+        <!-- SEARCH -->
+        <input type="text" value="{{ query }}" oninput="{{ setQuery }}" placeholder="Search your history…" style="width:100%; height:48px; border:1px solid #E6EEF7; border-radius:8px; padding:0 16px; font-size:15px; color:#1A1A1A; background:#FFFFFF; margin-top:24px;">
+
+        <!-- FILTER CHIPS -->
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:16px;">
+          <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+            <span onclick="{{ f.select }}" style="cursor:pointer; font-size:13px; font-weight:500; color: {{ f.color }}; background: {{ f.bg }}; border:1px solid {{ f.border }}; padding:9px 16px; border-radius:999px; white-space:nowrap;">{{ f.label }}</span>
+          </sc-for>
+        </div>
+
+        <!-- LIST -->
+        <sc-if value="{{ hasItems }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-direction:column; border:1px solid #E6EEF7; border-radius:12px; overflow:hidden; margin-top:24px;">
+            <sc-for list="{{ items }}" as="it" hint-placeholder-count="5">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px; background:#FFFFFF; border-bottom:1px solid #E6EEF7;">
+                <div style="min-width:0;">
+                  <div style="font-size:15px; font-weight:500; color:#1A1A1A;">{{ it.drug }}</div>
+                  <div style="font-size:13px; font-weight:400; color:#888; margin-top:2px;">{{ it.detail }}</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:14px; flex-shrink:0;">
+                  <span style="font-size:12px; font-weight:500; color: {{ it.badgeColor }}; background: {{ it.badgeBg }}; padding:6px 10px; border-radius:8px; white-space:nowrap;">{{ it.stockLabel }}</span>
+                  <span style="font-size:13px; font-weight:400; color:#888; white-space:nowrap;">{{ it.when }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- EMPTY STATE -->
+        <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:24px; border:1px dashed #E6EEF7; border-radius:16px; padding:64px 32px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px;">
+            <div style="width:56px; height:56px; border-radius:16px; background:#F0F7FF; display:flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:8px;">🔍</div>
+            <h3 style="font-size:17px; font-weight:500; color:#1A1A1A;">No searches here</h3>
+            <p style="font-size:14px; font-weight:400; color:#4A4A4A; max-width:320px; line-height:1.55;">Nothing in your history matches this filter. Try a different filter, or start a new search.</p>
+            <a href="./StocMed Chat.dc.html" style="margin-top:16px; height:48px; display:flex; align-items:center; justify-content:center; padding:0 24px; background:#0066CC; color:#FFFFFF; font-size:15px; font-weight:500; border-radius:8px;">Start a new search</a>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV (mobile) -->
+  <div class="stocmed-bottom-nav" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#FFFFFF; border-top:1px solid #E6EEF7; padding:8px 0 max(8px, env(safe-area-inset-bottom)); align-items:center; justify-content:space-around; z-index:50;">
+    <a href="./StocMed Patient Dashboard.dc.html" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 16px;">
+      <span style="font-size:19px;">🏠</span>
+      <span style="font-size:11px; font-weight:400; color:#4A4A4A;">Home</span>
+    </a>
+    <a href="./StocMed Chat.dc.html" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 16px;">
+      <span style="font-size:19px;">💬</span>
+      <span style="font-size:11px; font-weight:400; color:#4A4A4A;">Chat</span>
+    </a>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 16px;">
+      <span style="font-size:19px;">🕒</span>
+      <span style="font-size:11px; font-weight:500; color:#0066CC;">History</span>
+    </div>
+    <div style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 16px;">
+      <span style="font-size:19px;">⚙️</span>
+      <span style="font-size:11px; font-weight:400; color:#4A4A4A;">Settings</span>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script="">
+class Component extends DCLogic {
+  state = { filter: 'all', query: '' };
+
+  data() {
+    return [
+      { drug: 'Amoxicillin 500mg', detail: '3 pharmacies with stock near Ikeja', when: '2 hours ago', stock: 'in' },
+      { drug: 'Coartem (Artemether/Lumefantrine)', detail: '1 pharmacy found near Yaba', when: 'Yesterday', stock: 'low' },
+      { drug: 'Ventolin inhaler 100mcg', detail: 'Nothing nearby \u2014 alert set for restock', when: '2 days ago', stock: 'out' },
+      { drug: 'Vitamin C effervescent', detail: '5 pharmacies with stock near Yaba', when: '3 days ago', stock: 'in' },
+      { drug: 'Loratadine 10mg', detail: '4 pharmacies with stock near Surulere', when: 'Last week', stock: 'in' },
+      { drug: 'Insulin (Mixtard 30/70)', detail: '2 pharmacies, refrigerated stock confirmed', when: 'Last week', stock: 'low' },
+    ];
+  }
+
+  renderVals() {
+    const badge = {
+      in:  { stockLabel: 'Found in stock', badgeColor: '#639922', badgeBg: '#F2F7EA' },
+      low: { stockLabel: 'Low stock',      badgeColor: '#BA7517', badgeBg: '#FBF2E6' },
+      out: { stockLabel: 'Out of stock',   badgeColor: '#E24B4A', badgeBg: '#FBEDEC' },
+    };
+    const defs = [
+      { key: 'all', label: 'All' },
+      { key: 'in',  label: 'Found in stock' },
+      { key: 'low', label: 'Low stock' },
+      { key: 'out', label: 'Out of stock' },
+    ];
+    const filters = defs.map(d => {
+      const active = this.state.filter === d.key;
+      return {
+        label: d.label,
+        color: active ? '#FFFFFF' : '#4A4A4A',
+        bg: active ? '#0066CC' : '#FFFFFF',
+        border: active ? '#0066CC' : '#E6EEF7',
+        select: () => this.setState({ filter: d.key }),
+      };
+    });
+    const q = this.state.query.trim().toLowerCase();
+    const items = this.data()
+      .filter(it => this.state.filter === 'all' || it.stock === this.state.filter)
+      .filter(it => !q || it.drug.toLowerCase().includes(q))
+      .map(it => Object.assign({}, it, badge[it.stock]));
+    return {
+      filters,
+      items,
+      hasItems: items.length > 0,
+      isEmpty: items.length === 0,
+      query: this.state.query,
+      setQuery: (e) => this.setState({ query: e.target.value }),
+    };
+  }
+}
+
+</script>
+
+
+</body></html>

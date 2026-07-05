@@ -1,0 +1,552 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Upload,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  AlertCircle,
+  FileSpreadsheet,
+  HelpCircle,
+  Loader2,
+  Sparkles,
+  Check,
+  AlertTriangle
+} from 'lucide-react';
+import Link from 'next/link';
+
+type Step = 'upload' | 'mapping' | 'matching' | 'progress' | 'summary';
+
+const CANONICAL_FIELDS = [
+  { key: 'name', label: 'Drug / Generic Name', required: true, synonyms: ['name', 'generic name', 'drug name', 'medication', 'product'] },
+  { key: 'brand_name', label: 'Brand Name', required: false, synonyms: ['brand', 'brand name', 'trade name'] },
+  { key: 'strength', label: 'Strength', required: true, synonyms: ['strength', 'dosage strength', 'mg', 'g', 'ml'] },
+  { key: 'dosage_form', label: 'Dosage Form', required: true, synonyms: ['form', 'dosage form', 'type'] },
+  { key: 'category', label: 'Category', required: true, synonyms: ['category', 'class', 'group'] },
+  { key: 'pack_size', label: 'Pack Size', required: false, synonyms: ['pack', 'pack size', 'packaging'] },
+  { key: 'price', label: 'Selling Price (₦)', required: true, synonyms: ['price', 'selling price', 'rate', 'unit price'] },
+  { key: 'quantity', label: 'Opening Qty', required: true, synonyms: ['quantity', 'qty', 'stock', 'opening qty', 'count'] },
+  { key: 'batch_number', label: 'Batch Number', required: true, synonyms: ['batch', 'batch no', 'batch number', 'lot'] },
+  { key: 'expiry_date', label: 'Expiry Date', required: true, synonyms: ['expiry', 'exp', 'expiry date', 'exp date'] },
+];
+
+export default function BulkImportWizard() {
+  const router = useRouter();
+
+  const [step, setStep] = useState<Step>('upload');
+  const [file, setFile] = useState<File | null>(null);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rawRows, setRawRows] = useState<any[]>([]);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  
+  // Matching and Validation state
+  const [matchedRows, setMatchedRows] = useState<any[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  
+  // Progress state
+  const [importProgress, setImportProgress] = useState(0);
+  const [importStats, setImportStats] = useState({
+    imported: 0,
+    skipped: 0,
+    errors: 0,
+    total: 0,
+  });
+  const [isImporting, setIsImporting] = useState(false);
+
+  // File Upload Handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    setFile(selectedFile);
+    setIsParsing(true);
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+
+    try {
+      const res = await fetch('/api/pharmacy/inventory/import/parse', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to parse file');
+        setFile(null);
+        return;
+      }
+
+      const { headers, rows } = await res.json();
+      setHeaders(headers);
+      setRawRows(rows);
+      
+      // Run smart auto-mapping
+      const initialMapping: Record<string, string> = {};
+      CANONICAL_FIELDS.forEach((field) => {
+        const match = headers.find((header: string) => {
+          const cleanHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
+          return field.synonyms.some((syn) => {
+            const cleanSyn = syn.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanHeader.includes(cleanSyn) || cleanSyn.includes(cleanHeader);
+          });
+        });
+        if (match) {
+          initialMapping[field.key] = match;
+        }
+      });
+      setMapping(initialMapping);
+      setStep('mapping');
+    } catch (err) {
+      console.error(err);
+      alert('Error parsing uploaded file.');
+      setFile(null);
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  // Run matching logic
+  const handleMappingSubmit = async () => {
+    // Validate that required fields are mapped
+    const missingRequired = CANONICAL_FIELDS.filter(f => f.required && !mapping[f.key]);
+    if (missingRequired.length > 0) {
+      alert(`Please map all required fields: ${missingRequired.map(f => f.label).join(', ')}`);
+      return;
+    }
+
+    setIsValidating(true);
+    setStep('matching');
+
+    try {
+      const res = await fetch('/api/pharmacy/inventory/import/match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: rawRows, mapping }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Matching failed');
+        setStep('mapping');
+        return;
+      }
+
+      const { matchedRows: results } = await res.json();
+      // Initialize each row's selection to the highest confidence match if confidence > 0.4
+      const initializedResults = results.map((row: any) => {
+        const bestMatch = row.matches && row.matches[0];
+        const selectedId = bestMatch && bestMatch.confidence > 0.4 ? bestMatch.id : 'create_new';
+        
+        // Basic pre-commit validation checks
+        const warnings: string[] = [];
+        const errors: string[] = [];
+        
+        if (!row.mapped.price || isNaN(row.mapped.price) || row.mapped.price <= 0) {
+          errors.push('Price must be greater than ₦0');
+        }
+        if (row.mapped.quantity === null || isNaN(row.mapped.quantity) || row.mapped.quantity < 0) {
+          errors.push('Stock quantity cannot be negative');
+        }
+        if (!row.mapped.batch_number) {
+          errors.push('Batch number is required');
+        }
+        if (!row.mapped.expiry_date) {
+          errors.push('Expiry date is required');
+        } else {
+          const exp = new Date(row.mapped.expiry_date);
+          if (exp.getTime() < Date.now()) {
+            errors.push('Product has expired');
+          } else if (exp.getTime() < Date.now() + 90 * 24 * 60 * 60 * 1000) {
+            warnings.push('Expiry date is within 90 days');
+          }
+        }
+
+        return {
+          ...row,
+          selected_product_id: selectedId,
+          validation: { errors, warnings }
+        };
+      });
+
+      setMatchedRows(initializedResults);
+    } catch (err) {
+      console.error(err);
+      alert('Error during matching stage.');
+      setStep('mapping');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  // Commit Import
+  const handleCommitImport = async () => {
+    // Check if any row has validation errors
+    const errorCount = matchedRows.filter(r => r.validation.errors.length > 0).length;
+    if (errorCount > 0) {
+      const confirmProceed = confirm(`There are ${errorCount} rows with critical errors. These will be skipped or may fail. Proceed anyway?`);
+      if (!confirmProceed) return;
+    }
+
+    setIsImporting(true);
+    setStep('progress');
+    setImportProgress(0);
+
+    try {
+      const res = await fetch('/api/pharmacy/inventory/import/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchedRows: matchedRows.map(r => ({
+            mapped: r.mapped,
+            selected_product_id: r.selected_product_id
+          }))
+        }),
+      });
+
+      if (!res.body) {
+        throw new Error('No readable response stream.');
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6));
+            if (data.status === 'running' || data.status === 'completed') {
+              setImportProgress(data.progress);
+              setImportStats({
+                imported: data.imported,
+                skipped: data.skipped,
+                errors: data.errors,
+                total: data.total,
+              });
+            }
+            if (data.status === 'completed') {
+              setIsImporting(false);
+              setStep('summary');
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Error executing import transaction');
+      setIsImporting(false);
+      setStep('matching');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-surface py-10 px-4 md:px-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Breadcrumb / Back Navigation */}
+        <div className="flex items-center justify-between">
+          <Link href="/pharmacy/inventory" className="inline-flex items-center text-sm font-medium text-ink-muted hover:text-ink transition-colors">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Inventory
+          </Link>
+          <div className="text-xs font-semibold uppercase tracking-wider text-ink-light">
+            Step {step === 'upload' ? '1/4' : step === 'mapping' ? '2/4' : step === 'matching' ? '3/4' : '4/4'}
+          </div>
+        </div>
+
+        {/* STEP 1: Upload */}
+        {step === 'upload' && (
+          <Card className="p-8 space-y-8 border-border shadow-xl bg-white rounded-xl">
+            <div className="text-center space-y-2">
+              <div className="h-14 w-14 bg-primary/5 text-primary rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <FileSpreadsheet className="w-7 h-7" />
+              </div>
+              <h1 className="text-2xl font-display font-bold text-ink">Bulk Inventory Onboarding</h1>
+              <p className="text-ink-muted max-w-md mx-auto text-sm">
+                Upload your pharmacy&apos;s product list. We support CSV and Excel (.xlsx) files.
+              </p>
+            </div>
+
+            <div className="border-2 border-dashed border-border hover:border-primary/50 rounded-xl p-12 transition-all text-center bg-surface/50">
+              <input
+                type="file"
+                accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                id="file-upload"
+                className="hidden"
+                onChange={handleFileUpload}
+                disabled={isParsing}
+              />
+              <label htmlFor="file-upload" className="cursor-pointer block space-y-4">
+                {isParsing ? (
+                  <div className="flex flex-col items-center justify-center gap-3">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    <span className="text-sm font-semibold text-ink-muted">Uploading and parsing file...</span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-10 h-10 text-ink-light mx-auto" />
+                    <div>
+                      <span className="text-primary hover:text-primary/80 font-semibold underline">Click to upload</span>
+                      <span className="text-ink-muted"> or drag and drop</span>
+                    </div>
+                    <p className="text-xs text-ink-light">CSV or XLSX (Max. 5MB)</p>
+                  </>
+                )}
+              </label>
+            </div>
+
+            <div className="flex items-center justify-between border-t border-border pt-6">
+              <div className="flex items-center gap-2 text-sm text-ink-muted">
+                <HelpCircle className="w-4 h-4 text-ink-light" />
+                <span>Need a template to format your list?</span>
+              </div>
+              <a
+                href="/templates/inventory_import_template.csv"
+                download
+                className="inline-flex items-center px-4 py-2 border border-border rounded-md text-sm font-semibold text-ink bg-white hover:bg-surface shadow-sm"
+              >
+                Download Template CSV
+              </a>
+            </div>
+          </Card>
+        )}
+
+        {/* STEP 2: Mapping */}
+        {step === 'mapping' && (
+          <Card className="p-8 space-y-6 border-border shadow-xl bg-white rounded-xl">
+            <div>
+              <h2 className="text-xl font-display font-bold text-ink">Map Columns</h2>
+              <p className="text-ink-muted text-sm mt-1">
+                Map the headers of your spreadsheet to StocMed&apos;s product fields. We&apos;ve auto-detected matches.
+              </p>
+            </div>
+
+            <div className="divide-y divide-border border border-border rounded-lg overflow-hidden bg-surface/50 shadow-inner">
+              {CANONICAL_FIELDS.map((field) => (
+                <div key={field.key} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center bg-white hover:bg-surface/30">
+                  <div>
+                    <span className="text-sm font-semibold text-ink">{field.label}</span>
+                    {field.required && <span className="text-danger ml-1 font-bold">*</span>}
+                    <p className="text-xs text-ink-light mt-0.5">
+                      {field.required ? 'Required field.' : 'Optional.'}
+                    </p>
+                  </div>
+                  <div>
+                    <select
+                      value={mapping[field.key] || ''}
+                      onChange={(e) => setMapping(prev => ({ ...prev, [field.key]: e.target.value }))}
+                      className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm bg-white"
+                    >
+                      <option value="">-- Do Not Import --</option>
+                      {headers.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-border">
+              <Button variant="ghost" onClick={() => setStep('upload')}>
+                Cancel
+              </Button>
+              <Button onClick={handleMappingSubmit} className="shadow-lg">
+                Match Catalogue & Preview
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* STEP 3: Matching & Preview */}
+        {step === 'matching' && (
+          <Card className="p-8 space-y-6 border-border shadow-xl bg-white rounded-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-display font-bold text-ink">Review & Catalogue Match</h2>
+                <p className="text-ink-muted text-sm mt-1">
+                  We found matches for your drugs in the catalogue. Verify or create new catalogue entries.
+                </p>
+              </div>
+              <Button onClick={handleCommitImport} disabled={isValidating} className="shadow-lg">
+                Import {matchedRows.length} Drugs
+              </Button>
+            </div>
+
+            {isValidating ? (
+              <div className="py-24 text-center space-y-4">
+                <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
+                <p className="text-ink-muted font-medium">Running catalogue matching algorithms...</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="overflow-x-auto border border-border rounded-lg bg-white shadow-inner">
+                  <table className="w-full text-left text-sm divide-y divide-border">
+                    <thead className="bg-surface text-ink-muted font-semibold text-xs uppercase">
+                      <tr>
+                        <th className="p-3">Generic (Spreadsheet)</th>
+                        <th className="p-3">Strength & Form</th>
+                        <th className="p-3">Price & Stock</th>
+                        <th className="p-3">Catalogue Match</th>
+                        <th className="p-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {matchedRows.map((row, index) => {
+                        const hasErrors = row.validation.errors.length > 0;
+                        const hasWarnings = row.validation.warnings.length > 0;
+
+                        return (
+                          <tr key={index} className={`hover:bg-surface/50 transition-colors ${hasErrors ? 'bg-danger/5' : ''}`}>
+                            <td className="p-3">
+                              <div className="font-semibold text-ink">{row.mapped.generic_name}</div>
+                              {row.mapped.brand_name && (
+                                <div className="text-xs text-ink-light">Brand: {row.mapped.brand_name}</div>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <div>{row.mapped.strength || 'N/A'}</div>
+                              <div className="text-xs text-ink-muted capitalize">{row.mapped.dosage_form}</div>
+                            </td>
+                            <td className="p-3">
+                              <div className="font-semibold">₦{row.mapped.price?.toLocaleString()}</div>
+                              <div className="text-xs text-ink-muted">{row.mapped.quantity} in stock</div>
+                            </td>
+                            <td className="p-3">
+                              <select
+                                value={row.selected_product_id || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setMatchedRows(prev => prev.map((r, i) => i === index ? { ...r, selected_product_id: val } : r));
+                                }}
+                                className="w-[220px] px-2 py-1.5 border border-border rounded-md focus:ring-1 focus:ring-primary text-xs bg-white"
+                              >
+                                <option value="create_new">🆕 Add as Unverified Catalogue Item</option>
+                                {row.matches && row.matches.map((m: any) => (
+                                  <option key={m.id} value={m.id}>
+                                    ✨ {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}) - {Math.round(m.confidence * 100)}% Match
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="p-3 text-center">
+                              {hasErrors ? (
+                                <div className="inline-flex items-center gap-1 text-danger bg-danger/10 px-2 py-0.5 rounded text-xs font-semibold" title={row.validation.errors.join(', ')}>
+                                  <AlertCircle className="w-3.5 h-3.5" />
+                                  Error
+                                </div>
+                              ) : hasWarnings ? (
+                                <div className="inline-flex items-center gap-1 text-warning bg-warning/10 px-2 py-0.5 rounded text-xs font-semibold" title={row.validation.warnings.join(', ')}>
+                                  <AlertTriangle className="w-3.5 h-3.5" />
+                                  Warning
+                                </div>
+                              ) : (
+                                <div className="inline-flex items-center gap-1 text-success bg-success/10 px-2 py-0.5 rounded text-xs font-semibold">
+                                  <Check className="w-3.5 h-3.5" />
+                                  Valid
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
+
+        {/* STEP 4: Progress */}
+        {step === 'progress' && (
+          <Card className="p-8 space-y-8 border-border shadow-xl bg-white rounded-xl text-center">
+            <div className="space-y-3">
+              <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
+              <h2 className="text-xl font-display font-bold text-ink">Importing Inventory...</h2>
+              <p className="text-ink-muted text-sm">Do not close this tab. We are committing batch transactions to the ledger.</p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="h-3 w-full bg-surface rounded-full overflow-hidden border">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${importProgress}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs font-semibold text-ink-muted">
+                <span>Progress: {importProgress}%</span>
+                <span>{importStats.imported + importStats.errors} of {importStats.total} rows</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4 border-t border-border pt-6">
+              <div className="p-4 bg-surface rounded-lg">
+                <div className="text-xl font-bold text-success">{importStats.imported}</div>
+                <div className="text-xs text-ink-light mt-1 uppercase font-semibold">Imported</div>
+              </div>
+              <div className="p-4 bg-surface rounded-lg">
+                <div className="text-xl font-bold text-ink-muted">{importStats.skipped}</div>
+                <div className="text-xs text-ink-light mt-1 uppercase font-semibold">Skipped</div>
+              </div>
+              <div className="p-4 bg-surface rounded-lg">
+                <div className="text-xl font-bold text-danger">{importStats.errors}</div>
+                <div className="text-xs text-ink-light mt-1 uppercase font-semibold">Errors</div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* STEP 5: Summary */}
+        {step === 'summary' && (
+          <Card className="p-8 space-y-8 border-border shadow-xl bg-white rounded-xl text-center">
+            <div className="space-y-3">
+              <div className="h-16 w-16 bg-success/10 text-success rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-display font-bold text-ink">Import Complete!</h2>
+              <p className="text-ink-muted text-sm max-w-sm mx-auto">
+                Your inventory spreadsheet has been successfully integrated into the StocMed database spine.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+              <div className="p-4 bg-surface border rounded-lg">
+                <div className="text-2xl font-bold text-success">{importStats.imported}</div>
+                <div className="text-xs text-ink-light mt-1">Successfully Imported</div>
+              </div>
+              <div className="p-4 bg-surface border rounded-lg">
+                <div className="text-2xl font-bold text-danger">{importStats.errors}</div>
+                <div className="text-xs text-ink-light mt-1">Errors Encountered</div>
+              </div>
+            </div>
+
+            <div className="flex justify-center gap-3 pt-6 border-t border-border max-w-md mx-auto">
+              <Button variant="outline" onClick={() => setStep('upload')}>
+                Import Another File
+              </Button>
+              <Button onClick={() => router.push('/pharmacy/inventory')} className="shadow-lg">
+                Go to Inventory Table
+              </Button>
+            </div>
+          </Card>
+        )}
+      </div>
+    </div>
+  );
+}
