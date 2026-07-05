@@ -40,18 +40,6 @@ const GREETING_REGEX =
 
 export async function POST(request: NextRequest) {
   try {
-    const apiKey = process.env.ANTHROPIC_API_KEY
-
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          message:
-            'I am unable to reach the assistant service right now, but I can still help with basic search results.',
-        },
-        { status: 200 }
-      )
-    }
-
     const body = (await request.json()) as AssistantPayload
     const { conversation, query, userLocation, pharmacies } = body
 
@@ -160,27 +148,95 @@ export async function POST(request: NextRequest) {
         content: msg.content,
       }))
 
-    // Initialize Anthropic client
-    const anthropic = new Anthropic({
-      apiKey: apiKey,
-    })
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    const openaiKey = process.env.OPENAI_API_KEY
 
-    const response = await anthropic.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
-      temperature: 0.2,
-      system: SYSTEM_PROMPT + '\n\n' + contextLines.join('\n'),
-      messages: messages,
-    })
+    // Helper to call OpenAI Chat Completion
+    const callOpenAI = async () => {
+      if (!openaiKey) return null;
+      console.log('Attempting OpenAI chat completion...');
+      try {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${openaiKey}`
+          },
+          body: JSON.stringify({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT + '\n\n' + contextLines.join('\n') },
+              ...messages
+            ],
+            temperature: 0.2,
+            max_tokens: 400
+          })
+        });
 
-    const assistantMessage = response.content[0].type === 'text'
-      ? response.content[0].text
-      : 'I am unable to provide additional details right now.'
+        if (!response.ok) {
+          throw new Error(`OpenAI HTTP error: ${response.status}`);
+        }
 
-    return NextResponse.json({
-      message: assistantMessage,
-      triage: triageResult
-    })
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content || null;
+      } catch (err) {
+        console.error('OpenAI assistant error:', err);
+        return null;
+      }
+    };
+
+    // 3. Attempt Anthropic if key is available
+    if (apiKey) {
+      try {
+        const anthropic = new Anthropic({
+          apiKey: apiKey,
+        })
+
+        const response = await anthropic.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 400,
+          temperature: 0.2,
+          system: SYSTEM_PROMPT + '\n\n' + contextLines.join('\n'),
+          messages: messages,
+        })
+
+        const assistantMessage = response.content[0].type === 'text'
+          ? response.content[0].text
+          : 'I am unable to provide additional details right now.'
+
+        return NextResponse.json({
+          message: assistantMessage,
+          triage: triageResult
+        })
+      } catch (anthropicError) {
+        console.error('Anthropic assistant error, trying OpenAI fallback:', anthropicError)
+        const openaiResponse = await callOpenAI();
+        if (openaiResponse) {
+          return NextResponse.json({
+            message: openaiResponse,
+            triage: triageResult
+          })
+        }
+      }
+    } else {
+      console.log('Anthropic API key not found. Trying OpenAI...');
+      const openaiResponse = await callOpenAI();
+      if (openaiResponse) {
+        return NextResponse.json({
+          message: openaiResponse,
+          triage: triageResult
+        })
+      }
+    }
+
+    // Default fallback if both APIs are unavailable / fail
+    return NextResponse.json(
+      {
+        message:
+          'I am unable to reach the assistant service right now, but I can still help with basic search results.',
+      },
+      { status: 200 }
+    )
   } catch (error: any) {
     const status = error?.status ?? error?.statusCode ?? 'unknown'
     const errorMessage = error?.message ?? String(error)
