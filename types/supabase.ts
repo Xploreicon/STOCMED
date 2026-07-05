@@ -220,6 +220,201 @@ export interface Database {
           timestamp?: string
         }
       }
+      products: {
+        Row: {
+          id: string
+          generic_name: string
+          brand_name: string | null
+          manufacturer: string | null
+          strength: string
+          dosage_form: string | null
+          category: string | null
+          pack_size: string | null
+          nafdac_number: string | null
+          barcode: string | null
+          atc_code: string | null
+          requires_prescription: boolean
+          description: string | null
+          image_url: string | null
+          is_verified: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          generic_name: string
+          brand_name?: string | null
+          manufacturer?: string | null
+          strength: string
+          dosage_form?: string | null
+          category?: string | null
+          pack_size?: string | null
+          nafdac_number?: string | null
+          barcode?: string | null
+          atc_code?: string | null
+          requires_prescription?: boolean
+          description?: string | null
+          image_url?: string | null
+          is_verified?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          generic_name?: string
+          brand_name?: string | null
+          manufacturer?: string | null
+          strength?: string
+          dosage_form?: string | null
+          category?: string | null
+          pack_size?: string | null
+          nafdac_number?: string | null
+          barcode?: string | null
+          atc_code?: string | null
+          requires_prescription?: boolean
+          description?: string | null
+          image_url?: string | null
+          is_verified?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      pharmacy_inventory: {
+        Row: {
+          id: string
+          pharmacy_id: string
+          product_id: string
+          price: number
+          quantity_in_stock: number
+          low_stock_threshold: number
+          is_listed: boolean
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          pharmacy_id: string
+          product_id: string
+          price: number
+          quantity_in_stock?: number
+          low_stock_threshold?: number
+          is_listed?: boolean
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          pharmacy_id?: string
+          product_id?: string
+          price?: number
+          quantity_in_stock?: number
+          low_stock_threshold?: number
+          is_listed?: boolean
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      batches: {
+        Row: {
+          id: string
+          inventory_id: string
+          batch_number: string
+          expiry_date: string
+          quantity_received: number
+          cost_price: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          inventory_id: string
+          batch_number: string
+          expiry_date: string
+          quantity_received: number
+          cost_price?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          inventory_id?: string
+          batch_number?: string
+          expiry_date?: string
+          quantity_received?: number
+          cost_price?: number | null
+          created_at?: string
+        }
+      }
+      stock_movements: {
+        Row: {
+          id: string
+          inventory_id: string
+          batch_id: string | null
+          type:
+            | 'opening'
+            | 'sale'
+            | 'restock'
+            | 'adjustment'
+            | 'return'
+            | 'expiry_writeoff'
+            | 'transfer'
+            | 'write_off'
+          quantity: number
+          reason: string | null
+          reference: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          inventory_id: string
+          batch_id?: string | null
+          type:
+            | 'opening'
+            | 'sale'
+            | 'restock'
+            | 'adjustment'
+            | 'return'
+            | 'expiry_writeoff'
+            | 'transfer'
+            | 'write_off'
+          quantity: number
+          reason?: string | null
+          reference?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          inventory_id?: string
+          batch_id?: string | null
+          type?:
+            | 'opening'
+            | 'sale'
+            | 'restock'
+            | 'adjustment'
+            | 'return'
+            | 'expiry_writeoff'
+            | 'transfer'
+            | 'write_off'
+          quantity?: number
+          reason?: string | null
+          reference?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+      }
+      product_categories: {
+        Row: { name: string }
+        Insert: { name: string }
+        Update: { name?: string }
+      }
+      dosage_forms: {
+        Row: { name: string }
+        Insert: { name: string }
+        Update: { name?: string }
+      }
     }
     Views: {
       [_ in never]: never
@@ -230,6 +425,15 @@ export interface Database {
     Enums: {
       user_role: 'patient' | 'pharmacy'
       message_role: 'user' | 'assistant'
+      stock_movement_type:
+        | 'opening'
+        | 'sale'
+        | 'restock'
+        | 'adjustment'
+        | 'return'
+        | 'expiry_writeoff'
+        | 'transfer'
+        | 'write_off'
     }
   }
 }

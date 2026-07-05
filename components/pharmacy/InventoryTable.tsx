@@ -1,192 +1,189 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
-import { Button } from '@/components/ui/button';
-import { Pencil, Trash2, CheckCircle, AlertTriangle, XCircle } from 'lucide-react';
-import EditDrugModal from './EditDrugModal';
-import DeleteConfirmDialog from './DeleteConfirmDialog';
+import type { EnrichedInventoryRow } from '@/lib/pharmacyInventory';
+import { formatNaira, formatExpiry, getRowBadge, getBatchBadge } from '@/lib/inventoryUi';
 
 interface InventoryTableProps {
-  drugs: any[];
-  onRefetch: () => void;
+  rows: EnrichedInventoryRow[];
+  onEdit: (row: EnrichedInventoryRow) => void;
+  onAdjust: (row: EnrichedInventoryRow) => void;
+  onDelete: (row: EnrichedInventoryRow) => void;
 }
 
-function getStockBadge(stock: number, lowThreshold: number = 10) {
-  if (stock === 0) {
-    return {
-      icon: XCircle,
-      text: 'Out of Stock',
-      colorClass: 'text-red-600',
-      bgClass: 'bg-red-100',
-    };
-  } else if (stock <= lowThreshold) {
-    return {
-      icon: AlertTriangle,
-      text: 'Low Stock',
-      colorClass: 'text-orange-600',
-      bgClass: 'bg-orange-100',
-    };
-  } else {
-    return {
-      icon: CheckCircle,
-      text: 'In Stock',
-      colorClass: 'text-green-600',
-      bgClass: 'bg-green-100',
-    };
+function capitalize(s: string) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+function Badge({ badge }: { badge: ReturnType<typeof getRowBadge> }) {
+  return (
+    <span
+      className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium"
+      style={
+        badge.outline
+          ? { color: badge.color, background: badge.bg, border: `1px solid ${badge.color}` }
+          : { color: badge.color, background: badge.bg }
+      }
+    >
+      {badge.label}
+    </span>
+  );
+}
+
+function BatchList({ row }: { row: EnrichedInventoryRow }) {
+  if (row.batches.length === 0) {
+    return <p className="text-sm text-secondary">No batches recorded for this medication yet.</p>;
   }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="mb-1 text-xs font-medium text-secondary">Batches</div>
+      {row.batches.map((b) => {
+        const badge = getBatchBadge(b);
+        return (
+          <div
+            key={b.id}
+            className="flex items-center justify-between gap-3 rounded-lg border border-hairline bg-white px-3 py-2"
+          >
+            <span className="text-sm font-medium text-ink">Batch {b.batch_number}</span>
+            <span className="text-sm text-secondary">Qty {b.remaining_qty}</span>
+            <span className="text-sm font-medium" style={{ color: badge.color }}>
+              {badge.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
-export default function InventoryTable({ drugs, onRefetch }: InventoryTableProps) {
-  const [editingDrug, setEditingDrug] = useState<any | null>(null);
-  const [deletingDrug, setDeletingDrug] = useState<any | null>(null);
+export default function InventoryTable({ rows, onEdit, onAdjust, onDelete }: InventoryTableProps) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   return (
     <>
-      <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Image
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Drug Name
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Category
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Form
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Strength
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Price
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Stock
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {drugs.map((drug) => {
-              const stockBadge = getStockBadge(
-                drug.quantity_in_stock,
-                drug.low_stock_threshold
-              );
-              const StockIcon = stockBadge.icon;
-
-              return (
-                <tr key={drug.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {drug.image_url ? (
-                      <Image
-                        src={drug.image_url}
-                        alt={drug.name || drug.brand_name || 'Drug image'}
-                        width={48}
-                        height={48}
-                        className="h-12 w-12 rounded-md object-cover border border-gray-200"
-                        unoptimized
-                      />
-                    ) : (
-                      <div className="h-12 w-12 rounded-md bg-gray-100 flex items-center justify-center text-xs text-gray-500">
-                        No image
-                      </div>
+      {/* Desktop table */}
+      <div className="hidden overflow-hidden rounded-card border border-hairline md:block">
+        <div className="grid grid-cols-[1.6fr_1fr_0.8fr_0.6fr_0.9fr_0.9fr] border-b border-hairline bg-brand-tint px-4 py-3">
+          <span className="text-[13px] font-medium text-secondary">Product</span>
+          <span className="text-[13px] font-medium text-secondary">Strength &amp; form</span>
+          <span className="text-[13px] font-medium text-secondary">Price</span>
+          <span className="text-[13px] font-medium text-secondary">Qty</span>
+          <span className="text-[13px] font-medium text-secondary">Earliest expiry</span>
+          <span className="text-right text-[13px] font-medium text-secondary">Actions</span>
+        </div>
+        {rows.map((row) => {
+          const badge = getRowBadge(row);
+          const expanded = expandedId === row.id;
+          return (
+            <div key={row.id}>
+              <div className="grid grid-cols-[1.6fr_1fr_0.8fr_0.6fr_0.9fr_0.9fr] items-center border-b border-hairline px-4 py-3.5">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-ink">{row.generic_name}</div>
+                  {row.brand_name && <div className="mt-0.5 truncate text-xs text-muted">{row.brand_name}</div>}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <Badge badge={badge} />
+                    {row.stock_status === 'low' && (
+                      <span className="text-[11px] text-stock-low">Reorder suggested</span>
                     )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-medium text-gray-900">
-                      {drug.name || drug.brand_name}
-                    </div>
-                    {drug.generic_name && drug.generic_name !== drug.name && (
-                      <div className="text-xs text-gray-500">
-                        {drug.generic_name}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-700">{drug.category}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-700 capitalize">
-                      {drug.dosage_form}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-700">{drug.strength}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">
-                      ₦{drug.price?.toLocaleString()}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div
-                      className={`inline-flex items-center gap-1 px-3 py-1 rounded-full ${stockBadge.bgClass}`}
-                    >
-                      <StockIcon className={`w-4 h-4 ${stockBadge.colorClass}`} />
-                      <span className={`text-sm font-medium ${stockBadge.colorClass}`}>
-                        {drug.quantity_in_stock}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setEditingDrug(drug)}
-                        className="hover:bg-blue-50 hover:text-blue-600"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeletingDrug(drug)}
-                        className="hover:bg-red-50 hover:text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+                <span className="text-[13px] text-secondary">
+                  {row.strength} {row.dosage_form ? `· ${capitalize(row.dosage_form)}` : ''}
+                </span>
+                <span className="font-medium tabular-nums text-brand-deep">{formatNaira(row.price)}</span>
+                <span className="font-medium tabular-nums text-ink">{row.quantity_in_stock}</span>
+                <span
+                  className="text-[13px]"
+                  style={{ color: row.is_expired ? '#E24B4A' : row.is_expiring_soon ? '#BA7517' : '#4A4A4A' }}
+                >
+                  {formatExpiry(row.expiry_date)}
+                </span>
+                <div className="flex flex-wrap justify-end gap-3">
+                  <button onClick={() => onEdit(row)} className="text-[13px] font-medium text-brand">
+                    Edit
+                  </button>
+                  <button onClick={() => onAdjust(row)} className="text-[13px] font-medium text-brand">
+                    Adjust stock
+                  </button>
+                  <button onClick={() => onDelete(row)} className="text-[13px] font-medium text-stock-out">
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => setExpandedId(expanded ? null : row.id)}
+                    className="text-[13px] font-medium text-secondary"
+                  >
+                    {expanded ? 'Hide batches' : 'View batches'}
+                  </button>
+                </div>
+              </div>
+              {expanded && (
+                <div className="border-b border-hairline bg-brand-tint px-4 py-3">
+                  <BatchList row={row} />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Edit Modal */}
-      {editingDrug && (
-        <EditDrugModal
-          isOpen={!!editingDrug}
-          onClose={() => setEditingDrug(null)}
-          drug={editingDrug}
-          onSuccess={() => {
-            onRefetch();
-            setEditingDrug(null);
-          }}
-        />
-      )}
-
-      {/* Delete Dialog */}
-      {deletingDrug && (
-        <DeleteConfirmDialog
-          isOpen={!!deletingDrug}
-          onClose={() => setDeletingDrug(null)}
-          drug={deletingDrug}
-          onSuccess={() => {
-            onRefetch();
-            setDeletingDrug(null);
-          }}
-        />
-      )}
+      {/* Mobile cards */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {rows.map((row) => {
+          const badge = getRowBadge(row);
+          const expanded = expandedId === row.id;
+          return (
+            <div key={row.id} className="rounded-card border border-hairline p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-[15px] font-medium text-ink">{row.generic_name}</div>
+                  {row.brand_name && <div className="mt-0.5 truncate text-xs text-muted">{row.brand_name}</div>}
+                </div>
+                <div className="shrink-0">
+                  <Badge badge={badge} />
+                </div>
+              </div>
+              {row.stock_status === 'low' && (
+                <div className="mt-1.5 text-[11px] text-stock-low">Reorder suggested</div>
+              )}
+              <div className="mt-2.5 flex flex-wrap gap-4 text-[13px] text-secondary">
+                <span>
+                  {row.strength} {row.dosage_form ? `· ${capitalize(row.dosage_form)}` : ''}
+                </span>
+                <span>Qty: {row.quantity_in_stock}</span>
+                <span className="font-medium tabular-nums text-brand-deep">{formatNaira(row.price)}</span>
+              </div>
+              <div
+                className="mt-1.5 text-[13px]"
+                style={{ color: row.is_expired ? '#E24B4A' : row.is_expiring_soon ? '#BA7517' : '#4A4A4A' }}
+              >
+                Expiry: {formatExpiry(row.expiry_date)}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-4 border-t border-hairline pt-3">
+                <button onClick={() => onEdit(row)} className="text-[13px] font-medium text-brand">
+                  Edit
+                </button>
+                <button onClick={() => onAdjust(row)} className="text-[13px] font-medium text-brand">
+                  Adjust stock
+                </button>
+                <button onClick={() => onDelete(row)} className="text-[13px] font-medium text-stock-out">
+                  Delete
+                </button>
+                <button
+                  onClick={() => setExpandedId(expanded ? null : row.id)}
+                  className="text-[13px] font-medium text-secondary"
+                >
+                  {expanded ? 'Hide batches' : 'View batches'}
+                </button>
+              </div>
+              {expanded && (
+                <div className="mt-3 rounded-lg bg-brand-tint p-3">
+                  <BatchList row={row} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }

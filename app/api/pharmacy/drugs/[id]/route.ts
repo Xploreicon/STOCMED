@@ -10,7 +10,6 @@ export async function PATCH(
     const { id } = await params
     const supabase = await createClient()
 
-    // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
@@ -29,48 +28,42 @@ export async function PATCH(
       )
     }
 
-    // Verify drug belongs to this pharmacy
-    const { data: existingDrug, error: checkError } = await supabase
-      .from('drugs')
+    // Verify inventory row belongs to this pharmacy
+    const { data: existingRow, error: checkError } = await supabase
+      .from('pharmacy_inventory')
       .select('pharmacy_id')
       .eq('id', id)
       .single()
 
-    if (checkError || !existingDrug) {
+    if (checkError || !existingRow) {
       return NextResponse.json(
-        { error: 'Drug not found' },
+        { error: 'Medication not found' },
         { status: 404 }
       )
     }
 
-    if ((existingDrug as any).pharmacy_id !== pharmacy.id) {
+    if ((existingRow as any).pharmacy_id !== pharmacy.id) {
       return NextResponse.json(
-        { error: 'Forbidden: Drug does not belong to your pharmacy' },
+        { error: 'Forbidden: Medication does not belong to your pharmacy' },
         { status: 403 }
       )
     }
 
-    // Parse request body
     const body = await request.json()
 
-    // Update drug
-    const { data: drug, error: updateError } = await (supabase
-      .from('drugs') as any)
+    if (body.price === undefined || body.price === null || Number.isNaN(Number(body.price))) {
+      return NextResponse.json({ error: 'Price is required' }, { status: 400 })
+    }
+
+    const { data: updatedRow, error: updateError } = await (supabase
+      .from('pharmacy_inventory') as any)
       .update({
-        name: body.name,
-        generic_name: body.generic_name,
-        brand_name: body.brand_name,
-        category: body.category,
-        dosage_form: body.dosage_form,
-        strength: body.strength,
-        description: body.description,
-        price: body.price,
-        quantity_in_stock: body.quantity_in_stock,
-        low_stock_threshold: body.low_stock_threshold,
-        requires_prescription: body.requires_prescription,
-        manufacturer: body.manufacturer,
-        expiry_date: body.expiry_date,
-        image_url: body.image_url,
+        price: Number(body.price),
+        low_stock_threshold:
+          body.low_stock_threshold !== undefined && body.low_stock_threshold !== null
+            ? parseInt(body.low_stock_threshold, 10)
+            : undefined,
+        notes: body.notes ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -78,14 +71,14 @@ export async function PATCH(
       .single()
 
     if (updateError) {
-      console.error('Error updating drug:', updateError)
+      console.error('Error updating medication:', updateError)
       return NextResponse.json(
-        { error: 'Failed to update drug' },
+        { error: 'Failed to update medication' },
         { status: 500 }
       )
     }
 
-    return NextResponse.json(drug)
+    return NextResponse.json(updatedRow)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(
@@ -103,7 +96,6 @@ export async function DELETE(
     const { id } = await params
     const supabase = await createClient()
 
-    // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
 
     if (authError || !user) {
@@ -122,43 +114,43 @@ export async function DELETE(
       )
     }
 
-    // Verify drug belongs to this pharmacy
-    const { data: existingDrug, error: checkError } = await supabase
-      .from('drugs')
+    // Verify inventory row belongs to this pharmacy
+    const { data: existingRow, error: checkError } = await supabase
+      .from('pharmacy_inventory')
       .select('pharmacy_id')
       .eq('id', id)
       .single()
 
-    if (checkError || !existingDrug) {
+    if (checkError || !existingRow) {
       return NextResponse.json(
-        { error: 'Drug not found' },
+        { error: 'Medication not found' },
         { status: 404 }
       )
     }
 
-    if ((existingDrug as any).pharmacy_id !== pharmacy.id) {
+    if ((existingRow as any).pharmacy_id !== pharmacy.id) {
       return NextResponse.json(
-        { error: 'Forbidden: Drug does not belong to your pharmacy' },
+        { error: 'Forbidden: Medication does not belong to your pharmacy' },
         { status: 403 }
       )
     }
 
-    // Delete drug
+    // Deleting the inventory row cascades to its batches and stock_movements
     const { error: deleteError } = await supabase
-      .from('drugs')
+      .from('pharmacy_inventory')
       .delete()
       .eq('id', id)
 
     if (deleteError) {
-      console.error('Error deleting drug:', deleteError)
+      console.error('Error deleting medication:', deleteError)
       return NextResponse.json(
-        { error: 'Failed to delete drug' },
+        { error: 'Failed to delete medication' },
         { status: 500 }
       )
     }
 
     return NextResponse.json(
-      { message: 'Drug deleted successfully' },
+      { message: 'Medication deleted successfully' },
       { status: 200 }
     )
   } catch (error) {

@@ -1,24 +1,27 @@
 'use client';
 
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
-import Image from 'next/image';
+import { useEffect, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { X } from 'lucide-react';
+
+interface CatalogueProduct {
+  id: string;
+  generic_name: string;
+  brand_name: string | null;
+  strength: string;
+  dosage_form: string | null;
+  pack_size: string | null;
+}
 
 interface AddDrugModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  prefillName?: string;
 }
+
+type Step = 'search' | 'new' | 'details';
 
 const categories = [
   'Analgesics',
@@ -32,459 +35,373 @@ const categories = [
   'Others',
 ];
 
-const dosageForms = [
-  'tablet',
-  'capsule',
-  'syrup',
-  'injection',
-  'cream',
-  'drops',
-  'inhaler',
-];
+const dosageForms = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'drops', 'inhaler'];
 
-export default function AddDrugModal({
-  isOpen,
-  onClose,
-  onSuccess,
-}: AddDrugModalProps) {
+const inputClass =
+  'h-12 w-full rounded-control border border-hairline bg-white px-4 text-[15px] text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand/40';
+const labelClass = 'mb-2 block text-sm font-medium text-ink';
+
+export default function AddDrugModal({ isOpen, onClose, onSuccess, prefillName }: AddDrugModalProps) {
   const queryClient = useQueryClient();
-
-  const [formData, setFormData] = useState({
-    name: '',
+  const [step, setStep] = useState<Step>('search');
+  const [catalogueQuery, setCatalogueQuery] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState<CatalogueProduct | null>(null);
+  const [newProduct, setNewProduct] = useState({
     generic_name: '',
     brand_name: '',
-    category: '',
-    dosage_form: '',
     strength: '',
-    price: '',
-    quantity_in_stock: '',
-    low_stock_threshold: '10',
-    manufacturer: '',
-    description: '',
-    requires_prescription: false,
-    expiry_date: '',
+    dosage_form: '',
+    category: '',
   });
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [details, setDetails] = useState({
+    price: '',
+    opening_stock: '',
+    batch_number: '',
+    expiry_date: '',
+    low_stock_threshold: '10',
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setStep('search');
+      setCatalogueQuery(prefillName ?? '');
+      setSelectedProduct(null);
+      setNewProduct({ generic_name: prefillName ?? '', brand_name: '', strength: '', dosage_form: '', category: '' });
+      setDetails({ price: '', opening_stock: '', batch_number: '', expiry_date: '', low_stock_threshold: '10' });
+      setError(null);
+    }
+  }, [isOpen, prefillName]);
+
+  const { data: catalogueData, isFetching: isSearching } = useQuery({
+    queryKey: ['pharmacy-catalogue', catalogueQuery],
+    queryFn: async () => {
+      const response = await fetch(`/api/pharmacy/catalogue?q=${encodeURIComponent(catalogueQuery)}`);
+      if (!response.ok) throw new Error('Failed to search catalogue');
+      return response.json();
+    },
+    enabled: isOpen && step === 'search',
+  });
 
   const addDrugMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (payload: any) => {
       const response = await fetch('/api/pharmacy/drugs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to add drug');
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to add medication');
       }
       return response.json();
     },
     onSuccess: () => {
-      // Reset form
-      setFormData({
-        name: '',
-        generic_name: '',
-        brand_name: '',
-        category: '',
-        dosage_form: '',
-        strength: '',
-        price: '',
-        quantity_in_stock: '',
-        low_stock_threshold: '10',
-        manufacturer: '',
-        description: '',
-        requires_prescription: false,
-        expiry_date: '',
-      });
-      setImageFile(null);
-      setImagePreview(null);
-      setUploadError(null);
-      queryClient.invalidateQueries({
-        queryKey: ['pharmacy-drugs'],
-        refetchType: 'active',
-      });
-      queryClient.invalidateQueries({
-        queryKey: ['pharmacy-stats'],
-        refetchType: 'active',
-      });
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-stats'], refetchType: 'active' });
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-unmet-demand'], refetchType: 'active' });
       onSuccess();
     },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSelectProduct = (product: CatalogueProduct) => {
+    setSelectedProduct(product);
+    setStep('details');
+  };
+
+  const handleContinueNewProduct = () => {
+    if (!newProduct.generic_name.trim() || !newProduct.strength.trim()) {
+      setError('Generic name and strength are required');
+      return;
+    }
+    setError(null);
+    setSelectedProduct(null);
+    setStep('details');
+  };
+
+  const handleSubmitDetails = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    if (!details.price) {
+      setError('Price is required');
+      return;
+    }
 
     try {
-      let imageUrl: string | null = null;
-
-      if (imageFile) {
-        setIsUploading(true);
-        const supabase = createClient();
-        const fileExt = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
-        const uniqueName =
-          (typeof crypto !== 'undefined' && 'randomUUID' in crypto
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`) +
-          `.${fileExt}`;
-        const filePath = `drugs/${uniqueName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('drug-images')
-          .upload(filePath, imageFile, {
-            cacheControl: '3600',
-            contentType: imageFile.type,
-            upsert: false,
-          });
-
-        if (uploadError) {
-          setUploadError(uploadError.message);
-          throw uploadError;
-        }
-
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from('drug-images').getPublicUrl(filePath);
-
-        imageUrl = publicUrl;
-      }
-
       await addDrugMutation.mutateAsync({
-        name: formData.name,
-        generic_name: formData.generic_name || null,
-        brand_name: formData.brand_name || null,
-        category: formData.category,
-        dosage_form: formData.dosage_form,
-        strength: formData.strength,
-        price: parseFloat(formData.price),
-        quantity_in_stock: parseInt(formData.quantity_in_stock),
-        low_stock_threshold: parseInt(formData.low_stock_threshold),
-        manufacturer: formData.manufacturer || null,
-        description: formData.description || null,
-        requires_prescription: formData.requires_prescription,
-        expiry_date: formData.expiry_date || null,
-        image_url: imageUrl,
+        product_id: selectedProduct?.id,
+        new_product: selectedProduct
+          ? undefined
+          : {
+              generic_name: newProduct.generic_name,
+              brand_name: newProduct.brand_name || undefined,
+              strength: newProduct.strength,
+              dosage_form: newProduct.dosage_form || undefined,
+              category: newProduct.category || undefined,
+            },
+        price: parseFloat(details.price),
+        opening_stock: details.opening_stock ? parseInt(details.opening_stock, 10) : 0,
+        batch_number: details.batch_number || undefined,
+        expiry_date: details.expiry_date || undefined,
+        low_stock_threshold: details.low_stock_threshold ? parseInt(details.low_stock_threshold, 10) : 10,
       });
-    } catch (error: any) {
-      alert(error.message || 'Failed to add drug');
-    } finally {
-      setIsUploading(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to add medication');
     }
   };
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value, type } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]:
-        type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
-    }));
-  };
-
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      setImageFile(null);
-      setImagePreview(null);
-      return;
-    }
-
-    if (!file.type.startsWith('image/')) {
-      setUploadError('Please select a valid image file (PNG or JPG).');
-      return;
-    }
-
-    if (file.size > 1024 * 1024) {
-      setUploadError('Image size must be 1MB or less.');
-      return;
-    }
-
-    setUploadError(null);
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
-  };
-
-  const clearImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
-  };
+  const products: CatalogueProduct[] = catalogueData?.products ?? [];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Add New Drug</DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-6 p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Drug Image */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Drug Image (optional)
-                </label>
-                <div className="flex items-center gap-4">
-                  <label className="cursor-pointer">
-                    <span className="px-4 py-2 border border-dashed border-gray-300 rounded-md text-sm text-gray-600 hover:border-primary-blue transition-colors inline-flex items-center gap-2">
-                      Upload image
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/png,image/jpeg"
-                      className="hidden"
-                      onChange={handleImageChange}
-                    />
-                  </label>
-                  {imagePreview && (
-                    <div className="relative h-16 w-16 rounded-md overflow-hidden border border-gray-200">
-                      <Image
-                        src={imagePreview}
-                        alt="Drug preview"
-                        fill
-                        sizes="64px"
-                        className="object-cover"
-                      />
-                      <button
-                        type="button"
-                        onClick={clearImage}
-                        className="absolute -top-2 -right-2 bg-white border border-gray-200 rounded-full px-1 text-xs"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {uploadError && (
-                  <p className="mt-2 text-xs text-red-600">{uploadError}</p>
-                )}
-              </div>
-
-              {/* Drug Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Drug Name *
-                </label>
-                <Input
-                  name="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                  placeholder="Enter drug name"
-                />
-              </div>
-
-              {/* Generic Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Generic Name
-                </label>
-                <Input
-                  name="generic_name"
-                  value={formData.generic_name}
-                  onChange={handleChange}
-                  placeholder="Enter generic name"
-                />
-              </div>
-
-              {/* Brand Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Brand Name
-                </label>
-                <Input
-                  name="brand_name"
-                  value={formData.brand_name}
-                  onChange={handleChange}
-                  placeholder="Enter brand name"
-                />
-              </div>
-
-              {/* Category */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category *
-                </label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
+      <DialogContent className="max-h-[85vh] max-w-[480px] overflow-y-auto rounded-feature p-7">
+        {step === 'search' && (
+          <>
+            <div className="mb-5 flex items-center justify-between">
+              <DialogTitle className="text-xl font-medium text-ink">Add medication</DialogTitle>
+              <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-tint text-secondary">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <input
+              autoFocus
+              value={catalogueQuery}
+              onChange={(e) => setCatalogueQuery(e.target.value)}
+              placeholder="Search the drug catalogue…"
+              className={`${inputClass} mb-4 h-12`}
+            />
+            <div className="flex max-h-[280px] flex-col gap-2 overflow-y-auto">
+              {isSearching && <p className="text-sm text-secondary">Searching…</p>}
+              {!isSearching && products.length === 0 && (
+                <p className="text-sm text-secondary">No matches in the catalogue yet.</p>
+              )}
+              {products.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handleSelectProduct(p)}
+                  className="rounded-lg border border-hairline px-3.5 py-3 text-left hover:bg-brand-tint"
                 >
-                  <option value="">Select category</option>
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="text-sm font-medium text-ink">
+                    {p.generic_name} <span className="font-normal text-muted">· {p.brand_name || 'Generic'}</span>
+                  </div>
+                  <div className="mt-0.5 text-[13px] text-secondary">
+                    {p.strength} {p.dosage_form ? `· ${p.dosage_form}` : ''} {p.pack_size ? `· ${p.pack_size}` : ''}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setStep('new')}
+              className="mt-4 block w-full text-center text-[13px] font-medium text-brand"
+            >
+              Can&apos;t find it? Add a new product to the catalogue.
+            </button>
+          </>
+        )}
 
-              {/* Dosage Form */}
+        {step === 'new' && (
+          <>
+            <div className="mb-5 flex items-center justify-between">
+              <DialogTitle className="text-xl font-medium text-ink">Add new product to catalogue</DialogTitle>
+              <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-tint text-secondary">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-[18px]">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Dosage Form *
-                </label>
+                <label className={labelClass}>Generic name</label>
+                <input
+                  className={inputClass}
+                  placeholder="e.g. Amoxicillin"
+                  value={newProduct.generic_name}
+                  onChange={(e) => setNewProduct((p) => ({ ...p, generic_name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Brand name</label>
+                <input
+                  className={inputClass}
+                  placeholder="e.g. Amoxil"
+                  value={newProduct.brand_name}
+                  onChange={(e) => setNewProduct((p) => ({ ...p, brand_name: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Strength &amp; form</label>
+                  <input
+                    className={inputClass}
+                    placeholder="e.g. 500mg"
+                    value={newProduct.strength}
+                    onChange={(e) => setNewProduct((p) => ({ ...p, strength: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Category</label>
+                  <select
+                    className={inputClass}
+                    value={newProduct.category}
+                    onChange={(e) => setNewProduct((p) => ({ ...p, category: e.target.value }))}
+                  >
+                    <option value="">Select</option>
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Dosage form</label>
                 <select
-                  name="dosage_form"
-                  value={formData.dosage_form}
-                  onChange={handleChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
+                  className={inputClass}
+                  value={newProduct.dosage_form}
+                  onChange={(e) => setNewProduct((p) => ({ ...p, dosage_form: e.target.value }))}
                 >
                   <option value="">Select form</option>
-                  {dosageForms.map((form) => (
-                    <option key={form} value={form}>
-                      {form.charAt(0).toUpperCase() + form.slice(1)}
+                  {dosageForms.map((f) => (
+                    <option key={f} value={f}>
+                      {capitalize(f)}
                     </option>
                   ))}
                 </select>
               </div>
-
-              {/* Strength */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Strength *
-                </label>
-                <Input
-                  name="strength"
-                  value={formData.strength}
-                  onChange={handleChange}
-                  required
-                  placeholder="e.g., 500mg"
-                />
-              </div>
-
-              {/* Price */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Price (₦) *
-                </label>
-                <Input
-                  name="price"
-                  type="number"
-                  step="0.01"
-                  value={formData.price}
-                  onChange={handleChange}
-                  required
-                  placeholder="Enter price"
-                />
-              </div>
-
-              {/* Quantity in Stock */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantity in Stock *
-                </label>
-                <Input
-                  name="quantity_in_stock"
-                  type="number"
-                  value={formData.quantity_in_stock}
-                  onChange={handleChange}
-                  required
-                  placeholder="Enter quantity"
-                />
-              </div>
-
-              {/* Low Stock Threshold */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Low Stock Threshold
-                </label>
-                <Input
-                  name="low_stock_threshold"
-                  type="number"
-                  value={formData.low_stock_threshold}
-                  onChange={handleChange}
-                  placeholder="Default: 10"
-                />
-              </div>
-
-              {/* Manufacturer */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Manufacturer
-                </label>
-                <Input
-                  name="manufacturer"
-                  value={formData.manufacturer}
-                  onChange={handleChange}
-                  placeholder="Enter manufacturer"
-                />
-              </div>
-
-              {/* Expiry Date */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Expiry Date
-                </label>
-                <Input
-                  name="expiry_date"
-                  type="date"
-                  value={formData.expiry_date}
-                  onChange={handleChange}
-                />
+              {error && <p className="text-xs text-stock-out">{error}</p>}
+              <div className="mt-2 flex gap-3">
+                <button
+                  onClick={() => setStep('search')}
+                  className="h-12 flex-1 rounded-control border border-hairline text-[15px] font-medium text-secondary"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleContinueNewProduct}
+                  className="h-12 flex-1 rounded-control bg-brand text-[15px] font-medium text-white"
+                >
+                  Continue
+                </button>
               </div>
             </div>
+          </>
+        )}
 
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleChange}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-blue"
-                placeholder="Enter drug description"
-              />
+        {step === 'details' && (
+          <form onSubmit={handleSubmitDetails}>
+            <div className="mb-5 flex items-center justify-between">
+              <DialogTitle className="text-xl font-medium text-ink">Add medication</DialogTitle>
+              <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-tint text-secondary">
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-
-            {/* Requires Prescription */}
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="requires_prescription"
-                checked={formData.requires_prescription}
-                onChange={handleChange}
-                className="h-4 w-4 text-primary-blue border-gray-300 rounded"
-              />
-              <label className="text-sm font-medium text-gray-700">
-                Requires Prescription
-              </label>
+            <div className="mb-5 rounded-lg border border-hairline bg-brand-tint p-3.5">
+              <div className="text-sm font-medium text-ink">
+                {selectedProduct ? (
+                  <>
+                    {selectedProduct.generic_name}{' '}
+                    <span className="font-normal text-muted">· {selectedProduct.brand_name || 'Generic'}</span>
+                  </>
+                ) : (
+                  <>
+                    {newProduct.generic_name}{' '}
+                    {newProduct.brand_name && <span className="font-normal text-muted">· {newProduct.brand_name}</span>}
+                  </>
+                )}
+              </div>
+              <div className="mt-0.5 text-[13px] text-secondary">
+                {(selectedProduct?.strength || newProduct.strength) ?? ''}{' '}
+                {(selectedProduct?.dosage_form || newProduct.dosage_form) &&
+                  `· ${selectedProduct?.dosage_form || newProduct.dosage_form}`}
+                {selectedProduct?.pack_size ? ` · ${selectedProduct.pack_size}` : ''}
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep(selectedProduct ? 'search' : 'new')}
+                className="mt-2 inline-block text-xs font-medium text-brand"
+              >
+                Change product
+              </button>
             </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex justify-end gap-3 p-6 border-t">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={addDrugMutation.isPending || isUploading}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={addDrugMutation.isPending || isUploading}>
-              {addDrugMutation.isPending || isUploading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {isUploading ? 'Uploading...' : 'Adding...'}
-                </>
-              ) : (
-                'Add Drug'
-              )}
-            </Button>
-          </div>
-        </form>
+            <div className="flex flex-col gap-[18px]">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Price (₦)</label>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    placeholder="0"
+                    value={details.price}
+                    onChange={(e) => setDetails((d) => ({ ...d, price: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Opening stock</label>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    placeholder="0"
+                    value={details.opening_stock}
+                    onChange={(e) => setDetails((d) => ({ ...d, opening_stock: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Batch number</label>
+                  <input
+                    className={inputClass}
+                    placeholder="e.g. B24178"
+                    value={details.batch_number}
+                    onChange={(e) => setDetails((d) => ({ ...d, batch_number: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Expiry date</label>
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={details.expiry_date}
+                    onChange={(e) => setDetails((d) => ({ ...d, expiry_date: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Low-stock threshold</label>
+                <input
+                  type="number"
+                  className={inputClass}
+                  placeholder="10"
+                  value={details.low_stock_threshold}
+                  onChange={(e) => setDetails((d) => ({ ...d, low_stock_threshold: e.target.value }))}
+                />
+              </div>
+              {error && <p className="text-xs text-stock-out">{error}</p>}
+              <div className="mt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={addDrugMutation.isPending}
+                  className="h-12 flex-1 rounded-control border border-hairline text-[15px] font-medium text-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addDrugMutation.isPending}
+                  className="h-12 flex-1 rounded-control bg-brand text-[15px] font-medium text-white disabled:opacity-60"
+                >
+                  {addDrugMutation.isPending ? 'Adding…' : 'Add medication'}
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
       </DialogContent>
     </Dialog>
   );
+}
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }

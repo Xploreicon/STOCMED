@@ -1,7 +1,14 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import './globals.css'
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider'
 import { Toaster } from 'sonner'
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-inter',
+})
 
 export const metadata: Metadata = {
   title: 'StocMed - Find Medications in Nigeria | AI-Powered Pharmacy Search',
@@ -56,8 +63,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className={inter.variable}>
+      <body className="font-sans">
         <ReactQueryProvider>
           {children}
           <Toaster position="top-right" richColors />
