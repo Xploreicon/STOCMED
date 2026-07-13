@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { ReorderSuggestions } from '@/components/pharmacy/ReorderSuggestions';
 
 interface PharmacyStats {
   total: number;
@@ -82,10 +83,10 @@ export default function PharmacyDashboard() {
   const pct = total ? Math.round((inStock / total) * 100) : 0;
 
   const stats = [
-    { label: 'Total products', value: total, sub: 'across catalogue', dot: null, valueColor: '#042C53' },
-    { label: 'In stock', value: inStock, sub: `${pct}% of catalogue`, dot: '#639922', valueColor: '#639922' },
-    { label: 'Low stock', value: lowStock, sub: 'reorder suggested', dot: '#BA7517', valueColor: '#BA7517' },
-    { label: 'Out of stock', value: outOfStock, sub: 'restock needed', dot: '#E24B4A', valueColor: '#E24B4A' },
+    { label: 'Total products', value: total, sub: 'across catalogue', dot: null, valueColor: 'var(--navy)' },
+    { label: 'In stock', value: inStock, sub: `${pct}% of catalogue`, dot: 'var(--success)', valueColor: 'var(--success)' },
+    { label: 'Low stock', value: lowStock, sub: 'reorder suggested', dot: 'var(--warning)', valueColor: 'var(--warning)' },
+    { label: 'Out of stock', value: outOfStock, sub: 'restock needed', dot: 'var(--danger)', valueColor: 'var(--danger)' },
   ];
 
   const actions = [
@@ -99,30 +100,30 @@ export default function PharmacyDashboard() {
       title: 'New reservation — Coartem 80/480mg',
       sub: 'Ada N. will pick up before 6pm today',
       time: '12 min ago',
-      color: '#0066CC',
+      color: 'var(--primary)',
     },
     {
       title: 'Low stock alert — Amoxicillin 500mg',
       sub: '8 packs left, searched 22 times this week nearby',
       time: '1 hour ago',
-      color: '#BA7517',
+      color: 'var(--warning)',
     },
     {
       title: 'Out of stock — Ventolin inhaler 100mcg',
       sub: '3 patients set restock alerts',
       time: '3 hours ago',
-      color: '#E24B4A',
+      color: 'var(--danger)',
     },
     {
       title: 'Stock updated — 84 items via CSV',
       sub: 'by Chidi (staff)',
       time: 'Yesterday',
-      color: '#639922',
+      color: 'var(--success)',
     },
   ];
 
   return (
-    <div className="max-w-[900px] mx-auto py-2">
+    <div className="w-full min-w-0 max-w-[900px] mx-auto py-2">
       {/* Header */}
       <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
@@ -133,16 +134,16 @@ export default function PharmacyDashboard() {
         </div>
         <Link
           href="/pharmacy/inventory"
-          className="h-12 flex items-center px-6 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[#0052A3] transition-colors whitespace-nowrap"
+          className="h-12 flex items-center px-6 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[var(--primary-hover)] transition-colors whitespace-nowrap"
         >
           + Add medication
         </Link>
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-7">
+      <div className="grid min-w-0 grid-cols-2 lg:grid-cols-4 gap-4 mt-7">
         {stats.map((s, idx) => (
-          <div key={idx} className="border border-border rounded-card p-5 bg-white shadow-xs">
+          <div key={idx} className="min-w-0 border border-border rounded-card p-4 sm:p-5 bg-white shadow-xs">
             <div className="flex items-center gap-1.5">
               {s.dot && <span style={{ backgroundColor: s.dot }} className="w-2 h-2 rounded-full" />}
               <span className="text-[13px] text-ink-light">{s.label}</span>
@@ -153,27 +154,29 @@ export default function PharmacyDashboard() {
             >
               {s.value}
             </div>
-            <div className="text-[13px] text-ink-muted mt-1">{s.sub}</div>
+            <div className="text-[13px] text-ink-muted mt-1 break-words">{s.sub}</div>
           </div>
         ))}
       </div>
 
+      <ReorderSuggestions />
+
       {/* Quick actions */}
       <div className="mt-10">
         <h2 className="text-[16px] font-medium text-ink mb-4">Quick actions</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid min-w-0 grid-cols-1 lg:grid-cols-3 gap-4">
           {actions.map((a) => (
             <Link
               key={a.title}
               href={a.href}
-              className="border border-border rounded-card p-5 flex items-center gap-3.5 hover:border-primary/40 hover:bg-surface transition-all bg-white shadow-xs"
+              className="min-w-0 border border-border rounded-card p-5 flex items-center gap-3.5 hover:border-primary/40 hover:bg-surface transition-all bg-white shadow-xs"
             >
-              <div className="w-11 h-11 rounded-lg bg-[#F0F7FF] flex items-center justify-center text-[20px] flex-shrink-0">
+              <div className="w-11 h-11 rounded-lg bg-[var(--surface)] flex items-center justify-center text-[20px] flex-shrink-0">
                 {a.icon}
               </div>
-              <div>
-                <div className="text-[15px] font-medium text-ink">{a.title}</div>
-                <div className="text-[13px] text-ink-light mt-0.5">{a.sub}</div>
+              <div className="min-w-0">
+                <div className="text-[15px] font-medium text-ink break-words">{a.title}</div>
+                <div className="text-[13px] text-ink-light mt-0.5 break-words">{a.sub}</div>
               </div>
             </Link>
           ))}

@@ -1,9 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
+import { checkRateLimit } from '@/lib/rate-limit'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: NextRequest) {
+  const rateLimit = checkRateLimit(request, 'drug-search', 60, 60_000)
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams
     const query = searchParams.get('q')
@@ -195,6 +201,7 @@ export async function GET(request: NextRequest) {
 
       return {
         id: row.id,
+        product_id: product?.id || null,
         pharmacy_id: pharmacy?.id || null,
         name: product?.brand_name || product?.generic_name || '',
         generic_name: product?.generic_name || null,

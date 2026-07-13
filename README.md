@@ -1,17 +1,18 @@
 # StocMed MVP — AI-Powered Medication Search & Pharmacy Inventory Platform
 
-StocMed is a web application designed to help patients search for medications across nearby pharmacies, view real-time stock levels, and query a conversational AI concierge for drug information. Pharmacies can register to manage their inventories via a cloud-based dashboard.
+StocMed is a web application designed to help patients search for medications across nearby pharmacies, view real-time stock levels, and query a safety-gated AI concierge for drug information. Pharmacies can register to manage their inventories, procurement, shifts, reports, and high-speed offline-resilient POS terminals via a cloud-based operational dashboard.
 
 ---
 
 ## 🛠 Tech Stack
 
 - **Framework**: Next.js 14 (App Router)
-- **Database & Authentication**: Supabase (PostgreSQL, Row Level Security, Storage, Auth)
-- **AI Integrations**: OpenAI GPT-4o-mini (Chat Concierge)
-- **State Management**: Zustand (Client-side search history/auth persistence)
-- **Data Fetching**: TanStack React Query (Pharmacy UI/Dashboard caching)
-- **Styling**: Tailwind CSS + shadcn/ui primitives
+- **Database & Authentication**: Supabase (PostgreSQL 17, Row Level Security, Storage, Auth)
+- **AI Integrations**: Anthropic Claude (Single Haiku model integration for AI Assistant and safety triage)
+- **Observability & Error Tracking**: Sentry (Server & Client with automatic PII scrubbing)
+- **State & Offline Storage**: Zustand + Dexie.js (IndexedDB POS queueing)
+- **Data Fetching**: TanStack React Query (Dashboard caching)
+- **Styling**: Tailwind CSS + shadcn/ui components
 
 ---
 
@@ -20,38 +21,38 @@ StocMed is a web application designed to help patients search for medications ac
 ```
 stocmed-mvp/
 ├── app/
-│   ├── (auth)/          # Authentication pages (login, signup, callback)
-│   ├── (patient)/       # Patient-facing routes (chat, search history, dashboard)
-│   ├── (pharmacy)/      # Pharmacy management pages (dashboard, inventory CRUD)
-│   ├── api/             # API routes (chat, searches, pharmacy inventory management)
-│   └── insights/        # Restricted analytics dashboard for pharmacy users
-├── components/          # Reusable UI component library (shadcn, Chat, Inventory)
-├── lib/                 # Core utility wrappers & Supabase client builders
-├── store/               # Zustand client state definitions
+│   ├── (auth)/          # Authentication pages (login, signup, callback, reset)
+│   ├── (patient)/       # Patient routes (chat, search, history, dashboard)
+│   ├── (pharmacy)/      # Pharmacy ops (inventory, POS, shifts, procurement, reports)
+│   ├── admin/           # Administrative audit & safety queue routes
+│   └── api/             # Secure API endpoints (validated with Zod schemas)
+├── components/          # UI components (brand, patient, pharmacy, POS, layout)
+├── lib/                 # DB abstractions, validation, triage, and observability
+├── store/               # Zustand store modules
 ├── supabase/
-│   └── migrations/      # Version-controlled database migrations (schema & RLS)
-└── types/               # TypeScript interface schemas (Supabase, drugs, searches)
+│   └── migrations/      # Version-controlled SQL schema & RLS policies
+└── types/               # TypeScript definitions
 ```
 
 ---
 
 ## ⚙️ Environment Variables Setup
 
-Create a `.env.local` file in the root directory:
+Create a `.env.local` file in the root directory using the following variable names (do NOT commit real values):
 
 ```env
-# Supabase Connection (Public)
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-
-# Supabase Admin / Service Role (Server-only)
-SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key
-
-# Database Connection (Direct PostgreSQL Access)
-DATABASE_URL=postgresql://postgres:your-db-password@db.your-project-ref.supabase.co:5432/postgres
-
-# OpenAI API Key (for Chat Assistant)
-OPENAI_API_KEY=sk-proj-your-openai-api-key
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+DATABASE_URL
+ANTHROPIC_API_KEY
+ANTHROPIC_TRIAGE_MODEL
+ANTHROPIC_ASSISTANT_MODEL
+NEXT_PUBLIC_STOCMED_MEDIATED_COLLECTION
+STOCMED_MEDIATED_COLLECTION
+NEXT_PUBLIC_SENTRY_DSN
+SENTRY_DSN
+SENTRY_AUTH_TOKEN
 ```
 
 ---
@@ -63,35 +64,39 @@ OPENAI_API_KEY=sk-proj-your-openai-api-key
    npm install
    ```
 
-2. **Run Development Server**:
+2. **Run Local Database Migrations**:
+   ```bash
+   npx supabase db reset
+   ```
+
+3. **Development Server**:
    ```bash
    npm run dev
    ```
 
-3. **Production Build**:
+4. **Production Build & Verification**:
    ```bash
    npm run build
-   npm run start
+   npm run test
    ```
 
----
-
-## 🔒 Security, RLS, and Database Management
-
-- **Row Level Security (RLS)** is enabled on all tables (`users`, `pharmacies`, `drugs`, `searches`, `chat_messages`).
-- All schema alterations and security policies are tracked as version-controlled SQL files in `supabase/migrations/`.
-- **Public Search Protection**: The public drug search route (`/api/drugs/search`) runs under standard client privilege to enforce public read RLS constraints rather than bypassing it via the service-role client.
+### Local Test Accounts (Seeded locally only)
+- Cashier: `pharmacy.test@stocmed.local` / `StocMedTest123!`
+- Patient: `patient.test@stocmed.local` / `StocMedTest123!`
 
 ---
 
-## 🧾 POS + Offline Sync & Regulatory Landscape
+## 🔒 Security, RLS & Compliance Architecture
 
-StocMed features a high-speed, local-first Point of Sale (POS) checkout terminal designed to handle connectivity disruptions (e.g. offline environments, bandwidth throttles):
+- **Row Level Security (RLS)** is strictly enabled across 100% of public database tables (`users`, `pharmacies`, `products`, `pharmacy_inventory`, `batches`, `stock_movements`, `sales`, `sale_items`, `procurement_orders`, `purchase_order_items`, `receipts`, `receipt_items`, `shift_sessions`, `triage_logs`, `rx_submissions`, `symptom_intakes`, `research_consent`).
+- **Service Role Isolation**: `SUPABASE_SERVICE_ROLE_KEY` is restricted to server-side execution behind active authentication session checks.
+- **Sentry PII Scrubbing**: Patient medical search queries, triage inputs, phone numbers, and health data are scrubbed before transmitting breadcrumbs or errors to Sentry.
 
-1. **Local-First indexedDB Storage**: Checkout carts and offline sales are queued client-side using `Dexie.js` in IndexedDB.
-2. **Idempotent Sync Route**: Offline queues are synced to `/api/pharmacy/pos/sync` once connectivity is restored, featuring client-side UUID idempotency verification to prevent duplicate sale logs.
-3. **PWA Capability**: Registers a custom service worker (`public/sw.js`) and web app manifest (`public/manifest.json`) to cache core layout files, enabling pages to load and function fully offline.
-4. **Regulatory Payment Configuration**:
-   - `NEXT_PUBLIC_STOCMED_MEDIATED_COLLECTION=false`: Defaults StocMed strictly as a software of record. In this mode, payment collections (Cash, Bank Transfer, POS Terminal) only record the transaction method to log sale events without processing monetary funds. This keeps StocMed clear of Payment Service Provider (PSP) and Pharmacists Council of Nigeria (PCN) legal licenses for monetary clearing.
-   - If set to `true`, the platform triggers stubs for API mediated banking integrations.
+---
 
+## 🧾 POS & Regulatory Collection Policy
+
+StocMed features a high-speed, local-first Point of Sale (POS) checkout terminal designed to handle connectivity disruptions:
+1. **Local-First indexedDB Storage**: Checkout carts and offline sales are queued client-side using Dexie.js.
+2. **Idempotent Sync Route**: Offline queues sync to `/api/pharmacy/pos/sync` with UUID deduplication.
+3. **STOCMED_MEDIATED_COLLECTION Guard**: In production, `STOCMED_MEDIATED_COLLECTION` MUST be set to `false`. A hard server-side runtime guard enforces this setting, operating StocMed strictly as a software-of-record (recording transaction methods without receiving or clearing patient funds directly).

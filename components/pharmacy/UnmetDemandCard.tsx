@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useQuery } from '@tanstack/react-query';
 
 interface UnmetDemandCardProps {
@@ -46,12 +48,12 @@ export default function UnmetDemandCard({ onAdd }: UnmetDemandCardProps) {
                   <div className="mt-0.5 text-xs text-muted">{d.searches} searches nearby · last 7 days</div>
                 </div>
               </div>
-              <button
+              <Button
                 onClick={() => onAdd(d.drug)}
                 className="h-9 shrink-0 whitespace-nowrap rounded-control bg-brand px-3.5 text-[13px] font-medium text-white"
               >
                 Add to inventory
-              </button>
+              </Button>
             </div>
           ))}
       </div>

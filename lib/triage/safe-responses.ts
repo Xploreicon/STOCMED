@@ -24,14 +24,16 @@ For your safety and legal compliance, please consult a licensed medical practiti
     actionRequired: 'restricted',
   },
   REDIRECT: {
-    // Note: REDIRECT handles both RED_FLAG emergencies and general symptoms/out-of-scope.
-    // If it's a RED_FLAG, we display the emergency screen. Otherwise, we display out-of-scope or symptom screens.
     message: `If you are experiencing chest pain, severe shortness of breath, sudden weakness, heavy bleeding, or any other life-threatening symptoms, please seek immediate emergency medical care.
 
 • Call National Emergency Services: 112
 • Call Lagos Emergency Service: 767 (if in Lagos)
 • Go to the nearest hospital emergency department immediately.`,
     actionRequired: 'emergency',
+  },
+  CARE_REDIRECT: {
+    message: `A pharmacist can review a symptom intake, or you can continue with a medication or pharmacy search.`,
+    actionRequired: 'symptom_intake',
   },
   GATE: {
     message: `This medication is classified as Prescription-Only (POM). To comply with PCN regulations, we cannot fulfill or show detailed sourcing for this drug until a valid prescription is verified by our pharmacist.

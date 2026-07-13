@@ -1,5 +1,15 @@
 import Dexie, { Table } from 'dexie';
 
+export interface LocalBatch {
+  id: string;
+  batch_number: string;
+  expiry_date: string;
+  quantity_received: number;
+  remaining_qty: number;
+  is_expired: boolean;
+  is_expiring_soon: boolean;
+}
+
 export interface LocalInventoryItem {
   id: string; // inventory_id
   product_id: string;
@@ -11,12 +21,7 @@ export interface LocalInventoryItem {
   price: number;
   quantity_in_stock: number;
   barcode: string | null;
-  batches: Array<{
-    id: string;
-    batch_number: string;
-    expiry_date: string;
-    quantity_received: number;
-  }>;
+  batches: LocalBatch[];
 }
 
 export interface LocalSaleItem {
@@ -30,33 +35,74 @@ export interface LocalSaleItem {
   brand_name: string | null;
   strength: string;
   batch_number: string;
+  expiry_date: string;
 }
 
 export interface LocalSale {
   id: string; // client-generated UUID
   pharmacy_id: string;
   cashier_id: string;
+  shift_id: string;
   subtotal: number;
   discount: number;
   total: number;
   payment_method: 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'other';
+  amount_tendered: number | null;
+  change_due: number | null;
   status: 'pending' | 'completed' | 'cancelled';
   created_at: string;
   items: LocalSaleItem[];
   // Sync metadata
   sync_status: 'pending' | 'synced' | 'error';
   sync_error?: string;
+  retry_count: number;
+  next_retry_at?: string;
+}
+
+export interface LocalShift {
+  id: string;
+  pharmacy_id: string;
+  cashier_id: string;
+  opened_at: string;
+  opening_float: number;
+  closed_at?: string;
+  counted_cash?: number;
+  expected_cash?: number;
+  variance?: number;
+  notes?: string;
+  status: 'open' | 'closed';
+  sync_status: 'pending' | 'synced';
+  sync_error?: string;
+  retry_count: number;
+  next_retry_at?: string;
+}
+
+export interface HeldSale {
+  id: string; // client-generated UUID
+  label: string; // e.g. "Customer 1" or auto-generated
+  cart: Array<LocalSaleItem & { id: string }>;
+  discount: number;
+  held_at: string;
 }
 
 class PosLocalDatabase extends Dexie {
   local_sales!: Table<LocalSale>;
   local_inventory_cache!: Table<LocalInventoryItem>;
+  held_sales!: Table<HeldSale>;
+  local_shifts!: Table<LocalShift>;
 
   constructor() {
     super('PosLocalDatabase');
-    this.version(1).stores({
-      local_sales: 'id, pharmacy_id, sync_status, created_at',
-      local_inventory_cache: 'id, product_id, generic_name, brand_name, barcode'
+    this.version(2).stores({
+      local_sales: 'id, pharmacy_id, sync_status, created_at, next_retry_at',
+      local_inventory_cache: 'id, product_id, generic_name, brand_name, barcode',
+      held_sales: 'id, held_at'
+    });
+    this.version(3).stores({
+      local_sales: 'id, pharmacy_id, shift_id, sync_status, created_at, next_retry_at',
+      local_inventory_cache: 'id, product_id, generic_name, brand_name, barcode',
+      held_sales: 'id, held_at',
+      local_shifts: 'id, pharmacy_id, cashier_id, status, sync_status, opened_at, next_retry_at'
     });
   }
 }

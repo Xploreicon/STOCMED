@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import React from 'react';
 import { Heart, Phone, ArrowLeft } from 'lucide-react';
 
@@ -16,10 +17,10 @@ export default function CrisisScreen({ onBack }: CrisisScreenProps) {
         <Heart className="w-8 h-8 text-rose-500 fill-rose-100 animate-pulse" />
       </div>
 
-      <h2 className="text-2xl font-bold text-slate-900 text-center mb-2">
+      <h2 className="text-2xl font-bold text-ink text-center mb-2">
         You Are Not Alone
       </h2>
-      <p className="text-slate-600 text-center text-sm mb-8 leading-relaxed max-w-sm">
+      <p className="text-ink-muted text-center text-sm mb-8 leading-relaxed max-w-sm">
         If you are struggling, feeling overwhelmed, or having thoughts of self-harm, please reach out to someone who cares. Support is available for you right now.
       </p>
 
@@ -33,47 +34,47 @@ export default function CrisisScreen({ onBack }: CrisisScreenProps) {
           </p>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
+            <Button
               onClick={() => handleCall('08091116264')}
               className="flex items-center justify-center space-x-2 py-3 px-4 bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white rounded-lg text-sm font-semibold transition-all shadow-sm"
             >
               <Phone className="w-4 h-4" />
               <span>Call 0809 111 6264</span>
-            </button>
+            </Button>
             
-            <button
+            <Button
               onClick={() => handleCall('070062646264')}
               className="flex items-center justify-center space-x-2 py-3 px-4 bg-rose-600 hover:bg-rose-700 active:scale-[0.99] text-white rounded-lg text-sm font-semibold transition-all shadow-sm"
             >
               <Phone className="w-4 h-4" />
               <span>Call 0700 6264 6264</span>
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* National Emergency Link */}
-        <button
+        <Button
           onClick={() => handleCall('112')}
-          className="flex items-center justify-between w-full p-4 bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white rounded-xl font-semibold shadow-md transition-all"
+          className="flex items-center justify-between w-full p-4 bg-ink hover:bg-ink active:scale-[0.99] text-white rounded-xl font-semibold shadow-md transition-all"
         >
           <div className="flex items-center space-x-3">
             <Phone className="w-5 h-5 text-rose-400" />
             <div className="text-left">
-              <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">General Emergency Line</div>
+              <div className="text-xs text-ink-light uppercase tracking-wider font-semibold">General Emergency Line</div>
               <div className="text-lg">Call 112</div>
             </div>
           </div>
-          <span className="text-xs text-slate-400">National</span>
-        </button>
+          <span className="text-xs text-ink-light">National</span>
+        </Button>
       </div>
 
-      <button
+      <Button
         onClick={onBack}
-        className="flex items-center justify-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium"
+        className="flex items-center justify-center space-x-2 text-surface0 hover:text-ink transition-colors text-sm font-medium"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Return to Chat</span>
-      </button>
+      </Button>
     </div>
   );
 }

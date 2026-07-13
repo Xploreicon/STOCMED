@@ -27,6 +27,10 @@ const patientNavItems: NavItem[] = [
 const pharmacyNavItems: NavItem[] = [
   { label: 'Dashboard', emoji: '📊', href: '/pharmacy/dashboard' },
   { label: 'Inventory', emoji: '📦', href: '/pharmacy/inventory' },
+  { label: 'Procurement', emoji: '🚚', href: '/pharmacy/procurement' },
+  { label: 'POS', emoji: '🧾', href: '/pharmacy/pos' },
+  { label: 'Shifts', emoji: '💵', href: '/pharmacy/shifts' },
+  { label: 'Reports', emoji: '📈', href: '/pharmacy/reports' },
   { label: 'Reservations', emoji: '🔔', href: '/pharmacy/reservations' },
   { label: 'Settings', emoji: '⚙️', href: '/pharmacy/settings' },
 ];

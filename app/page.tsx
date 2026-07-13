@@ -35,7 +35,7 @@ export default async function Landing() {
             <Link href="/login" className="text-[15px] font-medium text-primary px-4 py-2.5">Sign in</Link>
             <Link
               href="/signup?role=patient"
-              className="h-11 flex items-center px-5 bg-primary text-white text-[15px] font-medium rounded-button whitespace-nowrap hover:bg-[#0052A3]"
+              className="h-11 flex items-center px-5 bg-primary text-white text-[15px] font-medium rounded-button whitespace-nowrap hover:bg-[var(--primary-hover)]"
             >
               Get started
             </Link>
@@ -44,7 +44,7 @@ export default async function Landing() {
       </header>
 
       {/* HERO */}
-      <section className="px-6 pt-20 pb-24" style={{ background: 'linear-gradient(180deg, #F0F7FF 0%, #FFFFFF 100%)' }}>
+      <section className="px-6 pt-20 pb-24" style={{ background: 'linear-gradient(180deg, var(--surface) 0%, var(--white) 100%)' }}>
         <div className="mx-auto max-w-[1200px] grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-16 items-center">
           <div className="order-2 lg:order-1">
             <div className="inline-flex items-center gap-2 bg-white border border-border rounded-full px-3.5 py-1.5 mb-6">
@@ -58,7 +58,7 @@ export default async function Landing() {
               StocMed&apos;s AI checks real-time stock across pharmacies near you, compares prices, and tells you exactly where to go — before you leave the house.
             </p>
             <div className="flex flex-wrap gap-4 mt-9">
-              <Link href="/signup?role=patient" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button hover:bg-[#0052A3]">
+              <Link href="/signup?role=patient" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button hover:bg-[var(--primary-hover)]">
                 Find medication
               </Link>
               <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-white text-primary border-[1.5px] border-primary text-[16px] font-medium rounded-button hover:bg-surface">
@@ -187,17 +187,17 @@ export default async function Landing() {
               <LogoMark size={28} onDark />
               <span className="text-[16px] font-medium text-white tracking-[-0.2px]">StocMed</span>
             </div>
-            <span className="text-[13px] font-medium uppercase tracking-[0.04em]" style={{ color: '#8FC7FF' }}>For pharmacies</span>
+            <span className="text-[13px] font-medium uppercase tracking-[0.04em]" style={{ color: 'var(--primary-light)' }}>For pharmacies</span>
             <h2 className="font-display font-medium text-[28px] lg:text-[34px] leading-[1.25] text-white mt-3">List your inventory. Reach patients searching for stock right now.</h2>
-            <p className="text-[16px] leading-[1.6] mt-4" style={{ color: '#C9DCEF' }}>
+            <p className="text-[16px] leading-[1.6] mt-4" style={{ color: 'var(--receipt-border)' }}>
               Join 1,200+ pharmacies already using StocMed to manage inventory and get discovered by nearby patients.
             </p>
           </div>
           <div className="flex flex-wrap gap-4">
-            <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button whitespace-nowrap hover:bg-[#0052A3]">
+            <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button whitespace-nowrap hover:bg-[var(--primary-hover)]">
               Register your pharmacy
             </Link>
-            <a href="#find" className="h-12 flex items-center justify-center px-7 bg-transparent text-white text-[16px] font-medium rounded-button whitespace-nowrap" style={{ border: '1.5px solid #4A79A8' }}>
+            <a href="#find" className="h-12 flex items-center justify-center px-7 bg-transparent text-white text-[16px] font-medium rounded-button whitespace-nowrap" style={{ border: '1.5px solid var(--muted-blue)' }}>
               Learn more
             </a>
           </div>

@@ -3,20 +3,47 @@ import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { triageQuery } from '@/lib/triage/classifier';
 import { normalizeQuery } from '@/lib/triage/deterministic-classifier';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
+
+const triagePayloadSchema = z.object({
+  query: z.string().min(1).max(1000),
+  thread_id: z.string().optional().nullable(),
+});
 
 export async function POST(request: NextRequest) {
-  try {
-    const { query, thread_id } = await request.json();
+  const rateLimit = checkRateLimit(request, 'triage', 20, 60_000);
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response;
+  }
 
-    if (!query || typeof query !== 'string') {
+  try {
+    const rawJson = await request.json();
+    const parsed = triagePayloadSchema.safeParse(rawJson);
+
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Query is required and must be a string' },
+        { error: 'Invalid triage request payload', details: parsed.error.flatten() },
         { status: 400 }
-      )
+      );
     }
+
+    const { query, thread_id } = parsed.data;
+
 
     // Run the orchestrator triage engine
     const triageResult = await triageQuery(query);
+
+    const supabase = await createClient();
+    if (triageResult.intent === 'NAMED_OTC' || triageResult.intent === 'NAMED_POM') {
+      const { data: matches } = await (supabase.rpc as any)('match_catalogue_product', {
+        search_query: query,
+      });
+      const bestMatch = Array.isArray(matches) ? matches[0] : null;
+      if (bestMatch && Number(bestMatch.confidence) >= 0.4) {
+        triageResult.matched_product_id = bestMatch.id;
+      }
+    }
 
     // Create anonymized query hash for privacy compliance
     const normalized = normalizeQuery(query);
@@ -27,7 +54,6 @@ export async function POST(request: NextRequest) {
 
     // Attempt to log audit trail to DB (graceful fallback if DB fails/offline)
     try {
-      const supabase = await createClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();

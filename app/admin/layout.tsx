@@ -24,17 +24,24 @@ export default async function AdminLayout({
   // Get admin / pharmacist authorization status
   const { data: userData, error } = await (supabase.from('users') as any)
     .select('is_admin, is_licensed_pharmacist')
-    .eq('id', user.id)
+    .eq('user_id', user.id)
     .single();
 
   if (error || (!userData?.is_admin && !userData?.is_licensed_pharmacist)) {
     redirect('/dashboard'); // Go back to patient dashboard if not authorized
   }
 
+  const navItems = [
+    { href: '/admin', label: 'Intakes', icon: ClipboardList },
+    { href: '/admin/rx-queue', label: 'Rx queue', icon: FileText },
+    { href: '/admin/audit', label: 'Audit', icon: Database },
+    ...(userData.is_admin ? [{ href: '/admin/config', label: 'Config', icon: ShieldAlert }] : []),
+  ];
+
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-800">
+    <div className="flex min-h-screen bg-surface text-ink">
       {/* Sidebar Navigation */}
-      <aside className="w-64 bg-slate-900 text-slate-100 flex flex-col justify-between p-5 border-r border-slate-800">
+      <aside className="hidden w-64 bg-ink text-surface lg:flex flex-col justify-between p-5 border-r border-ink">
         <div>
           <div className="flex items-center space-x-2.5 mb-8 px-2">
             <Settings className="w-6 h-6 text-blue-500" />
@@ -46,44 +53,44 @@ export default async function AdminLayout({
           <nav className="space-y-1">
             <Link
               href="/admin"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-800 hover:text-white transition-colors"
+              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-ink hover:text-white transition-colors"
             >
-              <ClipboardList className="w-4 h-4 text-slate-400" />
+              <ClipboardList className="w-4 h-4 text-ink-light" />
               <span>Symptom Intakes</span>
             </Link>
 
             <Link
               href="/admin/rx-queue"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-800 hover:text-white transition-colors"
+              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-ink hover:text-white transition-colors"
             >
-              <FileText className="w-4 h-4 text-slate-400" />
+              <FileText className="w-4 h-4 text-ink-light" />
               <span>Rx Verification</span>
             </Link>
 
             <Link
               href="/admin/audit"
-              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-800 hover:text-white transition-colors"
+              className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-ink hover:text-white transition-colors"
             >
-              <Database className="w-4 h-4 text-slate-400" />
+              <Database className="w-4 h-4 text-ink-light" />
               <span>Triage Logs</span>
             </Link>
 
             {userData.is_admin && (
               <Link
                 href="/admin/config"
-                className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-slate-800 hover:text-white transition-colors"
+                className="flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-semibold hover:bg-ink hover:text-white transition-colors"
               >
-                <ShieldAlert className="w-4 h-4 text-slate-400" />
+                <ShieldAlert className="w-4 h-4 text-ink-light" />
                 <span>Safety Config</span>
               </Link>
             )}
           </nav>
         </div>
 
-        <div className="border-t border-slate-800 pt-4">
+        <div className="border-t border-ink pt-4">
           <div className="flex items-center justify-between px-2">
             <div>
-              <div className="text-xs font-bold text-slate-400 truncate max-w-[130px]">
+              <div className="text-xs font-bold text-ink-light truncate max-w-[130px]">
                 {user.email}
               </div>
               <div className="text-[10px] text-blue-400 uppercase tracking-wide font-semibold mt-0.5">
@@ -92,7 +99,7 @@ export default async function AdminLayout({
             </div>
             <Link
               href="/dashboard"
-              className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              className="p-2 text-ink-light hover:text-white hover:bg-ink rounded-lg transition-colors"
               title="Return to patient dashboard"
             >
               <LogOut className="w-4 h-4" />
@@ -102,16 +109,19 @@ export default async function AdminLayout({
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-h-screen">
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8">
+      <main className="min-w-0 flex-1 flex flex-col min-h-screen">
+        <header className="min-h-16 bg-white border-b border-border flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-semibold bg-surface text-ink-muted px-2 py-0.5 rounded-full">
               Live Connection
             </span>
           </div>
+          <nav className="flex min-w-0 flex-1 justify-end gap-1 overflow-x-auto lg:hidden">
+            {navItems.map(({ href, label, icon: Icon }) => <Link key={href} href={href} className="flex shrink-0 items-center gap-1.5 rounded-button px-2 py-2 text-xs font-medium text-ink-muted hover:bg-surface hover:text-ink"><Icon className="h-4 w-4" />{label}</Link>)}
+          </nav>
         </header>
 
-        <div className="flex-1 p-8 overflow-y-auto">{children}</div>
+        <div className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">{children}</div>
       </main>
     </div>
   );

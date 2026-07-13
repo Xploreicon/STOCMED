@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -247,12 +249,12 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImpo
       <DialogContent className="max-h-[85vh] max-w-[480px] overflow-y-auto rounded-feature p-7">
         <div className="mb-5 flex items-center justify-between">
           <DialogTitle className="text-xl font-medium text-ink">Bulk stock update</DialogTitle>
-          <button
+          <Button
             onClick={resetAndClose}
             className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-tint text-secondary"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
 
         <div className="mb-6 flex items-center gap-1">
@@ -261,8 +263,8 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImpo
               <div
                 className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-medium"
                 style={{
-                  background: i === stepIndex ? '#0066CC' : '#F0F7FF',
-                  color: i === stepIndex ? '#FFFFFF' : '#4A4A4A',
+                  background: i === stepIndex ? 'var(--primary)' : 'var(--surface)',
+                  color: i === stepIndex ? 'var(--white)' : 'var(--ink-muted)',
                 }}
               >
                 {i + 1}
@@ -282,12 +284,12 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImpo
               <p className="text-sm leading-relaxed text-secondary">
                 Drag and drop your file here, or click to browse. Handles 500+ rows in one go.
               </p>
-              <button
+              <Button
                 onClick={() => fileInputRef.current?.click()}
                 className="mt-4 h-11 rounded-control border-[1.5px] border-brand px-5 text-sm font-medium text-brand"
               >
                 Choose file
-              </button>
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -298,12 +300,12 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImpo
               {fileName && <p className="mt-2 text-xs text-secondary">Selected: {fileName}</p>}
             </div>
             {error && <p className="mt-3 text-xs text-stock-out">{error}</p>}
-            <button
+            <Button
               onClick={downloadTemplate}
               className="mt-4 block w-full text-center text-[13px] font-medium text-brand"
             >
               Download CSV template
-            </button>
+            </Button>
           </>
         )}
 
@@ -336,18 +338,18 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImpo
             </div>
             {error && <p className="mt-3 text-xs text-stock-out">{error}</p>}
             <div className="mt-6 flex gap-3">
-              <button
+              <Button
                 onClick={() => setStep('upload')}
                 className="h-12 flex-1 rounded-control border border-hairline text-[15px] font-medium text-secondary"
               >
                 Back
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleConfirmMapping}
                 className="h-12 flex-1 rounded-control bg-brand text-[15px] font-medium text-white"
               >
                 Continue
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -389,20 +391,20 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImpo
                 </div>
                 {error && <p className="mt-3 text-xs text-stock-out">{error}</p>}
                 <div className="mt-6 flex gap-3">
-                  <button
+                  <Button
                     onClick={() => setStep('map')}
                     disabled={isCommitting}
                     className="h-12 flex-1 rounded-control border border-hairline text-[15px] font-medium text-secondary"
                   >
                     Back
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handleCommit}
                     disabled={isCommitting}
                     className="h-12 flex-1 rounded-control bg-brand text-[15px] font-medium text-white disabled:opacity-60"
                   >
                     {isCommitting ? 'Uploading…' : 'Upload & update'}
-                  </button>
+                  </Button>
                 </div>
               </>
             ) : (
@@ -414,12 +416,12 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImpo
                     <span className="text-stock-out"> {commitSummary.failed} rows failed — check for duplicates.</span>
                   )}
                 </p>
-                <button
+                <Button
                   onClick={resetAndClose}
                   className="mt-6 h-12 w-full rounded-control bg-brand text-[15px] font-medium text-white"
                 >
                   Done
-                </button>
+                </Button>
               </>
             )}
           </>

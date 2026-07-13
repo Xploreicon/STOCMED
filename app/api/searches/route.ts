@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     // Parse request body
     const body = await request.json()
 
-    const { query, results_count, location, session_id, metadata } = body
+    const { query, product_id, results_count, location, session_id, metadata } = body
 
     if (!query) {
       return NextResponse.json(
@@ -54,6 +54,15 @@ export async function POST(request: NextRequest) {
 
     const normalizedQuery = query.trim().toLowerCase()
     const queryHash = crypto.createHash('sha256').update(normalizedQuery).digest('hex')
+    let canonicalProductId = typeof product_id === 'string' ? product_id : null
+
+    if (!canonicalProductId) {
+      const { data: matches } = await (supabase.rpc as any)('match_catalogue_product', {
+        search_query: query,
+      })
+      const bestMatch = Array.isArray(matches) ? matches[0] : null
+      if (bestMatch && Number(bestMatch.confidence) >= 0.4) canonicalProductId = bestMatch.id
+    }
 
     // 1. Log anonymous aggregate record for demand analytics (strictly decoupled from user/session identity)
     const aggregatePayload = {
@@ -63,7 +72,11 @@ export async function POST(request: NextRequest) {
       location: location ?? null,
       metadata: null,
       results_count: results_count ?? null,
-      interpreted_query: interpretQuery(query) as any,
+      product_id: canonicalProductId,
+      interpreted_query: {
+        ...interpretQuery(query),
+        product_id: canonicalProductId,
+      } as any,
     }
 
     const { error: aggError } = await (supabase
@@ -82,6 +95,7 @@ export async function POST(request: NextRequest) {
         location: location ?? null,
         metadata: (metadata ?? null) as any,
         results_count: results_count ?? null,
+        product_id: null,
         interpreted_query: null, // do not store plaintext parsed info
       }
 

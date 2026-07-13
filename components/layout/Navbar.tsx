@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -56,12 +58,12 @@ export const Navbar: React.FC<NavbarProps> = ({ pharmacyName, userRole }) => {
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button
+                <Button
                   className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center text-[14px] font-medium text-primary hover:bg-primary/5 transition-colors"
                   aria-label="Account menu"
                 >
                   {initials}
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 {isPharmacyUI ? (

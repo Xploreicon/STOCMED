@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import React from 'react';
 import { Phone, AlertTriangle, ShieldAlert, ArrowLeft } from 'lucide-react';
 
@@ -19,16 +20,16 @@ export default function EmergencyScreen({ onBack, userState }: EmergencyScreenPr
         <AlertTriangle className="w-8 h-8 text-amber-600 animate-pulse" />
       </div>
 
-      <h2 className="text-2xl font-bold text-slate-900 text-center mb-2">
+      <h2 className="text-2xl font-bold text-ink text-center mb-2">
         This May Be an Emergency
       </h2>
-      <p className="text-slate-600 text-center text-sm mb-8 leading-relaxed max-w-sm">
+      <p className="text-ink-muted text-center text-sm mb-8 leading-relaxed max-w-sm">
         For your safety, please seek immediate medical care. AI tools and search systems cannot diagnose or treat life-threatening conditions.
       </p>
 
       <div className="w-full space-y-4 mb-8">
         {/* National Emergency */}
-        <button
+        <Button
           onClick={() => handleCall('112')}
           className="flex items-center justify-between w-full p-4 bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white rounded-xl font-semibold shadow-md transition-all"
         >
@@ -40,19 +41,19 @@ export default function EmergencyScreen({ onBack, userState }: EmergencyScreenPr
             </div>
           </div>
           <span className="text-xs bg-amber-500 bg-opacity-35 px-2.5 py-1 rounded-full text-white font-medium">Free Call</span>
-        </button>
+        </Button>
 
         {/* Lagos state Emergency */}
-        <button
+        <Button
           onClick={() => handleCall('767')}
-          className={`flex items-center justify-between w-full p-4 bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white rounded-xl font-semibold shadow-md transition-all ${
+          className={`flex items-center justify-between w-full p-4 bg-ink hover:bg-ink active:scale-[0.99] text-white rounded-xl font-semibold shadow-md transition-all ${
             isLagos ? 'border-2 border-amber-400' : ''
           }`}
         >
           <div className="flex items-center space-x-3">
             <Phone className="w-5 h-5 text-amber-400" />
             <div className="text-left">
-              <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Lagos Emergency (LASEMA)</div>
+              <div className="text-xs text-ink-light uppercase tracking-wider font-semibold">Lagos Emergency (LASEMA)</div>
               <div className="text-lg">Call 767</div>
             </div>
           </div>
@@ -61,31 +62,31 @@ export default function EmergencyScreen({ onBack, userState }: EmergencyScreenPr
               Recommended for Lagos
             </span>
           )}
-        </button>
+        </Button>
 
         {/* FRSC Accident Line */}
-        <button
+        <Button
           onClick={() => handleCall('122')}
-          className="flex items-center justify-between w-full p-4 bg-slate-100 hover:bg-slate-200 active:scale-[0.99] text-slate-800 rounded-xl font-semibold transition-all border border-slate-200"
+          className="flex items-center justify-between w-full p-4 bg-surface hover:bg-border active:scale-[0.99] text-ink rounded-xl font-semibold transition-all border border-border"
         >
           <div className="flex items-center space-x-3">
-            <ShieldAlert className="w-5 h-5 text-slate-600" />
+            <ShieldAlert className="w-5 h-5 text-ink-muted" />
             <div className="text-left">
-              <div className="text-xs text-slate-500 uppercase tracking-wider font-semibold">FRSC Road Accidents</div>
+              <div className="text-xs text-surface0 uppercase tracking-wider font-semibold">FRSC Road Accidents</div>
               <div className="text-lg">Call 122</div>
             </div>
           </div>
-          <span className="text-xs text-slate-500">National</span>
-        </button>
+          <span className="text-xs text-surface0">National</span>
+        </Button>
       </div>
 
-      <button
+      <Button
         onClick={onBack}
-        className="flex items-center justify-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium"
+        className="flex items-center justify-center space-x-2 text-surface0 hover:text-ink transition-colors text-sm font-medium"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Return to Chat</span>
-      </button>
+      </Button>
     </div>
   );
 }

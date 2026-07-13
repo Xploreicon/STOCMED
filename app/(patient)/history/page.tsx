@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -96,7 +98,7 @@ export default function History() {
         {FILTERS.map((f) => {
           const active = filter === f.key;
           return (
-            <button
+            <Button
               key={f.key}
               onClick={() => setFilter(f.key)}
               className={`text-[13px] font-medium px-4 py-2.5 rounded-full whitespace-nowrap border transition-colors ${
@@ -106,7 +108,7 @@ export default function History() {
               }`}
             >
               {f.label}
-            </button>
+            </Button>
           );
         })}
       </div>
@@ -148,7 +150,7 @@ export default function History() {
           </p>
           <Link
             href="/chat"
-            className="mt-4 h-12 flex items-center justify-center px-6 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[#0052A3]"
+            className="mt-4 h-12 flex items-center justify-center px-6 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[var(--primary-hover)]"
           >
             Start a new search
           </Link>

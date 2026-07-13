@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import Link from 'next/link';
 import { Pill } from 'lucide-react';
 
@@ -22,10 +24,10 @@ export default function SearchChips() {
           key={medication}
           href={`/chat?q=${encodeURIComponent(medication)}`}
         >
-          <button className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface border border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-150 text-sm font-medium text-ink group">
+          <Button className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-surface border border-border hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-150 text-sm font-medium text-ink group">
             <Pill className="h-4 w-4" />
             {medication}
-          </button>
+          </Button>
         </Link>
       ))}
     </div>

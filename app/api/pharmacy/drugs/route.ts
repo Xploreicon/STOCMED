@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { getEnrichedInventory } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -25,32 +26,20 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Fetch all drugs for this pharmacy
-    const { data: drugs, error: drugsError } = await supabase
-      .from('drugs')
-      .select('*')
-      .eq('pharmacy_id', pharmacy.id)
-      .order('created_at', { ascending: false })
-
-    if (drugsError) {
-      console.error('Error fetching drugs:', drugsError)
+    let inventory
+    try {
+      inventory = await getEnrichedInventory(supabase, pharmacy.id)
+    } catch (inventoryError) {
+      console.error('Error fetching inventory:', inventoryError)
       return NextResponse.json(
         { error: 'Failed to fetch drugs' },
         { status: 500 }
       )
     }
 
-    // Calculate stats
-    const stats = {
-      total: drugs.length,
-      in_stock: drugs.filter((d: any) => d.quantity_in_stock > d.low_stock_threshold).length,
-      low_stock: drugs.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= d.low_stock_threshold).length,
-      out_of_stock: drugs.filter((d: any) => d.quantity_in_stock === 0).length,
-    }
-
     return NextResponse.json({
-      drugs,
-      stats,
+      drugs: inventory.rows,
+      stats: inventory.stats,
     })
   } catch (error) {
     console.error('Unexpected error:', error)
@@ -182,17 +171,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch and return the updated view record to keep UI happy
-    const { data: drug, error: fetchError } = await (supabase as any)
-      .from('drugs')
-      .select('*')
-      .eq('id', inventory.id)
-      .single()
-
-    if (fetchError) {
-      console.error('Error fetching new drug view:', fetchError)
+    let createdInventory
+    try {
+      createdInventory = await getEnrichedInventory(supabase, pharmacy.id)
+    } catch (fetchError) {
+      console.error('Error fetching new inventory item:', fetchError)
       return NextResponse.json(
         { error: 'Failed to fetch created drug profile' },
+        { status: 500 }
+      )
+    }
+
+    const drug = createdInventory.rows.find((row) => row.id === inventory.id)
+    if (!drug) {
+      return NextResponse.json(
+        { error: 'Created inventory item could not be retrieved' },
         { status: 500 }
       )
     }

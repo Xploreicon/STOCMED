@@ -464,28 +464,28 @@ export default function Chat() {
 
         const response = await fetch(`/api/drugs/search?${params.toString()}`);
         const data = await response.json();
-
-        if (user) {
-          await fetch('/api/searches', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: trimmedMedication,
-              results_count: data.count || 0,
-              location:
-                locationOverride ??
-                userLocation?.label ??
-                (pendingLocationLabel ?? null),
-              metadata: {
-                source: 'chat',
-                location_label:
-                  locationOverride ?? userLocation?.label ?? pendingLocationLabel ?? null,
-              },
-            }),
-          });
-        }
-
         const results = data.results || [];
+
+        await fetch('/api/searches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: trimmedMedication,
+            product_id: results[0]?.product_id ?? null,
+            results_count: data.count || 0,
+            location:
+              locationOverride ??
+              userLocation?.label ??
+              (pendingLocationLabel ?? null),
+            metadata: {
+              source: 'chat',
+              latitude: userLocation?.latitude ?? null,
+              longitude: userLocation?.longitude ?? null,
+              location_label:
+                locationOverride ?? userLocation?.label ?? pendingLocationLabel ?? null,
+            },
+          }),
+        });
         setLastResults(results);
         setLastQueryText(trimmedMedication);
         setPendingMedication(trimmedMedication);
@@ -532,7 +532,6 @@ export default function Chat() {
       conversation,
       pushAssistantMessage,
       requestAssistantMessage,
-      user,
       userLocation,
       pendingLocationLabel,
     ]
@@ -636,8 +635,8 @@ export default function Chat() {
           return;
         }
 
-        // 2. Handle REDIRECT (Emergency RED_FLAG)
-        if (triageData.risk_tier === 'REDIRECT') {
+        // Emergency UI is positive-signal-only: both classifier fields must agree.
+        if (triageData.risk_tier === 'REDIRECT' && triageData.intent === 'RED_FLAG') {
           setActiveSafetyScreen('emergency');
           setIsLoading(false);
           return;
@@ -650,8 +649,11 @@ export default function Chat() {
           return;
         }
 
-        // 4. Handle SYMPTOM_GENERIC
-        if (triageData.intent === 'SYMPTOM_GENERIC') {
+        // Non-emergency redirects never display emergency numbers.
+        if (
+          triageData.risk_tier === 'CARE_REDIRECT' &&
+          triageData.intent === 'SYMPTOM_GENERIC'
+        ) {
           setActiveSafetyScreen('symptom_intake');
           setIsLoading(false);
           return;
@@ -756,14 +758,14 @@ export default function Chat() {
         <div className="max-w-[720px] mx-auto flex flex-col gap-5">
           {/* Centered initial timestamp */}
           <div className="text-center mb-2">
-            <span className="text-[12px] font-normal text-ink-muted bg-[#F0F7FF] px-3.5 py-1.5 rounded-full">
+            <span className="text-[12px] font-normal text-ink-muted bg-[var(--surface)] px-3.5 py-1.5 rounded-full">
               Today, {mounted ? new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase() : ''}
             </span>
           </div>
 
           {/* Location status / sharing widget (Compact style) */}
           {!userLocation && (
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-card border border-border bg-[#F0F7FF] shadow-sm text-left">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-4 rounded-card border border-border bg-[var(--surface)] shadow-sm text-left">
               <div className="flex items-start gap-2.5">
                 <MapPin className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
                 <div>
@@ -824,7 +826,7 @@ export default function Chat() {
                     );
                   }}
                   disabled={isLocating}
-                  className="rounded-button bg-primary text-white text-[13px] font-medium h-9 px-4 hover:bg-[#0052A3]"
+                  className="rounded-button bg-primary text-white text-[13px] font-medium h-9 px-4 hover:bg-[var(--primary-hover)]"
                 >
                   {isLocating ? 'Locating...' : 'Share location'}
                 </Button>
@@ -875,12 +877,12 @@ export default function Chat() {
           {activeSafetyScreen === 'intake_tracker' && currentIntakeId && (
             <div className="space-y-4">
               <IntakeStatusTracker intakeId={currentIntakeId} />
-              <button
+              <Button
                 onClick={() => setActiveSafetyScreen(null)}
-                className="py-2.5 px-4 bg-slate-150 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl border border-slate-250 transition-colors"
+                className="py-2.5 px-4 bg-surface hover:bg-border text-ink text-xs font-semibold rounded-xl border border-border transition-colors"
               >
                 Close Status Tracker
-              </button>
+              </Button>
             </div>
           )}
 
@@ -900,11 +902,11 @@ export default function Chat() {
             return (
               <Fragment key={message.id}>
                 {isAssistant ? (
-                  <div className="self-start bg-[#F0F7FF] text-[#1A1A1A] text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_12px_2px] max-w-[85%] whitespace-pre-line text-left">
+                  <div className="self-start bg-[var(--surface)] text-[var(--ink)] text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_12px_2px] max-w-[85%] whitespace-pre-line text-left">
                     {message.content}
                   </div>
                 ) : (
-                  <div className="self-end bg-[#0066CC] text-white text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_2px_12px] max-w-[80%] whitespace-pre-line text-left">
+                  <div className="self-end bg-[var(--primary)] text-white text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_2px_12px] max-w-[80%] whitespace-pre-line text-left">
                     {message.content}
                   </div>
                 )}
@@ -952,13 +954,13 @@ export default function Chat() {
           {/* Quick chips */}
           <div className="flex gap-2 flex-wrap mb-3">
             {activeQuickActions.map((action) => (
-              <button
+              <Button
                 key={action.token}
                 onClick={() => handleQuickAction(action.token)}
                 className="text-[13px] font-medium text-primary border border-border bg-white px-3.5 py-2 rounded-full cursor-pointer hover:bg-surface transition-colors"
               >
                 {action.label}
-              </button>
+              </Button>
             ))}
           </div>
 
@@ -976,13 +978,13 @@ export default function Chat() {
               disabled={isLoading}
               className="flex-1 h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:opacity-60 min-w-0"
             />
-            <button
+            <Button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="w-12 h-12 rounded-button bg-primary flex items-center justify-center text-white text-[17px] flex-shrink-0 cursor-pointer hover:bg-[#0052A3] transition-colors disabled:opacity-60"
+              className="w-12 h-12 rounded-button bg-primary flex items-center justify-center text-white text-[17px] flex-shrink-0 cursor-pointer hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-60"
             >
               →
-            </button>
+            </Button>
           </form>
 
           {/* Disclaimer */}

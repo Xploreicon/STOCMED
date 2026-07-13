@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 
 type Step = 'upload' | 'mapping' | 'matching' | 'progress' | 'summary';
+type ImportSource = 'stocmed' | 'quickbooks';
 
 const CANONICAL_FIELDS = [
   { key: 'name', label: 'Drug / Generic Name', required: true, synonyms: ['name', 'generic name', 'drug name', 'medication', 'product'] },
@@ -28,6 +29,8 @@ const CANONICAL_FIELDS = [
   { key: 'dosage_form', label: 'Dosage Form', required: true, synonyms: ['form', 'dosage form', 'type'] },
   { key: 'category', label: 'Category', required: true, synonyms: ['category', 'class', 'group'] },
   { key: 'pack_size', label: 'Pack Size', required: false, synonyms: ['pack', 'pack size', 'packaging'] },
+  { key: 'sku', label: 'SKU / Barcode', required: false, synonyms: ['sku', 'barcode', 'product sku'] },
+  { key: 'unit_cost', label: 'Unit Cost (₦)', required: false, synonyms: ['cost', 'unit cost', 'purchase cost'] },
   { key: 'price', label: 'Selling Price (₦)', required: true, synonyms: ['price', 'selling price', 'rate', 'unit price'] },
   { key: 'quantity', label: 'Opening Qty', required: true, synonyms: ['quantity', 'qty', 'stock', 'opening qty', 'count'] },
   { key: 'batch_number', label: 'Batch Number', required: true, synonyms: ['batch', 'batch no', 'batch number', 'lot'] },
@@ -38,6 +41,7 @@ export default function BulkImportWizard() {
   const router = useRouter();
 
   const [step, setStep] = useState<Step>('upload');
+  const [source, setSource] = useState<ImportSource>('stocmed');
   const [file, setFile] = useState<File | null>(null);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<any[]>([]);
@@ -114,7 +118,10 @@ export default function BulkImportWizard() {
   // Run matching logic
   const handleMappingSubmit = async () => {
     // Validate that required fields are mapped
-    const missingRequired = CANONICAL_FIELDS.filter(f => f.required && !mapping[f.key]);
+    const quickBooksRequired = new Set(['name', 'price', 'quantity']);
+    const missingRequired = CANONICAL_FIELDS.filter(f =>
+      (source === 'quickbooks' ? quickBooksRequired.has(f.key) : f.required) && !mapping[f.key]
+    );
     if (missingRequired.length > 0) {
       alert(`Please map all required fields: ${missingRequired.map(f => f.label).join(', ')}`);
       return;
@@ -141,7 +148,7 @@ export default function BulkImportWizard() {
       // Initialize each row's selection to the highest confidence match if confidence > 0.4
       const initializedResults = results.map((row: any) => {
         const bestMatch = row.matches && row.matches[0];
-        const selectedId = bestMatch && bestMatch.confidence > 0.4 ? bestMatch.id : 'create_new';
+        const selectedId = bestMatch && bestMatch.confidence > 0.4 ? bestMatch.id : source === 'quickbooks' ? '' : 'create_new';
         
         // Basic pre-commit validation checks
         const warnings: string[] = [];
@@ -153,10 +160,10 @@ export default function BulkImportWizard() {
         if (row.mapped.quantity === null || isNaN(row.mapped.quantity) || row.mapped.quantity < 0) {
           errors.push('Stock quantity cannot be negative');
         }
-        if (!row.mapped.batch_number) {
+        if (source !== 'quickbooks' && !row.mapped.batch_number) {
           errors.push('Batch number is required');
         }
-        if (!row.mapped.expiry_date) {
+        if (source !== 'quickbooks' && !row.mapped.expiry_date) {
           errors.push('Expiry date is required');
         } else {
           const exp = new Date(row.mapped.expiry_date);
@@ -189,61 +196,61 @@ export default function BulkImportWizard() {
     // Check if any row has validation errors
     const errorCount = matchedRows.filter(r => r.validation.errors.length > 0).length;
     if (errorCount > 0) {
-      const confirmProceed = confirm(`There are ${errorCount} rows with critical errors. These will be skipped or may fail. Proceed anyway?`);
-      if (!confirmProceed) return;
+      alert(`Resolve the validation errors in ${errorCount} row(s) before importing. No rows have been committed.`);
+      return;
     }
 
     setIsImporting(true);
-    setStep('progress');
     setImportProgress(0);
 
     try {
+      const payloadRows = matchedRows.map(r => ({
+        mapped: r.mapped,
+        selected_product_id: r.selected_product_id
+      }));
+      const requestBody = { matchedRows: payloadRows, source: source === 'quickbooks' ? 'quickbooks' : undefined };
+      const preflightRes = await fetch('/api/pharmacy/inventory/import/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...requestBody, validate_only: true }),
+      });
+      const preflight = await preflightRes.json();
+
+      if (!preflightRes.ok) {
+        if (Array.isArray(preflight.rowErrors)) {
+          const errorsByRow = new Map<number, string[]>(
+            preflight.rowErrors.map((entry: any) => [entry.row - 1, entry.errors])
+          );
+          setMatchedRows(rows => rows.map((row, index) => ({
+            ...row,
+            validation: {
+              ...row.validation,
+              errors: errorsByRow.get(index) || [],
+            },
+          })));
+        }
+        throw new Error(preflight.error || 'Import preflight failed');
+      }
+
+      setStep('progress');
       const res = await fetch('/api/pharmacy/inventory/import/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          matchedRows: matchedRows.map(r => ({
-            mapped: r.mapped,
-            selected_product_id: r.selected_product_id
-          }))
-        }),
+        body: JSON.stringify(requestBody),
       });
 
-      if (!res.body) {
-        throw new Error('No readable response stream.');
+      const result = await res.json();
+      if (!res.ok) {
+        const rowDetails = Array.isArray(result.rowErrors)
+          ? result.rowErrors.map((entry: any) => `Row ${entry.row}: ${entry.errors.join(', ')}`).join('\n')
+          : '';
+        throw new Error([result.error || 'Import failed', rowDetails].filter(Boolean).join('\n'));
       }
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = JSON.parse(line.slice(6));
-            if (data.status === 'running' || data.status === 'completed') {
-              setImportProgress(data.progress);
-              setImportStats({
-                imported: data.imported,
-                skipped: data.skipped,
-                errors: data.errors,
-                total: data.total,
-              });
-            }
-            if (data.status === 'completed') {
-              setIsImporting(false);
-              setStep('summary');
-            }
-          }
-        }
-      }
+      setImportProgress(100);
+      setImportStats({ imported: result.imported, skipped: 0, errors: 0, total: result.total });
+      setIsImporting(false);
+      setStep('summary');
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Error executing import transaction');
@@ -278,6 +285,13 @@ export default function BulkImportWizard() {
                 Upload your pharmacy&apos;s product list. We support CSV and Excel (.xlsx) files.
               </p>
             </div>
+
+            <div className="grid grid-cols-2 gap-1 rounded-input border border-border bg-surface p-1">
+              <Button variant={source === 'stocmed' ? 'default' : 'ghost'} onClick={() => setSource('stocmed')}>StocMed template</Button>
+              <Button variant={source === 'quickbooks' ? 'default' : 'ghost'} onClick={() => setSource('quickbooks')}>QuickBooks export</Button>
+            </div>
+
+            {source === 'quickbooks' && <div className="border-l-4 border-primary bg-primary/5 p-4 text-sm text-ink"><strong>Switch from QuickBooks</strong><p className="mt-1 text-ink-muted">Product/Service Name, SKU, Quantity on Hand, Cost, and Price are mapped automatically. QuickBooks did not store batch or expiry data, so matched rows enter an expiry-capture queue before becoming sellable stock.</p></div>}
 
             <div className="border-2 border-dashed border-border hover:border-primary/50 rounded-xl p-12 transition-all text-center bg-surface/50">
               <input
@@ -338,9 +352,9 @@ export default function BulkImportWizard() {
                 <div key={field.key} className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center bg-white hover:bg-surface/30">
                   <div>
                     <span className="text-sm font-semibold text-ink">{field.label}</span>
-                    {field.required && <span className="text-danger ml-1 font-bold">*</span>}
+                    {(source === 'quickbooks' ? ['name', 'price', 'quantity'].includes(field.key) : field.required) && <span className="text-danger ml-1 font-bold">*</span>}
                     <p className="text-xs text-ink-light mt-0.5">
-                      {field.required ? 'Required field.' : 'Optional.'}
+                      {(source === 'quickbooks' ? ['name', 'price', 'quantity'].includes(field.key) : field.required) ? 'Required field.' : 'Optional.'}
                     </p>
                   </div>
                   <div>
@@ -383,7 +397,11 @@ export default function BulkImportWizard() {
                   We found matches for your drugs in the catalogue. Verify or create new catalogue entries.
                 </p>
               </div>
-              <Button onClick={handleCommitImport} disabled={isValidating} className="shadow-lg">
+              <Button
+                onClick={handleCommitImport}
+                disabled={isValidating || matchedRows.some(row => row.validation.errors.length > 0) || (source === 'quickbooks' && matchedRows.some(row => !row.selected_product_id))}
+                className="shadow-lg"
+              >
                 Import {matchedRows.length} Drugs
               </Button>
             </div>
@@ -436,7 +454,7 @@ export default function BulkImportWizard() {
                                 }}
                                 className="w-[220px] px-2 py-1.5 border border-border rounded-md focus:ring-1 focus:ring-primary text-xs bg-white"
                               >
-                                <option value="create_new">🆕 Add as Unverified Catalogue Item</option>
+                                {source === 'quickbooks' ? <option value="">Select a catalogue match</option> : <option value="create_new">🆕 Add as Unverified Catalogue Item</option>}
                                 {row.matches && row.matches.map((m: any) => (
                                   <option key={m.id} value={m.id}>
                                     ✨ {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}) - {Math.round(m.confidence * 100)}% Match
@@ -520,9 +538,7 @@ export default function BulkImportWizard() {
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h2 className="text-2xl font-display font-bold text-ink">Import Complete!</h2>
-              <p className="text-ink-muted text-sm max-w-sm mx-auto">
-                Your inventory spreadsheet has been successfully integrated into the StocMed database spine.
-              </p>
+              <p className="text-ink-muted text-sm max-w-sm mx-auto">{source === 'quickbooks' ? 'Your QuickBooks products are matched and staged. Capture the physical batch and expiry printed on each carton to move them into sellable stock.' : 'Your inventory spreadsheet has been successfully integrated into the StocMed database spine.'}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
@@ -540,8 +556,8 @@ export default function BulkImportWizard() {
               <Button variant="outline" onClick={() => setStep('upload')}>
                 Import Another File
               </Button>
-              <Button onClick={() => router.push('/pharmacy/inventory')} className="shadow-lg">
-                Go to Inventory Table
+              <Button onClick={() => router.push(source === 'quickbooks' ? '/pharmacy/inventory/expiry-capture' : '/pharmacy/inventory')} className="shadow-lg">
+                {source === 'quickbooks' ? 'Capture batch & expiry' : 'Go to Inventory Table'}
               </Button>
             </div>
           </Card>

@@ -1,103 +1,97 @@
-import { createClient } from '@/lib/supabase/server'
-import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
+import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { createClient } from '@/lib/supabase/server'
+import { validateRows, type ImportRow } from '@/lib/validation/import-rows'
+import { quickBooksImportSchema } from '@/lib/validation/reporting'
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = (await createClient()) as any
-
-    // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const pharmacy = await ensurePharmacyRecord(supabase, user)
-
     if (!pharmacy) {
+      return NextResponse.json({ error: 'Pharmacy profile not found' }, { status: 404 })
+    }
+
+    const body = await request.json()
+    if (body?.source === 'quickbooks') {
+      const parsed = quickBooksImportSchema.safeParse(body)
+      if (!parsed.success) {
+        return NextResponse.json({
+          error: 'QuickBooks rows require a catalogue match, quantity, cost, and price',
+          issues: parsed.error.issues,
+        }, { status: 422 })
+      }
+      if (parsed.data.validate_only) return NextResponse.json({ valid: true, rowErrors: [] })
+      const { data, error } = await supabase.rpc('stage_quickbooks_import', {
+        p_pharmacy_id: pharmacy.id,
+        p_rows: parsed.data.matchedRows,
+      })
+      if (error) return NextResponse.json({ error: `QuickBooks import rolled back: ${error.message}` }, { status: 409 })
+      return NextResponse.json({ imported: data.staged, total: data.staged, expiry_capture_required: true }, { status: 201 })
+    }
+    if (!Array.isArray(body.matchedRows) || body.matchedRows.length === 0) {
+      return NextResponse.json({ error: 'matchedRows must be a non-empty array' }, { status: 400 })
+    }
+
+    const rowErrors = validateRows(body.matchedRows)
+    const selectedProductIds = Array.from(new Set(
+      body.matchedRows
+        .map((row: ImportRow) => row.selected_product_id)
+        .filter((id: unknown): id is string => typeof id === 'string' && id !== 'create_new')
+    ))
+
+    if (selectedProductIds.length) {
+      const { data: products, error: productError } = await supabase
+        .from('products')
+        .select('id')
+        .in('id', selectedProductIds)
+
+      if (productError) {
+        return NextResponse.json({ error: 'Could not validate catalogue selections' }, { status: 500 })
+      }
+
+      const existingIds = new Set((products || []).map((product: { id: string }) => product.id))
+      body.matchedRows.forEach((row: ImportRow, index: number) => {
+        if (row.selected_product_id && row.selected_product_id !== 'create_new' && !existingIds.has(row.selected_product_id)) {
+          const existingError = rowErrors.find((entry) => entry.row === index + 1)
+          if (existingError) existingError.errors.push('Selected catalogue product does not exist')
+          else rowErrors.push({ row: index + 1, errors: ['Selected catalogue product does not exist'] })
+        }
+      })
+    }
+
+    if (rowErrors.length) {
       return NextResponse.json(
-        { error: 'Pharmacy profile not found. Complete your setup to continue.' },
-        { status: 404 }
+        { error: 'Import validation failed; no rows were committed', rowErrors },
+        { status: 422 }
       )
     }
 
-    const { matchedRows } = await request.json()
+    if (body.validate_only === true) {
+      return NextResponse.json({ valid: true, rowErrors: [] })
+    }
 
-    if (!matchedRows || !Array.isArray(matchedRows)) {
+    const { data, error } = await supabase.rpc('import_inventory_file', {
+      p_pharmacy_id: pharmacy.id,
+      p_user_id: user.id,
+      p_rows: body.matchedRows,
+    })
+
+    if (error) {
       return NextResponse.json(
-        { error: 'Invalid payload: matchedRows must be an array' },
-        { status: 400 }
+        { error: `Import rolled back: ${error.message}`, rowErrors: [] },
+        { status: 409 }
       )
     }
 
-    const encoder = new TextEncoder()
-
-    // Setup ReadableStream for Server-Sent Events (SSE)
-    const stream = new ReadableStream({
-      async start(controller) {
-        const sendUpdate = (data: any) => {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
-        }
-
-        let imported = 0
-        let skipped = 0
-        let errors = 0
-        const total = matchedRows.length
-
-        sendUpdate({ status: 'started', progress: 0, imported, skipped, errors, total })
-
-        for (let i = 0; i < total; i++) {
-          const row = matchedRows[i]
-          const { mapped, selected_product_id } = row
-          
-          try {
-            // Call the database function to import the row atomically
-            const { data: res, error: rpcErr } = await supabase.rpc('import_inventory_row', {
-              p_pharmacy_id: pharmacy.id,
-              p_user_id: user.id,
-              p_selected_product_id: selected_product_id || '',
-              p_mapped: mapped
-            })
-
-            if (rpcErr) {
-              throw new Error(`RPC call failed: ${rpcErr.message}`)
-            }
-
-            if (!res || !(res as any).success) {
-              throw new Error(`Database import failed: ${(res as any)?.error || 'Unknown error'}`)
-            }
-
-            imported++
-          } catch (err: any) {
-            console.error(`Error importing row ${i + 1}:`, err)
-            errors++
-          }
-
-          // Send periodic progress
-          const progress = Math.round(((i + 1) / total) * 100)
-          sendUpdate({ status: 'running', progress, imported, skipped, errors, total })
-        }
-
-        sendUpdate({ status: 'completed', progress: 100, imported, skipped, errors, total })
-        controller.close()
-      }
-    })
-
-    return new NextResponse(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      }
-    })
-  } catch (error: any) {
-    console.error('Import commit error:', error)
+    return NextResponse.json(data, { status: 201 })
+  } catch (error) {
+    console.error('Import commit failed')
     return NextResponse.json(
-      { error: error.message || 'Internal server error committing import' },
+      { error: error instanceof Error ? error.message : 'Internal server error committing import' },
       { status: 500 }
     )
   }

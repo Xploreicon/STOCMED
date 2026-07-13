@@ -1,23 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { getAnthropicClient, runClaudeRequest } from '@/lib/anthropic'
 import { triageQuery } from '@/lib/triage/classifier'
 import { getSafeResponse } from '@/lib/triage/safe-responses'
+import { checkRateLimit } from '@/lib/rate-limit'
+import { z } from 'zod'
 
-type ChatMessage = {
-  role: 'system' | 'user' | 'assistant'
-  content: string
-}
+const chatMessageSchema = z.object({
+  role: z.enum(['system', 'user', 'assistant']),
+  content: z.string().max(2000),
+})
 
-interface AssistantPayload {
-  conversation: ChatMessage[]
-  query: string
-  userLocation?: {
-    latitude: number
-    longitude: number
-    label: string
-  } | null
-  pharmacies?: Array<Record<string, any>>
-}
+const assistantPayloadSchema = z.object({
+  conversation: z.array(chatMessageSchema),
+  query: z.string().max(1000).optional().default(''),
+  userLocation: z
+    .object({
+      latitude: z.number(),
+      longitude: z.number(),
+      label: z.string(),
+    })
+    .nullable()
+    .optional(),
+  pharmacies: z.array(z.record(z.string(), z.any())).optional(),
+})
+
 
 // Scope-locked clinical-concierge prompt (C.1)
 const SYSTEM_PROMPT = `You are StocMed's scope-locked patient concierge.
@@ -39,9 +45,24 @@ const GREETING_REGEX =
   /^(hi|hello|hey|hiya|good morning|good afternoon|good evening)(?:[!\.\s]*)$/i
 
 export async function POST(request: NextRequest) {
+  const rateLimit = checkRateLimit(request, 'chat-assistant', 15, 60_000)
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response
+  }
+
   try {
-    const body = (await request.json()) as AssistantPayload
-    const { conversation, query, userLocation, pharmacies } = body
+    const rawJson = await request.json()
+    const parsed = assistantPayloadSchema.safeParse(rawJson)
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: 'Invalid payload schema', details: parsed.error.flatten() },
+        { status: 400 }
+      )
+    }
+
+    const { conversation, query, userLocation, pharmacies } = parsed.data
+
 
     const lastUserMessage =
       [...conversation].filter((msg) => msg.role === 'user').pop()?.content || ''
@@ -64,6 +85,7 @@ export async function POST(request: NextRequest) {
     if (
       triageResult.risk_tier === 'CRISIS' ||
       triageResult.risk_tier === 'BLOCK_SOURCING' ||
+      triageResult.risk_tier === 'CARE_REDIRECT' ||
       triageResult.risk_tier === 'REDIRECT'
     ) {
       const safeResponse = getSafeResponse(triageResult.intent, triageResult.risk_tier);
@@ -107,8 +129,8 @@ export async function POST(request: NextRequest) {
 
       const topPharmacies = pharmacies
         .slice(0, 5)
-        .map((item, index) => {
-          const pharmacy = item.pharmacies ?? {}
+        .map((item: Record<string, any>, index: number) => {
+          const pharmacy = (item.pharmacies || {}) as Record<string, any>
           const distance =
             typeof item.distance_km === 'number'
               ? `${item.distance_km.toFixed(1)} km`
@@ -116,20 +138,21 @@ export async function POST(request: NextRequest) {
           const priceRange =
             typeof item.price_range_min === 'number' &&
             typeof item.price_range_max === 'number'
-              ? `${formatCurrency(item.price_range_min)} – ${formatCurrency(
-                  item.price_range_max
+              ? `${formatCurrency(item.price_range_min as number)} – ${formatCurrency(
+                  item.price_range_max as number
                 )}`
-              : formatCurrency(item.price) ?? 'Price unavailable'
+              : formatCurrency(item.price as number | null) ?? 'Price unavailable'
           const medicationName =
             item.name || item.brand_name || item.generic_name || 'Medication'
           const strength = item.strength ? ` (${item.strength})` : ''
           const stockText = describeStock(
-            item.quantity_in_stock ?? null,
-            item.low_stock_threshold
+            (item.quantity_in_stock as number | null) ?? null,
+            item.low_stock_threshold as number | null
           )
           return `- Pharmacy ${index + 1}: ${pharmacy.pharmacy_name || 'Unknown pharmacy'} | Product: ${medicationName}${strength} | Price: ${priceRange} | ${stockText} | Distance: ${distance}`
         })
         .join('\n')
+
 
       contextLines.push(
         `Nearby pharmacies:\n${topPharmacies || 'No pharmacies available'}`
@@ -148,58 +171,21 @@ export async function POST(request: NextRequest) {
         content: msg.content,
       }))
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    const openaiKey = process.env.OPENAI_API_KEY
+    const anthropic = getAnthropicClient()
 
-    // Helper to call OpenAI Chat Completion
-    const callOpenAI = async () => {
-      if (!openaiKey) return null;
-      console.log('Attempting OpenAI chat completion...');
-      try {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${openaiKey}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT + '\n\n' + contextLines.join('\n') },
-              ...messages
-            ],
-            temperature: 0.2,
-            max_tokens: 400
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`OpenAI HTTP error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return data.choices?.[0]?.message?.content || null;
-      } catch (err) {
-        console.error('OpenAI assistant error:', err);
-        return null;
-      }
-    };
-
-    // 3. Attempt Anthropic if key is available
-    if (apiKey) {
-      try {
-        const anthropic = new Anthropic({
-          apiKey: apiKey,
-        })
-
-        const response = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
+    if (anthropic) {
+      const response = await runClaudeRequest(
+        () => anthropic.messages.create({
+          model: process.env.ANTHROPIC_ASSISTANT_MODEL || 'claude-haiku-4-5-20251001',
           max_tokens: 400,
           temperature: 0.2,
           system: SYSTEM_PROMPT + '\n\n' + contextLines.join('\n'),
           messages: messages,
-        })
+        }),
+        10_000
+      )
 
+      if (response) {
         const assistantMessage = response.content[0].type === 'text'
           ? response.content[0].text
           : 'I am unable to provide additional details right now.'
@@ -208,28 +194,10 @@ export async function POST(request: NextRequest) {
           message: assistantMessage,
           triage: triageResult
         })
-      } catch (anthropicError) {
-        console.error('Anthropic assistant error, trying OpenAI fallback:', anthropicError)
-        const openaiResponse = await callOpenAI();
-        if (openaiResponse) {
-          return NextResponse.json({
-            message: openaiResponse,
-            triage: triageResult
-          })
-        }
-      }
-    } else {
-      console.log('Anthropic API key not found. Trying OpenAI...');
-      const openaiResponse = await callOpenAI();
-      if (openaiResponse) {
-        return NextResponse.json({
-          message: openaiResponse,
-          triage: triageResult
-        })
       }
     }
 
-    // Default fallback if both APIs are unavailable / fail
+    // Search remains usable when Anthropic is unavailable or out of credit.
     return NextResponse.json(
       {
         message:

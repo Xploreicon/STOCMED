@@ -51,7 +51,7 @@ export function classifyDeterministically(rawQuery: string): TriageResult | null
   if (!normalized) {
     return {
       intent: 'OUT_OF_SCOPE',
-      risk_tier: 'REDIRECT',
+      risk_tier: 'CARE_REDIRECT',
       confidence: 1.0,
       raw_query: rawQuery,
       layers_triggered: ['deterministic_empty'],

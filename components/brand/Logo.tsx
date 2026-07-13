@@ -1,9 +1,9 @@
 import Link from 'next/link';
 
 // Brand logo mark — tilted split pill inside a rounded square (matches /design-reference)
-export function LogoMark({ size = 32, onDark = false }: { size?: number; onDark?: boolean }) {
-  const box = onDark ? '#FFFFFF' : '#0066CC';
-  const bar = onDark ? '#0066CC' : '#FFFFFF';
+export function LogoMark({ size = 36, onDark = false }: { size?: number; onDark?: boolean }) {
+  const box = onDark ? 'var(--white)' : 'var(--primary)';
+  const bar = onDark ? 'var(--primary)' : 'var(--white)';
   return (
     <div
       className="flex items-center justify-center flex-shrink-0"
@@ -27,7 +27,7 @@ export function LogoMark({ size = 32, onDark = false }: { size?: number; onDark?
 }
 
 export function Logo({
-  size = 32,
+  size = 36,
   wordSize = 18,
   onDark = false,
   href = '/',
@@ -43,7 +43,7 @@ export function Logo({
     <>
       <LogoMark size={size} onDark={onDark} />
       <span
-        className={`font-medium tracking-[-0.2px] ${onDark ? 'text-white' : 'text-ink'}`}
+        className={`whitespace-nowrap font-medium ${onDark ? 'text-white' : 'text-ink'}`}
         style={{ fontSize: wordSize }}
       >
         StocMed

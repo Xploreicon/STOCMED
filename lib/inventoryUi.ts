@@ -2,9 +2,9 @@ import { format } from 'date-fns'
 import type { EnrichedInventoryRow, EnrichedBatch } from '@/lib/pharmacyInventory'
 
 export const STOCK_COLORS = {
-  in: { color: '#639922', bg: '#F2F7EA' },
-  low: { color: '#BA7517', bg: '#FBF2E6' },
-  out: { color: '#E24B4A', bg: '#FBEDEC' },
+  in: { color: 'var(--success)', bg: 'var(--success-tint)' },
+  low: { color: 'var(--warning)', bg: 'var(--warning-tint)' },
+  out: { color: 'var(--danger)', bg: 'var(--danger-tint)' },
 } as const
 
 export function formatNaira(amount: number) {
@@ -29,10 +29,10 @@ export interface RowBadge {
 
 export function getRowBadge(row: Pick<EnrichedInventoryRow, 'stock_status' | 'is_expired' | 'is_expiring_soon'>): RowBadge {
   if (row.is_expired) {
-    return { label: 'Expired', color: '#E24B4A', bg: '#FFFFFF', outline: true }
+    return { label: 'Expired', color: 'var(--danger)', bg: 'var(--white)', outline: true }
   }
   if (row.is_expiring_soon) {
-    return { label: 'Expiring soon', color: '#BA7517', bg: '#FFFFFF', outline: true }
+    return { label: 'Expiring soon', color: 'var(--warning)', bg: 'var(--white)', outline: true }
   }
   const stock = STOCK_COLORS[row.stock_status]
   const label =
@@ -41,9 +41,9 @@ export function getRowBadge(row: Pick<EnrichedInventoryRow, 'stock_status' | 'is
 }
 
 export function getBatchBadge(batch: Pick<EnrichedBatch, 'is_expired' | 'is_expiring_soon'>) {
-  if (batch.is_expired) return { label: 'Expired', color: '#E24B4A' }
-  if (batch.is_expiring_soon) return { label: 'Expiring soon', color: '#BA7517' }
-  return { label: 'OK', color: '#639922' }
+  if (batch.is_expired) return { label: 'Expired', color: 'var(--danger)' }
+  if (batch.is_expiring_soon) return { label: 'Expiring soon', color: 'var(--warning)' }
+  return { label: 'OK', color: 'var(--success)' }
 }
 
 export const STATUS_FILTERS = [

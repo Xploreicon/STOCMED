@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
       const dosageForm = mapping.dosage_form && rawRow[mapping.dosage_form] ? String(rawRow[mapping.dosage_form]).trim() : ''
       const category = mapping.category && rawRow[mapping.category] ? String(rawRow[mapping.category]).trim() : ''
       const packSize = mapping.pack_size && rawRow[mapping.pack_size] ? String(rawRow[mapping.pack_size]).trim() : ''
+      const sku = mapping.sku && rawRow[mapping.sku] ? String(rawRow[mapping.sku]).trim() : ''
       
       // Parse numbers
       const priceRaw = rawRow[mapping.price]
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
       
       const quantityRaw = rawRow[mapping.quantity]
       const quantity = quantityRaw !== undefined && quantityRaw !== '' ? Number(String(quantityRaw).replace(/[^0-9]/g, '')) : null
+      const unitCostRaw = mapping.unit_cost ? rawRow[mapping.unit_cost] : 0
+      const unitCost = unitCostRaw !== undefined && unitCostRaw !== '' ? Number(String(unitCostRaw).replace(/[^0-9\.]/g, '')) : 0
       
       const batchNumber = mapping.batch_number && rawRow[mapping.batch_number] ? String(rawRow[mapping.batch_number]).trim() : ''
       const expiryDateRaw = mapping.expiry_date && rawRow[mapping.expiry_date] ? rawRow[mapping.expiry_date] : ''
@@ -95,8 +98,10 @@ export async function POST(request: NextRequest) {
           dosage_form: dosageForm,
           category,
           pack_size: packSize,
+          sku,
           price,
           quantity,
+          unit_cost: unitCost,
           batch_number: batchNumber,
           expiry_date: expiryDate
         },

@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -176,7 +178,7 @@ export default function PharmacySettings() {
 
       {/* Tabs */}
       <div className="flex gap-0 border-b border-border mb-8">
-        <button
+        <Button
           onClick={() => setActiveTab('profile')}
           className={`pb-3 px-5 text-[15px] font-medium transition-colors border-b-2 ${
             activeTab === 'profile'
@@ -185,8 +187,8 @@ export default function PharmacySettings() {
           }`}
         >
           Pharmacy profile
-        </button>
-        <button
+        </Button>
+        <Button
           onClick={() => setActiveTab('account')}
           className={`pb-3 px-5 text-[15px] font-medium transition-colors border-b-2 ${
             activeTab === 'account'
@@ -195,7 +197,7 @@ export default function PharmacySettings() {
           }`}
         >
           Account
-        </button>
+        </Button>
       </div>
 
       {/* Profile Tab Content */}
@@ -219,9 +221,9 @@ export default function PharmacySettings() {
                 type="text"
                 value={licenseNumber}
                 disabled
-                className="flex-1 h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-[#F0F7FF] cursor-not-allowed focus:outline-none"
+                className="flex-1 h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-[var(--surface)] cursor-not-allowed focus:outline-none"
               />
-              <span className="text-[13px] font-medium text-[#639922] bg-[#F2F7EA] px-3.5 py-2 rounded-button whitespace-nowrap">
+              <span className="text-[13px] font-medium text-[var(--success)] bg-[var(--success-tint)] px-3.5 py-2 rounded-button whitespace-nowrap">
                 ✓ Verified
               </span>
             </div>
@@ -268,7 +270,7 @@ export default function PharmacySettings() {
           <div>
             <label className="block text-[14px] font-medium text-ink mb-2">Phone number</label>
             <div className="flex gap-2">
-              <div className="w-[72px] h-12 border border-border rounded-button flex items-center justify-center text-[15px] font-medium text-ink-muted bg-[#F0F7FF] flex-shrink-0">
+              <div className="w-[72px] h-12 border border-border rounded-button flex items-center justify-center text-[15px] font-medium text-ink-muted bg-[var(--surface)] flex-shrink-0">
                 +234
               </div>
               <input
@@ -303,7 +305,7 @@ export default function PharmacySettings() {
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">
-            <button
+            <Button
               type="button"
               onClick={() => {
                 if (pharmacy) {
@@ -318,14 +320,14 @@ export default function PharmacySettings() {
               className="h-12 flex items-center px-6 bg-white text-ink-muted border border-border font-medium text-[15px] rounded-button hover:bg-surface transition-colors"
             >
               Discard changes
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={isSaving}
-              className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[#0052A3] transition-colors disabled:opacity-60"
+              className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-60"
             >
               {isSaving ? 'Saving...' : 'Save changes'}
-            </button>
+            </Button>
           </div>
 
           {saveSuccess && (
@@ -346,7 +348,7 @@ export default function PharmacySettings() {
                 type="email"
                 value={email}
                 disabled
-                className="w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-[#F0F7FF] cursor-not-allowed focus:outline-none"
+                className="w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-[var(--surface)] cursor-not-allowed focus:outline-none"
               />
             </div>
 
@@ -375,30 +377,30 @@ export default function PharmacySettings() {
             </div>
 
             <div className="flex justify-end pt-2">
-              <button
+              <Button
                 type="submit"
                 disabled={isSaving}
-                className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[#0052A3] transition-colors disabled:opacity-60"
+                className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-60"
               >
                 {isSaving ? 'Updating...' : 'Update password'}
-              </button>
+              </Button>
             </div>
           </form>
 
           {/* Danger Zone */}
           <div className="mt-6 pt-6 border-t border-border">
-            <h3 className="text-[16px] font-medium text-[#E24B4A] mb-2">Danger zone</h3>
+            <h3 className="text-[16px] font-medium text-[var(--danger)] mb-2">Danger zone</h3>
             <p className="text-[14px] text-ink-muted leading-[1.55]">
               Deactivating your pharmacy removes it from patient search results. Your data is kept for 90 days in case you reactivate.
             </p>
             <div className="mt-4">
-              <button
+              <Button
                 type="button"
                 onClick={handleDeactivate}
-                className="h-11 flex items-center px-5 bg-white text-[#E24B4A] border-[1.5px] border-[#E24B4A] font-medium text-[14px] rounded-button hover:bg-[#FBEDEC] transition-colors"
+                className="h-11 flex items-center px-5 bg-white text-[var(--danger)] border-[1.5px] border-[var(--danger)] font-medium text-[14px] rounded-button hover:bg-[var(--danger-tint)] transition-colors"
               >
                 Deactivate pharmacy
-              </button>
+              </Button>
             </div>
           </div>
         </div>

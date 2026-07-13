@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useUser } from '@/hooks/useUser';
@@ -139,23 +141,23 @@ export default function SymptomQueuePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+      <div className="flex items-center justify-between border-b border-border pb-4">
         <div>
-          <h1 className="text-2xl font-bold font-display text-slate-900">
+          <h1 className="text-2xl font-bold font-display text-ink">
             Symptom Intake Queue
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-surface0 mt-1">
             Review symptoms and durational data submitted by patients under licensed pharmacist SLA.
           </p>
         </div>
 
         {/* Filter controls */}
         <div className="flex items-center space-x-2">
-          <span className="text-xs font-semibold text-slate-500">Filter status:</span>
+          <span className="text-xs font-semibold text-surface0">Filter status:</span>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="text-xs bg-white border border-slate-200 rounded-lg p-2 font-medium"
+            className="text-xs bg-white border border-border rounded-lg p-2 font-medium"
           >
             <option value="all">All tickets</option>
             <option value="submitted">Submitted</option>
@@ -169,15 +171,15 @@ export default function SymptomQueuePage() {
         {/* Intakes List Column */}
         <div className="lg:col-span-2 space-y-3">
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-20 bg-white border border-slate-200 rounded-2xl">
+            <div className="flex flex-col items-center justify-center p-20 bg-white border border-border rounded-2xl">
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
-              <span className="text-sm text-slate-500">Syncing intake queue...</span>
+              <span className="text-sm text-surface0">Syncing intake queue...</span>
             </div>
           ) : intakes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-20 bg-white border border-slate-200 border-dashed rounded-2xl">
-              <ClipboardList className="w-12 h-12 text-slate-300 mb-3" />
-              <span className="text-sm font-semibold text-slate-600">No tickets found</span>
-              <span className="text-xs text-slate-400 mt-1">Everything is clear for this filter status.</span>
+            <div className="flex flex-col items-center justify-center p-20 bg-white border border-border border-dashed rounded-2xl">
+              <ClipboardList className="w-12 h-12 text-border mb-3" />
+              <span className="text-sm font-semibold text-ink-muted">No tickets found</span>
+              <span className="text-xs text-ink-light mt-1">Everything is clear for this filter status.</span>
             </div>
           ) : (
             intakes.map((item) => (
@@ -185,12 +187,12 @@ export default function SymptomQueuePage() {
                 key={item.id}
                 onClick={() => setSelectedIntake(item)}
                 className={`p-4 bg-white border rounded-xl shadow-sm hover:shadow-md cursor-pointer transition-all flex items-start justify-between ${
-                  selectedIntake?.id === item.id ? 'border-2 border-blue-600' : 'border-slate-200'
+                  selectedIntake?.id === item.id ? 'border-2 border-blue-600' : 'border-border'
                 }`}
               >
                 <div className="space-y-1.5 text-left">
                   <div className="flex items-center space-x-2">
-                    <span className="text-xs font-bold text-slate-900">Patient Intake</span>
+                    <span className="text-xs font-bold text-ink">Patient Intake</span>
                     <span
                       className={`text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded-full ${
                         item.status === 'submitted'
@@ -204,22 +206,22 @@ export default function SymptomQueuePage() {
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-600 font-semibold line-clamp-2">
+                  <p className="text-xs text-ink-muted font-semibold line-clamp-2">
                     Symptoms: {item.symptoms}
                   </p>
                   
-                  <div className="flex items-center space-x-3 text-[11px] text-slate-400 font-medium">
+                  <div className="flex items-center space-x-3 text-[11px] text-ink-light font-medium">
                     <span>Duration: {item.duration}</span>
                     <span>•</span>
-                    <span>Severity: <span className="font-bold text-slate-600">{item.severity}</span></span>
+                    <span>Severity: <span className="font-bold text-ink-muted">{item.severity}</span></span>
                     <span>•</span>
                     <span>Age: {item.age}</span>
                   </div>
                 </div>
 
-                <button className="p-2 hover:bg-slate-50 text-slate-400 hover:text-slate-700 rounded-lg transition-colors">
+                <Button className="p-2 hover:bg-surface text-ink-light hover:text-ink rounded-lg transition-colors">
                   <Eye className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             ))
           )}
@@ -228,16 +230,16 @@ export default function SymptomQueuePage() {
         {/* Selected Intake Details Column */}
         <div className="lg:col-span-1">
           {selectedIntake ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5 text-left sticky top-6">
+            <div className="bg-white border border-border rounded-2xl p-5 shadow-sm space-y-5 text-left sticky top-6">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Intake Details</h3>
-                <p className="text-[11px] text-slate-400 font-mono mt-0.5">ID: {selectedIntake.id}</p>
+                <h3 className="text-sm font-bold text-ink">Intake Details</h3>
+                <p className="text-[11px] text-ink-light font-mono mt-0.5">ID: {selectedIntake.id}</p>
               </div>
 
               {/* Status Section */}
-              <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1.5">
+              <div className="p-3 bg-surface border border-surface rounded-xl space-y-1.5">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-500">Status:</span>
+                  <span className="font-semibold text-surface0">Status:</span>
                   <span
                     className={`uppercase font-bold tracking-wide text-[10px] px-2 py-0.5 rounded-full ${
                       selectedIntake.status === 'submitted'
@@ -252,41 +254,41 @@ export default function SymptomQueuePage() {
                 </div>
                 
                 {selectedIntake.status === 'submitted' && (
-                  <button
+                  <Button
                     onClick={() => handleClaim(selectedIntake.id)}
                     className="w-full mt-2 py-2 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-semibold rounded-lg shadow transition-all"
                   >
                     Claim Ticket & Review
-                  </button>
+                  </Button>
                 )}
               </div>
 
               {/* Patient details list */}
-              <div className="space-y-3.5 border-b border-slate-150 pb-4">
+              <div className="space-y-3.5 border-b border-surface pb-4">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Symptoms</span>
-                  <p className="text-xs text-slate-800 leading-relaxed font-medium mt-1">{selectedIntake.symptoms}</p>
+                  <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Symptoms</span>
+                  <p className="text-xs text-ink leading-relaxed font-medium mt-1">{selectedIntake.symptoms}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Duration</span>
-                    <p className="text-xs text-slate-800 font-medium mt-1">{selectedIntake.duration}</p>
+                    <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Duration</span>
+                    <p className="text-xs text-ink font-medium mt-1">{selectedIntake.duration}</p>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Severity</span>
-                    <p className="text-xs text-slate-800 font-bold mt-1 capitalize">{selectedIntake.severity}</p>
+                    <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Severity</span>
+                    <p className="text-xs text-ink font-bold mt-1 capitalize">{selectedIntake.severity}</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Age</span>
-                    <p className="text-xs text-slate-800 font-medium mt-1">{selectedIntake.age}</p>
+                    <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Age</span>
+                    <p className="text-xs text-ink font-medium mt-1">{selectedIntake.age}</p>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Pregnancy</span>
-                    <p className="text-xs text-slate-800 font-medium mt-1">
+                    <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Pregnancy</span>
+                    <p className="text-xs text-ink font-medium mt-1">
                       {selectedIntake.pregnancy_breastfeeding ? 'Yes (Preg/Breastfeed)' : 'No'}
                     </p>
                   </div>
@@ -294,21 +296,21 @@ export default function SymptomQueuePage() {
 
                 {selectedIntake.current_medications && (
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Current Meds</span>
-                    <p className="text-xs text-slate-800 font-medium mt-1">{selectedIntake.current_medications}</p>
+                    <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Current Meds</span>
+                    <p className="text-xs text-ink font-medium mt-1">{selectedIntake.current_medications}</p>
                   </div>
                 )}
 
                 {selectedIntake.allergies && (
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Allergies</span>
-                    <p className="text-xs text-slate-850 font-bold text-amber-700 mt-1">{selectedIntake.allergies}</p>
+                    <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Allergies</span>
+                    <p className="text-xs text-ink font-bold text-amber-700 mt-1">{selectedIntake.allergies}</p>
                   </div>
                 )}
 
                 {selectedIntake.photo_url && (
                   <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Attachment</span>
+                    <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Attachment</span>
                     {signedPhotoUrl ? (
                       <a
                         href={signedPhotoUrl}
@@ -319,7 +321,7 @@ export default function SymptomQueuePage() {
                         View Photo / Document
                       </a>
                     ) : (
-                      <span className="text-[10px] text-slate-400 mt-1 block">Resolving photo link...</span>
+                      <span className="text-[10px] text-ink-light mt-1 block">Resolving photo link...</span>
                     )}
                   </div>
                 )}
@@ -329,19 +331,19 @@ export default function SymptomQueuePage() {
               {selectedIntake.status === 'under_review' && selectedIntake.assigned_pharmacist === user?.id && (
                 <form onSubmit={handleSubmitResponse} className="space-y-3.5">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <label className="block text-[10px] font-bold text-ink-light uppercase tracking-wider">
                       Pharmacist Clinical Answer
                     </label>
                     <textarea
                       value={responseHtml}
                       onChange={(e) => setResponseHtml(e.target.value)}
                       placeholder="Write your recommendation, OTC instructions, or doctor consultation redirection details..."
-                      className="w-full mt-1.5 p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all resize-none h-24"
+                      className="w-full mt-1.5 p-3 text-xs bg-surface border border-border rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all resize-none h-24"
                       required
                     />
                   </div>
 
-                  <button
+                  <Button
                     type="submit"
                     disabled={isSubmitting}
                     className="w-full py-2.5 bg-green-600 hover:bg-green-700 disabled:bg-green-300 active:scale-[0.99] text-white text-xs font-semibold rounded-xl flex items-center justify-center space-x-2 transition-all shadow-md"
@@ -351,7 +353,7 @@ export default function SymptomQueuePage() {
                     ) : (
                       <span>Submit Answer</span>
                     )}
-                  </button>
+                  </Button>
                 </form>
               )}
 
@@ -368,9 +370,9 @@ export default function SymptomQueuePage() {
               )}
             </div>
           ) : (
-            <div className="bg-slate-50 border border-slate-200 border-dashed rounded-2xl p-8 text-center">
-              <ClipboardList className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <span className="text-xs font-semibold text-slate-500">Select a ticket to review</span>
+            <div className="bg-surface border border-border border-dashed rounded-2xl p-8 text-center">
+              <ClipboardList className="w-10 h-10 text-border mx-auto mb-2" />
+              <span className="text-xs font-semibold text-surface0">Select a ticket to review</span>
             </div>
           )}
         </div>

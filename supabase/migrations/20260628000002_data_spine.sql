@@ -569,36 +569,6 @@ BEGIN
     END IF;
 END$$;
 
--- Create public.drugs view for backward compatibility
-CREATE OR REPLACE VIEW public.drugs AS
-SELECT 
-    pi.id AS id,
-    pi.pharmacy_id AS pharmacy_id,
-    coalesce(p.brand_name, p.generic_name) AS name,
-    p.generic_name AS generic_name,
-    p.brand_name AS brand_name,
-    p.category AS category,
-    p.dosage_form AS dosage_form,
-    p.strength AS strength,
-    p.description AS description,
-    pi.price AS price,
-    pi.quantity_in_stock AS quantity_in_stock,
-    pi.low_stock_threshold AS low_stock_threshold,
-    p.requires_prescription AS requires_prescription,
-    p.manufacturer AS manufacturer,
-    (
-        SELECT expiry_date 
-        FROM public.batches b 
-        WHERE b.inventory_id = pi.id 
-        ORDER BY expiry_date ASC 
-        LIMIT 1
-    ) AS expiry_date,
-    pi.created_at AS created_at,
-    pi.updated_at AS updated_at,
-    p.image_url AS image_url
-FROM public.pharmacy_inventory pi
-JOIN public.products p ON pi.product_id = p.id;
-
 -- Enable RLS
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.pharmacy_inventory ENABLE ROW LEVEL SECURITY;

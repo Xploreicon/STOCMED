@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -89,12 +91,12 @@ export default function SearchResults() {
 
   const getStockInfo = (qty: number, threshold = 10) => {
     if (qty <= 0) {
-      return { label: 'Out of stock', badgeColor: '#E24B4A', badgeBg: '#FBEDEC' };
+      return { label: 'Out of stock', badgeColor: 'var(--danger)', badgeBg: 'var(--danger-tint)' };
     }
     if (qty <= threshold) {
-      return { label: 'Low stock', badgeColor: '#BA7517', badgeBg: '#FBF2E6' };
+      return { label: 'Low stock', badgeColor: 'var(--warning)', badgeBg: 'var(--warning-tint)' };
     }
-    return { label: 'In stock', badgeColor: '#639922', badgeBg: '#F2F7EA' };
+    return { label: 'In stock', badgeColor: 'var(--success)', badgeBg: 'var(--success-tint)' };
   };
 
   const handleOpenDetail = (item: DrugSearchResult) => {
@@ -162,7 +164,7 @@ export default function SearchResults() {
             <>
               {exactMatches.length > 0 && (
                 <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Direct Matches</h3>
+                  <h3 className="text-xs font-bold text-ink-light uppercase tracking-wider">Direct Matches</h3>
                   <div className="flex flex-col gap-3">
                     {exactMatches.map((r) => {
                       const stock = getStockInfo(r.quantity_in_stock, r.low_stock_threshold);
@@ -274,7 +276,7 @@ export default function SearchResults() {
       </div>
 
       {/* Alternative suggestion banner */}
-      <div className="mt-7 bg-[#F0F7FF] border border-border rounded-card p-4 flex items-start gap-3">
+      <div className="mt-7 bg-[var(--surface)] border border-border rounded-card p-4 flex items-start gap-3">
         <span className="text-[18px] mt-0.5">💡</span>
         <p className="text-[14px] font-normal text-ink-muted leading-relaxed">
           Need a cheaper option? Ask StocMed to check for generic alternatives or brands with the same active ingredients.
@@ -350,13 +352,13 @@ export default function SearchResults() {
               {/* Action buttons */}
               <div className="flex flex-col gap-2 pt-2">
                 <div className="flex gap-3">
-                  <button
+                  <Button
                     onClick={handleReserve}
                     disabled={reserving}
-                    className="flex-1 h-12 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[#0052A3] transition-colors disabled:opacity-60 flex items-center justify-center"
+                    className="flex-1 h-12 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-60 flex items-center justify-center"
                   >
                     {reserving ? 'Reserving...' : 'Reserve medication'}
-                  </button>
+                  </Button>
                   {selectedItem.pharmacies.phone && (
                     <a
                       href={`tel:${selectedItem.pharmacies.phone}`}
@@ -371,7 +373,7 @@ export default function SearchResults() {
                   href={`https://chowdeck.com/search?q=${encodeURIComponent(selectedItem.brand_name || selectedItem.name)}&store=${encodeURIComponent(selectedItem.pharmacies.pharmacy_name)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="w-full h-12 bg-[#00A859] hover:bg-[#008F4C] text-white text-[15px] font-medium rounded-button transition-colors flex items-center justify-center space-x-2"
+                  className="w-full h-12 bg-[var(--legacy-success)] hover:bg-[var(--legacy-success-hover)] text-white text-[15px] font-medium rounded-button transition-colors flex items-center justify-center space-x-2"
                 >
                   <span className="font-bold">⚡ Deliver with Chowdeck</span>
                 </a>

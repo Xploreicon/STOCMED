@@ -196,7 +196,7 @@ export default function EditDrugModal({
                     className="object-cover"
                     unoptimized
                   />
-                  <button
+                  <Button
                     type="button"
                     onClick={clearImage}
                     className="absolute top-0.5 right-0.5 bg-white/90 hover:bg-white text-ink rounded-full p-0.5 border border-border shadow transition-transform hover:scale-110"
@@ -204,7 +204,7 @@ export default function EditDrugModal({
                     disabled={editDrugMutation.isPending || isUploading}
                   >
                     <X className="w-3 h-3" />
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <label className="cursor-pointer flex flex-col items-center justify-center h-16 w-16 rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-surface/50 bg-white shrink-0 transition-all shadow-sm">

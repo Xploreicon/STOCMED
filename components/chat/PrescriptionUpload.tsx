@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import React, { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -110,11 +111,11 @@ export default function PrescriptionUpload({
   };
 
   return (
-    <div className="w-full bg-white border border-slate-200 rounded-2xl p-5 shadow-md flex flex-col items-center">
+    <div className="w-full bg-white border border-border rounded-2xl p-5 shadow-md flex flex-col items-center">
       <div className="text-left w-full mb-4">
-        <h4 className="text-sm font-bold text-slate-900">Upload Prescription</h4>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Please upload a valid doctor&apos;s prescription for <span className="font-semibold text-slate-800">{productName}</span>.
+        <h4 className="text-sm font-bold text-ink">Upload Prescription</h4>
+        <p className="text-xs text-surface0 mt-0.5">
+          Please upload a valid doctor&apos;s prescription for <span className="font-semibold text-ink">{productName}</span>.
         </p>
       </div>
 
@@ -134,19 +135,19 @@ export default function PrescriptionUpload({
           className={`w-full border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all ${
             file
               ? 'border-blue-300 bg-blue-50/20'
-              : 'border-slate-300 hover:border-blue-400 bg-slate-50 hover:bg-blue-50/10'
+              : 'border-border hover:border-blue-400 bg-surface hover:bg-blue-50/10'
           }`}
         >
           {file ? (
             <FileText className="w-10 h-10 text-blue-500 mb-2" />
           ) : (
-            <Upload className="w-10 h-10 text-slate-400 mb-2" />
+            <Upload className="w-10 h-10 text-ink-light mb-2" />
           )}
 
-          <span className="text-sm font-semibold text-slate-700">
+          <span className="text-sm font-semibold text-ink">
             {file ? file.name : 'Choose file or drag & drop'}
           </span>
-          <span className="text-xs text-slate-400 mt-1">
+          <span className="text-xs text-ink-light mt-1">
             {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : 'JPG, PNG, PDF up to 5MB'}
           </span>
         </div>
@@ -162,15 +163,15 @@ export default function PrescriptionUpload({
 
       {file && uploadStatus !== 'success' && (
         <div className="w-full mt-4 flex items-center space-x-3">
-          <button
+          <Button
             onClick={() => setFile(null)}
             disabled={isUploading}
-            className="flex-1 py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg border border-slate-200 transition-colors"
+            className="flex-1 py-2 text-xs font-semibold text-surface0 hover:text-ink hover:bg-surface rounded-lg border border-border transition-colors"
           >
             Cancel
-          </button>
+          </Button>
           
-          <button
+          <Button
             onClick={handleUpload}
             disabled={isUploading}
             className="flex-1 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 rounded-lg flex items-center justify-center space-x-2 transition-colors shadow-sm"
@@ -183,7 +184,7 @@ export default function PrescriptionUpload({
             ) : (
               <span>Submit prescription</span>
             )}
-          </button>
+          </Button>
         </div>
       )}
     </div>

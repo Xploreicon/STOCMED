@@ -70,9 +70,9 @@ export default function IntakeStatusTracker({ intakeId }: IntakeStatusTrackerPro
 
   if (loading) {
     return (
-      <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col items-center justify-center">
+      <div className="w-full bg-surface border border-border rounded-2xl p-6 flex flex-col items-center justify-center">
         <Loader2 className="w-6 h-6 text-blue-600 animate-spin mb-2" />
-        <span className="text-xs text-slate-500">Loading intake status tracker...</span>
+        <span className="text-xs text-surface0">Loading intake status tracker...</span>
       </div>
     );
   }
@@ -94,13 +94,13 @@ export default function IntakeStatusTracker({ intakeId }: IntakeStatusTrackerPro
   const isSlaMet = new Date() < deadline;
 
   return (
-    <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-5 shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+    <div className="w-full bg-surface border border-border rounded-2xl p-5 shadow-sm">
+      <div className="flex items-center justify-between border-b border-border pb-3 mb-4">
         <div>
-          <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+          <h4 className="text-xs font-bold text-ink uppercase tracking-wide">
             Intake Queue Status
           </h4>
-          <span className="text-[10px] text-slate-400 font-mono mt-0.5 block">
+          <span className="text-[10px] text-ink-light font-mono mt-0.5 block">
             ID: {intakeId.slice(0, 8)}
           </span>
         </div>
@@ -115,7 +115,7 @@ export default function IntakeStatusTracker({ intakeId }: IntakeStatusTrackerPro
 
       {/* Timeline steps */}
       <div className="relative flex items-center justify-between mb-6 px-4">
-        <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-0.5 bg-slate-200 -z-10" />
+        <div className="absolute left-6 right-6 top-1/2 -translate-y-1/2 h-0.5 bg-border -z-10" />
         <div
           className="absolute left-6 top-1/2 -translate-y-1/2 h-0.5 bg-blue-600 -z-10 transition-all duration-500"
           style={{
@@ -134,7 +134,7 @@ export default function IntakeStatusTracker({ intakeId }: IntakeStatusTrackerPro
           >
             1
           </div>
-          <span className="text-[10px] font-semibold text-slate-700 mt-1.5">Submitted</span>
+          <span className="text-[10px] font-semibold text-ink mt-1.5">Submitted</span>
         </div>
 
         {/* Step 2: Under Review */}
@@ -145,12 +145,12 @@ export default function IntakeStatusTracker({ intakeId }: IntakeStatusTrackerPro
                 ? 'bg-blue-600 border-blue-600 text-white animate-pulse'
                 : status === 'answered'
                 ? 'bg-white border-blue-600 text-blue-600'
-                : 'bg-white border-slate-300 text-slate-400'
+                : 'bg-white border-border text-ink-light'
             }`}
           >
             2
           </div>
-          <span className="text-[10px] font-semibold text-slate-500 mt-1.5">Reviewing</span>
+          <span className="text-[10px] font-semibold text-surface0 mt-1.5">Reviewing</span>
         </div>
 
         {/* Step 3: Completed */}
@@ -159,12 +159,12 @@ export default function IntakeStatusTracker({ intakeId }: IntakeStatusTrackerPro
             className={`w-6 h-6 rounded-full flex items-center justify-center border-2 text-[10px] font-bold ${
               status === 'answered'
                 ? 'bg-green-600 border-green-600 text-white'
-                : 'bg-white border-slate-300 text-slate-400'
+                : 'bg-white border-border text-ink-light'
             }`}
           >
             3
           </div>
-          <span className="text-[10px] font-semibold text-slate-500 mt-1.5">Completed</span>
+          <span className="text-[10px] font-semibold text-surface0 mt-1.5">Completed</span>
         </div>
       </div>
 
@@ -177,17 +177,17 @@ export default function IntakeStatusTracker({ intakeId }: IntakeStatusTrackerPro
               Pharmacist Response
             </span>
           </div>
-          <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
+          <p className="text-xs text-ink leading-relaxed whitespace-pre-line">
             {intake.pharmacist_response}
           </p>
         </div>
       ) : (
-        <div className="bg-slate-100/50 border border-slate-200 border-dashed rounded-xl p-4 text-center">
-          <MessageSquare className="w-5 h-5 text-slate-400 mx-auto mb-1.5" />
-          <span className="text-xs font-semibold text-slate-700 block">
+        <div className="bg-surface/50 border border-border border-dashed rounded-xl p-4 text-center">
+          <MessageSquare className="w-5 h-5 text-ink-light mx-auto mb-1.5" />
+          <span className="text-xs font-semibold text-ink block">
             {status === 'under_review' ? 'Pharmacist is writing a response...' : 'Symptom intake submitted'}
           </span>
-          <span className="text-[10px] text-slate-500 mt-0.5 block">
+          <span className="text-[10px] text-surface0 mt-0.5 block">
             {status === 'under_review'
               ? 'Our pharmacist has claimed your ticket and is preparing recommendations.'
               : 'Our pharmacist will review this ticket and suggest safe next steps shortly.'}

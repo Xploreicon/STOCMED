@@ -343,7 +343,7 @@ export default function AddDrugModal({
               ) : searchResults.length > 0 ? (
                 <div className="divide-y divide-border max-h-[300px] overflow-y-auto border border-border rounded-lg bg-white shadow-inner">
                   {searchResults.map((prod) => (
-                    <button
+                    <Button
                       key={prod.id}
                       type="button"
                       onClick={() => setSelectedProduct(prod)}
@@ -358,7 +358,7 @@ export default function AddDrugModal({
                         </div>
                       </div>
                       <Plus className="w-5 h-5 text-ink-light" />
-                    </button>
+                    </Button>
                   ))}
                 </div>
               ) : searchQuery.trim() ? (
@@ -406,13 +406,13 @@ export default function AddDrugModal({
                         sizes="112px"
                         className="object-cover"
                       />
-                      <button
+                      <Button
                         type="button"
                         onClick={clearImage}
                         className="absolute top-1 right-1 bg-white/90 hover:bg-white text-ink rounded-full p-1 border border-border shadow transition-transform hover:scale-110"
                       >
                         <X className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <label className="cursor-pointer flex flex-col items-center justify-center h-28 w-28 rounded-xl border border-dashed border-border hover:border-primary/50 hover:bg-surface/50 bg-white transition-all shadow-sm">

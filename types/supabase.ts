@@ -82,6 +82,15 @@ export interface Database {
           updated_at?: string
           logo_url?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: 'pharmacies_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: true
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
         Update: {
           id?: string
           user_id?: string
@@ -174,6 +183,7 @@ export interface Database {
           timestamp: string
           location: string | null
           metadata: Json | null
+          product_id: string | null
         }
         Insert: {
           id?: string
@@ -186,6 +196,7 @@ export interface Database {
           timestamp?: string
           location?: string | null
           metadata?: Json | null
+          product_id?: string | null
         }
         Update: {
           id?: string
@@ -198,6 +209,7 @@ export interface Database {
           timestamp?: string
           location?: string | null
           metadata?: Json | null
+          product_id?: string | null
         }
       }
       chat_messages: {
@@ -322,6 +334,22 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'pharmacy_inventory_pharmacy_id_fkey'
+            columns: ['pharmacy_id']
+            isOneToOne: false
+            referencedRelation: 'pharmacies'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pharmacy_inventory_product_id_fkey'
+            columns: ['product_id']
+            isOneToOne: false
+            referencedRelation: 'products'
+            referencedColumns: ['id']
+          },
+        ]
       }
       batches: {
         Row: {
@@ -351,6 +379,15 @@ export interface Database {
           cost_price?: number | null
           created_at?: string
         }
+        Relationships: [
+          {
+            foreignKeyName: 'batches_inventory_id_fkey'
+            columns: ['inventory_id']
+            isOneToOne: false
+            referencedRelation: 'pharmacy_inventory'
+            referencedColumns: ['id']
+          },
+        ]
       }
       stock_movements: {
         Row: {
@@ -633,7 +670,22 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      sync_shift_open: {
+        Args: { p_shift_id: string; p_pharmacy_id: string; p_opening_float: number; p_opened_at: string }
+        Returns: Json
+      }
+      sync_pos_sale_with_shift: {
+        Args: { p_pharmacy_id: string; p_sale: Json }
+        Returns: Json
+      }
+      sync_shift_close: {
+        Args: { p_shift_id: string; p_pharmacy_id: string; p_counted_cash: number; p_notes: string | null; p_closed_at: string }
+        Returns: Json
+      }
+      get_shift_report: {
+        Args: { p_shift_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       user_role: 'patient' | 'pharmacy'

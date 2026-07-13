@@ -92,7 +92,7 @@ export default async function PatientDashboard() {
           </Link>
           <Link
             href="/chat"
-            className="w-[52px] h-[52px] flex-shrink-0 rounded-button bg-primary flex items-center justify-center text-white text-lg hover:bg-[#0052A3]"
+            className="w-[52px] h-[52px] flex-shrink-0 rounded-button bg-primary flex items-center justify-center text-white text-lg hover:bg-[var(--primary-hover)]"
             aria-label="Start chat search"
           >
             →

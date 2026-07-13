@@ -44,6 +44,36 @@
 
     --surface: #F0F7FF; /* #F0F7FF — light blue tint */
     --surface-alt: #F0F7FF;
+    --white: #FFFFFF;
+    --ink: #1A1A1A;
+    --ink-muted: #4A4A4A;
+    --ink-light: #888888;
+    --navy: #042C53;
+    --navy-light: #073A6B;
+    --primary-hover: #0052A3;
+    --primary-dark: #003D7A;
+    --primary-deep: #002952;
+    --primary-soft: #E0EFFF;
+    --primary-pale: #BBE0FF;
+    --primary-light: #8ACDFF;
+    --cyan: #06B6D4;
+    --pos-bg: #0A2540;
+    --pos-panel: #0D3460;
+    --pos-control: #164177;
+    --pos-accent: #54B7FF;
+    --pos-success: #34D399;
+    --pos-warning: #FBBF24;
+    --pos-danger: #FB7185;
+    --ios-danger: #FF3B30;
+    --ios-warning: #FF9500;
+    --legacy-success: #00A859;
+    --legacy-success-hover: #008F4C;
+    --receipt-border: #C9DCEF;
+    --muted-blue: #4A79A8;
+    --primary-mid: #2A9DFF;
+    --primary-faint: #EAF3FF;
+    --primary-wash: #D6E8FF;
+    --success-bright: #2DB88A;
 
     /* Warm status-badge background tints (from design) */
     --success-tint: #F2F7EA;  /* #F2F7EA */

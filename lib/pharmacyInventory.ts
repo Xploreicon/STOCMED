@@ -39,6 +39,8 @@ export interface EnrichedInventoryRow {
   generic_name: string
   brand_name: string | null
   manufacturer: string | null
+  nafdac_number: string | null
+  barcode: string | null
   category: string | null
   dosage_form: string | null
   strength: string
@@ -142,6 +144,8 @@ export async function getEnrichedInventory(
       generic_name: product?.generic_name ?? '',
       brand_name: product?.brand_name ?? null,
       manufacturer: product?.manufacturer ?? null,
+      nafdac_number: product?.nafdac_number ?? null,
+      barcode: product?.barcode ?? null,
       category: product?.category ?? null,
       dosage_form: product?.dosage_form ?? null,
       strength: product?.strength ?? '',

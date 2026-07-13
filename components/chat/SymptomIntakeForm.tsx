@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import React, { useState, useRef } from 'react';
 import { FileText, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -107,12 +108,12 @@ export default function SymptomIntakeForm({
   };
 
   return (
-    <div className="w-full bg-white border border-slate-200 rounded-2xl p-5 shadow-lg max-w-lg mx-auto">
-      <div className="flex items-center space-x-2.5 mb-4 border-b border-slate-100 pb-3">
+    <div className="w-full bg-white border border-border rounded-2xl p-5 shadow-lg max-w-lg mx-auto">
+      <div className="flex items-center space-x-2.5 mb-4 border-b border-surface pb-3">
         <FileText className="w-5 h-5 text-blue-600" />
         <div>
-          <h3 className="text-sm font-bold text-slate-900">Pharmacist Symptom Intake</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h3 className="text-sm font-bold text-ink">Pharmacist Symptom Intake</h3>
+          <p className="text-xs text-surface0 mt-0.5">
             Fill this out to queue for review by a licensed duty pharmacist.
           </p>
         </div>
@@ -121,14 +122,14 @@ export default function SymptomIntakeForm({
       <form onSubmit={handleSubmit} className="space-y-4 text-left">
         {/* Symptoms */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+          <label className="block text-xs font-bold text-ink uppercase tracking-wide">
             Describe symptoms *
           </label>
           <textarea
             value={symptoms}
             onChange={(e) => setSymptoms(e.target.value)}
             placeholder="e.g. Cough, runny nose, slight throat irritation..."
-            className="w-full mt-1.5 p-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all resize-none h-20"
+            className="w-full mt-1.5 p-3 text-sm bg-surface border border-border rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all resize-none h-20"
             required
           />
         </div>
@@ -136,7 +137,7 @@ export default function SymptomIntakeForm({
         {/* Duration & Age */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+            <label className="block text-xs font-bold text-ink uppercase tracking-wide">
               Duration *
             </label>
             <input
@@ -144,12 +145,12 @@ export default function SymptomIntakeForm({
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
               placeholder="e.g. 3 days"
-              className="w-full mt-1.5 p-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
+              className="w-full mt-1.5 p-3 text-sm bg-surface border border-border rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
               required
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+            <label className="block text-xs font-bold text-ink uppercase tracking-wide">
               Patient Age *
             </label>
             <input
@@ -157,7 +158,7 @@ export default function SymptomIntakeForm({
               value={age}
               onChange={(e) => setAge(e.target.value)}
               placeholder="e.g. 28 years"
-              className="w-full mt-1.5 p-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
+              className="w-full mt-1.5 p-3 text-sm bg-surface border border-border rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
               required
             />
           </div>
@@ -166,13 +167,13 @@ export default function SymptomIntakeForm({
         {/* Severity & Pregnancy */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+            <label className="block text-xs font-bold text-ink uppercase tracking-wide">
               Severity *
             </label>
             <select
               value={severity}
               onChange={(e) => setSeverity(e.target.value as any)}
-              className="w-full mt-1.5 p-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
+              className="w-full mt-1.5 p-3 text-sm bg-surface border border-border rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
             >
               <option value="mild">Mild</option>
               <option value="moderate">Moderate</option>
@@ -185,9 +186,9 @@ export default function SymptomIntakeForm({
               id="preg-breast"
               checked={pregnancyBreastfeeding}
               onChange={(e) => setPregnancyBreastfeeding(e.target.checked)}
-              className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+              className="w-4 h-4 text-blue-600 border-border rounded focus:ring-blue-500"
             />
-            <label htmlFor="preg-breast" className="text-xs font-semibold text-slate-700 cursor-pointer">
+            <label htmlFor="preg-breast" className="text-xs font-semibold text-ink cursor-pointer">
               Pregnancy / Breastfeeding?
             </label>
           </div>
@@ -196,7 +197,7 @@ export default function SymptomIntakeForm({
         {/* Medications & Allergies */}
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+            <label className="block text-xs font-bold text-ink uppercase tracking-wide">
               Current Meds
             </label>
             <input
@@ -204,11 +205,11 @@ export default function SymptomIntakeForm({
               value={currentMedications}
               onChange={(e) => setCurrentMedications(e.target.value)}
               placeholder="e.g. None or Vitamin C"
-              className="w-full mt-1.5 p-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
+              className="w-full mt-1.5 p-3 text-sm bg-surface border border-border rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+            <label className="block text-xs font-bold text-ink uppercase tracking-wide">
               Drug Allergies
             </label>
             <input
@@ -216,14 +217,14 @@ export default function SymptomIntakeForm({
               value={allergies}
               onChange={(e) => setAllergies(e.target.value)}
               placeholder="e.g. Penicillin"
-              className="w-full mt-1.5 p-3 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
+              className="w-full mt-1.5 p-3 text-sm bg-surface border border-border rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all"
             />
           </div>
         </div>
 
         {/* Photo Upload (Optional) */}
         <div>
-          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide">
+          <label className="block text-xs font-bold text-ink uppercase tracking-wide">
             Attach photo (Optional)
           </label>
           <input
@@ -234,30 +235,30 @@ export default function SymptomIntakeForm({
             accept=".jpg,.jpeg,.png,.webp"
           />
           <div className="flex items-center space-x-2 mt-1.5">
-            <button
+            <Button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors"
+              className="px-3.5 py-2 text-xs font-semibold text-ink bg-surface hover:bg-border border border-border rounded-lg transition-colors"
             >
               Choose photo
-            </button>
-            <span className="text-xs text-slate-500">
+            </Button>
+            <span className="text-xs text-surface0">
               {file ? file.name : 'No file selected (Max 5MB)'}
             </span>
           </div>
         </div>
 
         <div className="flex items-center space-x-3 pt-2">
-          <button
+          <Button
             type="button"
             onClick={onCancel}
             disabled={isSubmitting}
-            className="flex-1 py-3 text-sm font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl border border-slate-200 transition-colors"
+            className="flex-1 py-3 text-sm font-semibold text-surface0 hover:text-ink hover:bg-surface rounded-xl border border-border transition-colors"
           >
             Cancel
-          </button>
+          </Button>
           
-          <button
+          <Button
             type="submit"
             disabled={isSubmitting}
             className="flex-1 py-3 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 rounded-xl flex items-center justify-center space-x-2 transition-all shadow-md"
@@ -270,7 +271,7 @@ export default function SymptomIntakeForm({
             ) : (
               <span>Submit to Duty RPh</span>
             )}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

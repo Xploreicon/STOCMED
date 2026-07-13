@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -96,12 +98,12 @@ export default function PosModal({ isOpen, onClose, rows }: PosModalProps) {
       <DialogContent className="max-h-[85vh] max-w-[420px] overflow-y-auto rounded-feature p-7">
         <div className="mb-2 flex items-center justify-between">
           <DialogTitle className="text-xl font-medium text-ink">Point of sale</DialogTitle>
-          <button
+          <Button
             onClick={resetAndClose}
             className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-tint text-secondary"
           >
             <X className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
         <p className="mb-5 text-sm leading-relaxed text-secondary">
           Ring up an in-store sale. Stock updates automatically when you complete a sale.
@@ -116,14 +118,14 @@ export default function PosModal({ isOpen, onClose, rows }: PosModalProps) {
           {results.length > 0 && (
             <div className="absolute left-0 right-0 top-[52px] z-10 flex flex-col gap-1 rounded-control border border-hairline bg-white p-1.5 shadow-sm">
               {results.map((r) => (
-                <button
+                <Button
                   key={r.id}
                   onClick={() => addToCart(r)}
                   className="flex items-center justify-between rounded-lg px-2.5 py-2 text-left hover:bg-brand-tint"
                 >
                   <span className="text-sm text-ink">{r.generic_name}</span>
                   <span className="text-xs text-secondary">{formatNaira(r.price)}</span>
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -149,9 +151,9 @@ export default function PosModal({ isOpen, onClose, rows }: PosModalProps) {
                       onChange={(e) => updateQty(line.row.id, parseInt(e.target.value, 10) || 1)}
                       className="h-6 w-12 rounded border border-hairline px-1 text-center text-xs"
                     />
-                    <button onClick={() => removeLine(line.row.id)} className="text-stock-out">
+                    <Button onClick={() => removeLine(line.row.id)} className="text-stock-out">
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <div className="shrink-0 text-[15px] font-medium text-brand-deep">
@@ -167,13 +169,13 @@ export default function PosModal({ isOpen, onClose, rows }: PosModalProps) {
           <span className="text-xl font-medium text-brand-deep">{formatNaira(total)}</span>
         </div>
         {error && <p className="mb-3 text-xs text-stock-out">{error}</p>}
-        <button
+        <Button
           onClick={handleCompleteSale}
           disabled={cart.length === 0 || isCompleting}
           className="h-12 w-full rounded-control bg-brand text-[15px] font-medium text-white disabled:opacity-50"
         >
           {isCompleting ? 'Completing…' : 'Complete sale'}
-        </button>
+        </Button>
       </DialogContent>
     </Dialog>
   );

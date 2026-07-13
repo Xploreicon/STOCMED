@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { getEnrichedInventory } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function PATCH(
@@ -90,19 +91,20 @@ export async function PATCH(
       }
     }
 
-    // Fetch and return the updated view record to keep UI happy
-    const { data: drug, error: fetchError } = await (supabase as any)
-      .from('drugs')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (fetchError) {
-      console.error('Error fetching updated drug view:', fetchError)
+    let updatedInventory
+    try {
+      updatedInventory = await getEnrichedInventory(supabase, pharmacy.id)
+    } catch (fetchError) {
+      console.error('Error fetching updated inventory item:', fetchError)
       return NextResponse.json(
         { error: 'Failed to retrieve updated drug profile' },
         { status: 500 }
       )
+    }
+
+    const drug = updatedInventory.rows.find((row) => row.id === id)
+    if (!drug) {
+      return NextResponse.json({ error: 'Drug not found' }, { status: 404 })
     }
 
     return NextResponse.json(drug)

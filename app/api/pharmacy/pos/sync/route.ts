@@ -1,155 +1,96 @@
-import { createClient } from '@/lib/supabase/server'
-import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
+import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { createClient } from '@/lib/supabase/server'
+import { posSyncSchema } from '@/lib/validation/pos'
+
+type RpcResult = PromiseLike<{ data: unknown; error: { message: string } | null }>
+
+function shiftRpc(
+  client: Awaited<ReturnType<typeof createClient>>,
+  name: string,
+  args: Record<string, unknown>
+) {
+  const call = client.rpc as unknown as (fn: string, parameters: Record<string, unknown>) => RpcResult
+  return call(name, args)
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as any
-
-    // Check authentication
+    const supabase = await createClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const pharmacy = await ensurePharmacyRecord(supabase, user)
+    if (!pharmacy) return NextResponse.json({ error: 'Pharmacy profile not found' }, { status: 404 })
 
-    if (!pharmacy) {
-      return NextResponse.json(
-        { error: 'Pharmacy profile not found. Complete your setup to continue.' },
-        { status: 404 }
-      )
-    }
-
-    const { sales } = await request.json()
-
-    if (!sales || !Array.isArray(sales)) {
-      return NextResponse.json(
-        { error: 'Invalid payload: sales must be an array' },
-        { status: 400 }
-      )
+    const parsed = posSyncSchema.safeParse(await request.json())
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid sync payload', details: parsed.error.flatten() }, { status: 400 })
     }
 
     const syncedIds: string[] = []
+    const syncedShiftIds: string[] = []
     const failedIds: Array<{ id: string; error: string }> = []
+    const failedShiftIds: Array<{ id: string; error: string }> = []
+    const failedShiftSet = new Set<string>()
 
-    for (const sale of sales) {
-      const { id, subtotal, discount, total, payment_method, created_at, items } = sale
-
-      try {
-        // Idempotency check: see if sale already exists
-        const { data: existingSale } = await supabase
-          .from('sales')
-          .select('id, status')
-          .eq('id', id)
-          .maybeSingle()
-
-        if (existingSale && existingSale.status === 'completed') {
-          syncedIds.push(id)
-          continue
-        }
-
-        // Negative stock check: verify quantity_in_stock before executing deduction
-        const itemQuantities: { [key: string]: number } = {}
-        for (const item of items) {
-          itemQuantities[item.inventory_id] = (itemQuantities[item.inventory_id] || 0) + Number(item.quantity)
-        }
-
-        const inventoryIds = Object.keys(itemQuantities)
-        const { data: inventoryLevels, error: stockErr } = await supabase
-          .from('pharmacy_inventory')
-          .select('id, quantity_in_stock')
-          .in('id', inventoryIds)
-
-        if (stockErr) {
-          throw new Error(`Failed to verify stock: ${stockErr.message}`)
-        }
-
-        for (const inv of inventoryLevels || []) {
-          const requested = itemQuantities[inv.id] || 0
-          if (inv.quantity_in_stock < requested) {
-            throw new Error(`Oversell: insufficient stock for inventory item ${inv.id} (requested ${requested}, available ${inv.quantity_in_stock})`)
-          }
-        }
-
-        if (existingSale) {
-          // Retry logic: delete any existing sale items to prevent conflicts
-          const { error: deleteItemsErr } = await supabase
-            .from('sale_items')
-            .delete()
-            .eq('sale_id', id)
-          if (deleteItemsErr) {
-            throw new Error(`Failed to clean up pending sale items: ${deleteItemsErr.message}`)
-          }
-        } else {
-          // 1. Insert sale record in 'pending' status
-          const { error: saleErr } = await supabase
-            .from('sales')
-            .insert({
-              id,
-              pharmacy_id: pharmacy.id,
-              cashier_id: user.id,
-              subtotal,
-              discount,
-              total,
-              payment_method,
-              status: 'pending',
-              created_at: created_at || new Date().toISOString()
-            })
-
-          if (saleErr) {
-            throw new Error(`Failed to create sale: ${saleErr.message}`)
-          }
-        }
-
-        // 2. Insert all sale items
-        const saleItemsToInsert = items.map((item: any) => ({
-          sale_id: id,
-          inventory_id: item.inventory_id,
-          batch_id: item.batch_id || null,
-          quantity: Number(item.quantity),
-          unit_price: Number(item.unit_price),
-          line_total: Number(item.line_total)
-        }))
-
-        const { error: itemsErr } = await supabase
-          .from('sale_items')
-          .insert(saleItemsToInsert)
-
-        if (itemsErr) {
-          throw new Error(`Failed to create sale items: ${itemsErr.message}`)
-        }
-
-        // 3. Update status to 'completed' to fire ledger trigger
-        const { error: completeErr } = await supabase
-          .from('sales')
-          .update({ status: 'completed', synced_at: new Date().toISOString() })
-          .eq('id', id)
-
-        if (completeErr) {
-          throw new Error(`Failed to finalize sale: ${completeErr.message}`)
-        }
-
-        syncedIds.push(id)
-      } catch (err: any) {
-        console.error(`Error syncing sale ${id}:`, err)
-        failedIds.push({ id, error: err.message || 'Unknown error' })
+    // Closed offline shifts must first exist as open records so queued sales can attach.
+    for (const shift of parsed.data.shifts) {
+      const { error } = await shiftRpc(supabase, 'sync_shift_open', {
+        p_shift_id: shift.id,
+        p_pharmacy_id: pharmacy.id,
+        p_opening_float: shift.opening_float,
+        p_opened_at: shift.opened_at,
+      })
+      if (error) {
+        failedShiftSet.add(shift.id)
+        failedShiftIds.push({ id: shift.id, error: error.message || 'Shift open sync failed' })
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      syncedIds,
-      failedIds
-    })
-  } catch (error: any) {
-    console.error('POS sync error:', error)
+    for (const sale of parsed.data.sales) {
+      if (failedShiftSet.has(sale.shift_id)) {
+        failedIds.push({ id: sale.id, error: 'The sale shift has not synced yet' })
+        continue
+      }
+      const { error } = await shiftRpc(supabase, 'sync_pos_sale_with_shift', {
+        p_pharmacy_id: pharmacy.id,
+        p_sale: sale,
+      })
+      if (error) failedIds.push({ id: sale.id, error: error.message || 'Sale sync failed' })
+      else syncedIds.push(sale.id)
+    }
+
+    for (const shift of parsed.data.shifts.filter((item) => item.status === 'closed')) {
+      if (failedShiftSet.has(shift.id)) continue
+      if (shift.counted_cash == null || !shift.closed_at) {
+        failedShiftSet.add(shift.id)
+        failedShiftIds.push({ id: shift.id, error: 'Closed shifts require counted cash and a close time' })
+        continue
+      }
+      const { error } = await shiftRpc(supabase, 'sync_shift_close', {
+        p_shift_id: shift.id,
+        p_pharmacy_id: pharmacy.id,
+        p_counted_cash: shift.counted_cash,
+        p_notes: shift.notes ?? null,
+        p_closed_at: shift.closed_at,
+      })
+      if (error) {
+        failedShiftSet.add(shift.id)
+        failedShiftIds.push({ id: shift.id, error: error.message || 'Shift close sync failed' })
+      } else {
+        syncedShiftIds.push(shift.id)
+      }
+    }
+
+    for (const shift of parsed.data.shifts.filter((item) => item.status === 'open')) {
+      if (!failedShiftSet.has(shift.id)) syncedShiftIds.push(shift.id)
+    }
+
+    return NextResponse.json({ success: true, syncedIds, syncedShiftIds, failedIds, failedShiftIds })
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message || 'Internal server error during POS sync' },
+      { error: error instanceof Error ? error.message : 'Internal server error during POS sync' },
       { status: 500 }
     )
   }

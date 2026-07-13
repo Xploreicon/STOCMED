@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import React from 'react';
 import { Lock, AlertCircle, ArrowLeft, ShieldAlert } from 'lucide-react';
 
@@ -12,42 +13,42 @@ export default function RestrictedScreen({ onBack }: RestrictedScreenProps) {
         <Lock className="w-8 h-8 text-red-600" />
       </div>
 
-      <h2 className="text-2xl font-bold text-slate-900 text-center mb-2">
+      <h2 className="text-2xl font-bold text-ink text-center mb-2">
         Medication Sourcing Locked
       </h2>
-      <p className="text-slate-600 text-center text-sm mb-6 leading-relaxed max-w-sm">
+      <p className="text-ink-muted text-center text-sm mb-6 leading-relaxed max-w-sm">
         This substance or medication is classified as highly controlled or restricted under Nigerian health regulations. We are legally prohibited from displaying pharmacy availability, pricing, or facilitating supply.
       </p>
 
-      <div className="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 mb-8 space-y-3">
+      <div className="w-full bg-surface border border-surface rounded-xl p-4 mb-8 space-y-3">
         <div className="flex items-start space-x-3">
-          <ShieldAlert className="w-5 h-5 text-slate-700 mt-0.5 flex-shrink-0" />
+          <ShieldAlert className="w-5 h-5 text-ink mt-0.5 flex-shrink-0" />
           <div>
-            <h4 className="text-sm font-semibold text-slate-800">Regulatory Compliance</h4>
-            <p className="text-xs text-slate-600 leading-relaxed mt-0.5">
+            <h4 className="text-sm font-semibold text-ink">Regulatory Compliance</h4>
+            <p className="text-xs text-ink-muted leading-relaxed mt-0.5">
               These restrictions are in place to prevent substance misuse, illegal distribution, and self-medication risks.
             </p>
           </div>
         </div>
 
         <div className="flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-slate-700 mt-0.5 flex-shrink-0" />
+          <AlertCircle className="w-5 h-5 text-ink mt-0.5 flex-shrink-0" />
           <div>
-            <h4 className="text-sm font-semibold text-slate-800">What you should do</h4>
-            <p className="text-xs text-slate-600 leading-relaxed mt-0.5">
+            <h4 className="text-sm font-semibold text-ink">What you should do</h4>
+            <p className="text-xs text-ink-muted leading-relaxed mt-0.5">
               Please visit a registered medical practitioner at a hospital or licensed clinic to obtain clinical assessment and prescription.
             </p>
           </div>
         </div>
       </div>
 
-      <button
+      <Button
         onClick={onBack}
-        className="flex items-center justify-center space-x-2 text-slate-500 hover:text-slate-800 transition-colors text-sm font-medium"
+        className="flex items-center justify-center space-x-2 text-surface0 hover:text-ink transition-colors text-sm font-medium"
       >
         <ArrowLeft className="w-4 h-4" />
         <span>Return to Chat</span>
-      </button>
+      </Button>
     </div>
   );
 }

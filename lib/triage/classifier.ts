@@ -6,6 +6,7 @@ const RISK_HIERARCHY: Record<RiskTier, number> = {
   CRISIS: 5,
   BLOCK_SOURCING: 4,
   REDIRECT: 3,
+  CARE_REDIRECT: 2,
   GATE: 2,
   ALLOW: 1,
 };

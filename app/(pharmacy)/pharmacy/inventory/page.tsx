@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -17,7 +19,7 @@ export default function PharmacyInventory() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const addProductId = searchParams.get('add_product_id');
@@ -39,6 +41,14 @@ export default function PharmacyInventory() {
       setIsAddModalOpen(true);
     }
   }, [addProductId]);
+
+  useEffect(() => {
+    const desktop = window.matchMedia('(min-width: 1280px)');
+    const updateViewMode = () => setViewMode(desktop.matches ? 'table' : 'grid');
+    updateViewMode();
+    desktop.addEventListener('change', updateViewMode);
+    return () => desktop.removeEventListener('change', updateViewMode);
+  }, []);
 
   useEffect(() => {
     if (!authLoading && (!user || !isPharmacy)) {
@@ -131,11 +141,11 @@ export default function PharmacyInventory() {
   });
 
   const stats = [
-    { label: 'Total products', value: totalProducts, icon: '📦', color: '#042C53' },
-    { label: 'In stock', value: inStock, icon: '🟢', color: '#639922' },
-    { label: 'Low stock', value: lowStock, icon: '🟡', color: '#BA7517' },
-    { label: 'Out of stock', value: outOfStock, icon: '🔴', color: '#E24B4A' },
-    { label: 'Expiring soon', value: expiringSoon, icon: '⚠️', color: '#BA7517' },
+    { label: 'Total products', value: totalProducts, icon: '📦', color: 'var(--navy)' },
+    { label: 'In stock', value: inStock, icon: '🟢', color: 'var(--success)' },
+    { label: 'Low stock', value: lowStock, icon: '🟡', color: 'var(--warning)' },
+    { label: 'Out of stock', value: outOfStock, icon: '🔴', color: 'var(--danger)' },
+    { label: 'Expiring soon', value: expiringSoon, icon: '⚠️', color: 'var(--warning)' },
   ];
 
   const filterOptions = [
@@ -148,13 +158,13 @@ export default function PharmacyInventory() {
   ];
 
   return (
-    <div className="max-w-[1000px] mx-auto py-2">
+    <div className="w-full min-w-0 max-w-[1000px] mx-auto py-2">
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-[24px] font-medium text-ink">Inventory</h1>
-            <span className="text-[13px] font-medium text-primary bg-[#F0F7FF] border border-border px-2.5 py-1 rounded-full whitespace-nowrap">
+            <span className="text-[13px] font-medium text-primary bg-[var(--surface)] border border-border px-2.5 py-1 rounded-full whitespace-nowrap">
               {totalProducts} {totalProducts === 1 ? 'product' : 'products'}
             </span>
           </div>
@@ -162,25 +172,25 @@ export default function PharmacyInventory() {
             Manage what&apos;s on your shelves and how patients find it
           </p>
         </div>
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <button
+        <div className="flex min-w-0 items-center gap-2.5 flex-wrap">
+          <Button
             onClick={() => alert('POS Interface coming soon!')}
             className="h-11 flex items-center px-4 bg-white text-primary border-[1.5px] border-primary font-medium text-[14px] rounded-button hover:bg-surface transition-colors"
           >
             Open POS
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => router.push('/pharmacy/inventory/import')}
             className="h-11 flex items-center px-4 bg-white text-primary border-[1.5px] border-primary font-medium text-[14px] rounded-button hover:bg-surface transition-colors"
           >
             Bulk import
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={() => setIsAddModalOpen(true)}
-            className="h-11 flex items-center px-4 bg-primary text-white font-medium text-[14px] rounded-button hover:bg-[#0052A3] transition-colors"
+            className="h-11 flex items-center px-4 bg-primary text-white font-medium text-[14px] rounded-button hover:bg-[var(--primary-hover)] transition-colors"
           >
             + Add drug
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -190,7 +200,7 @@ export default function PharmacyInventory() {
           <div key={idx} className="border border-border rounded-card p-3.5 bg-white">
             <div className="flex items-center gap-1.5">
               <span className="text-[15px]">{s.icon}</span>
-              <span className="text-[12px] text-ink-light whitespace-nowrap">{s.label}</span>
+              <span className="min-w-0 text-[12px] text-ink-light leading-tight">{s.label}</span>
             </div>
             <div
               style={{ color: s.color }}
@@ -215,17 +225,17 @@ export default function PharmacyInventory() {
           {filterOptions.map((f) => {
             const isActive = filterStatus === f.value;
             return (
-              <button
+              <Button
                 key={f.value}
                 onClick={() => setFilterStatus(f.value)}
                 className={`h-11 flex items-center px-3.5 text-[13px] font-medium border rounded-button whitespace-nowrap transition-colors ${
                   isActive
-                    ? 'text-primary bg-[#F0F7FF] border-primary/45'
+                    ? 'text-primary bg-[var(--surface)] border-primary/45'
                     : 'text-ink-muted bg-white border-border hover:bg-surface'
                 }`}
               >
                 {f.label}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -234,7 +244,7 @@ export default function PharmacyInventory() {
       {/* Main Inventory Content */}
       {filteredDrugs.length === 0 ? (
         <div className="border border-dashed border-border rounded-card-lg p-16 flex flex-col items-center justify-center text-center gap-2 bg-white">
-          <div className="w-14 h-14 rounded-card bg-[#F0F7FF] flex items-center justify-center text-[24px] mb-2">
+          <div className="w-14 h-14 rounded-card bg-[var(--surface)] flex items-center justify-center text-[24px] mb-2">
             📦
           </div>
           <h3 className="text-[18px] font-medium text-ink">
@@ -247,18 +257,18 @@ export default function PharmacyInventory() {
           </p>
           {drugs.length === 0 && (
             <div className="flex gap-3 mt-5 flex-wrap justify-center">
-              <button
+              <Button
                 onClick={() => router.push('/pharmacy/inventory/import')}
                 className="h-12 flex items-center px-6 bg-white text-primary border-[1.5px] border-primary font-medium text-[15px] rounded-button hover:bg-surface transition-colors"
               >
                 Bulk import catalogue
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => setIsAddModalOpen(true)}
-                className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[#0052A3] transition-colors"
+                className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[var(--primary-hover)] transition-colors"
               >
                 + Add your first drug
-              </button>
+              </Button>
             </div>
           )}
         </div>

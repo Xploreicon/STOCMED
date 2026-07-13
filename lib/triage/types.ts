@@ -10,6 +10,7 @@ export type TriageIntent =
 export type RiskTier =
   | 'ALLOW'
   | 'GATE'
+  | 'CARE_REDIRECT'
   | 'REDIRECT'
   | 'BLOCK_SOURCING'
   | 'CRISIS';

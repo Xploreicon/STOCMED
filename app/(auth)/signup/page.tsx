@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -244,24 +246,26 @@ export default function Signup() {
             <p className="text-[16px] text-ink-muted mt-3">Choose how you&apos;ll use StocMed</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <button
+            <Button
               onClick={() => selectRole('patient')}
-              className="text-left cursor-pointer border-[1.5px] border-border rounded-card p-8 flex flex-col gap-2 hover:border-primary/50 transition-colors"
+              variant="outline"
+              className="h-auto items-start justify-start whitespace-normal text-left cursor-pointer border-[1.5px] border-border rounded-card p-8 flex flex-col gap-2 hover:border-primary/50 transition-colors"
             >
               <div className="w-12 h-12 rounded-card bg-surface flex items-center justify-center text-[22px] mb-2">🧑</div>
               <h3 className="text-[19px] font-medium text-ink">I&apos;m a patient</h3>
               <p className="text-[14px] leading-[1.55] text-ink-muted">Search for medication and find nearby pharmacies with stock.</p>
               <span className="mt-4 text-[14px] font-medium text-primary">Continue as patient →</span>
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => selectRole('pharmacy')}
-              className="text-left cursor-pointer border-[1.5px] border-border rounded-card p-8 flex flex-col gap-2 hover:border-primary/50 transition-colors"
+              variant="outline"
+              className="h-auto items-start justify-start whitespace-normal text-left cursor-pointer border-[1.5px] border-border rounded-card p-8 flex flex-col gap-2 hover:border-primary/50 transition-colors"
             >
               <div className="w-12 h-12 rounded-card bg-surface flex items-center justify-center text-[22px] mb-2">🏥</div>
               <h3 className="text-[19px] font-medium text-ink">I&apos;m a pharmacy</h3>
               <p className="text-[14px] leading-[1.55] text-ink-muted">List and manage your inventory so patients can find you.</p>
               <span className="mt-4 text-[14px] font-medium text-primary">Continue as pharmacy →</span>
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -269,7 +273,7 @@ export default function Signup() {
       {/* STEP 2: form */}
       {currentStep === 2 && (
         <div className={`mx-auto px-6 pt-14 pb-24 ${selectedRole === 'pharmacy' ? 'max-w-[640px]' : 'max-w-[520px]'}`}>
-          <button onClick={goBack} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ink-muted mb-6 hover:text-ink">← Back</button>
+          <Button onClick={goBack} className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ink-muted mb-6 hover:text-ink">← Back</Button>
           <h1 className="font-display font-medium text-[30px] text-ink">
             {selectedRole === 'pharmacy' ? 'Register your pharmacy' : 'Create your patient account'}
           </h1>
@@ -389,7 +393,7 @@ export default function Signup() {
             <label className="flex items-start gap-2.5 text-[14px] text-ink-muted cursor-pointer">
               <input type="checkbox" checked={acceptedTerms}
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
-                disabled={isLoading} className="mt-0.5 w-4 h-4 flex-shrink-0" style={{ accentColor: '#0066CC' }} />
+                disabled={isLoading} className="mt-0.5 w-4 h-4 flex-shrink-0" style={{ accentColor: 'var(--primary)' }} />
               <span>
                 {selectedRole === 'pharmacy'
                   ? "I confirm I'm authorized to register this pharmacy and agree to the "
@@ -400,10 +404,10 @@ export default function Signup() {
             </label>
             {errors.terms && <p className="text-xs text-danger -mt-2">{errors.terms}</p>}
 
-            <button type="submit" disabled={isLoading}
-              className="h-12 w-full bg-primary text-white text-[16px] font-medium rounded-button mt-2 hover:bg-[#0052A3] disabled:opacity-60">
+            <Button type="submit" disabled={isLoading}
+              className="h-12 w-full bg-primary text-white text-[16px] font-medium rounded-button mt-2 hover:bg-[var(--primary-hover)] disabled:opacity-60">
               {isLoading ? 'Creating account…' : selectedRole === 'pharmacy' ? 'Register pharmacy' : 'Create account'}
-            </button>
+            </Button>
 
             {selectedRole === 'pharmacy' && (
               <p className="text-[13px] text-ink-light text-center">

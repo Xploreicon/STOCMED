@@ -24,6 +24,7 @@ export default function PatientSettingsPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [consented, setConsented] = useState<boolean | null>(null);
   const [savingConsent, setSavingConsent] = useState(false);
+  const [deletingData, setDeletingData] = useState(false);
 
   const [notifStock, setNotifStock] = useState(false);
   const [notifPrice, setNotifPrice] = useState(false);
@@ -332,15 +333,22 @@ export default function PatientSettingsPage() {
             <Trash2 className="h-5 w-5 text-danger" />
           </div>
           <div>
-            <CardTitle>Delete account</CardTitle>
+            <CardTitle>Delete my data</CardTitle>
             <p className="mt-1 text-sm text-ink-muted">
-              Permanently remove your account and data. This feature is coming soon.
+              Remove your linked search, chat, consent, intake, and prescription data. Anonymous aggregate records cannot identify you.
             </p>
           </div>
         </CardHeader>
         <CardContent>
-          <Button variant="destructive" disabled>
-            Delete my account (coming soon)
+          <Button variant="destructive" disabled={deletingData} onClick={async () => {
+            if (!window.confirm('Delete all data linked to your account? This cannot be undone.')) return;
+            setDeletingData(true);
+            const response = await fetch('/api/privacy/delete-my-data', { method: 'DELETE' });
+            setDeletingData(false);
+            if (response.ok) toast.success('Your linked data has been deleted');
+            else toast.error('Your data could not be deleted');
+          }}>
+            {deletingData ? 'Deleting…' : 'Delete my data'}
           </Button>
         </CardContent>
       </Card>

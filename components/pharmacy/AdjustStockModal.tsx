@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -78,13 +80,13 @@ export default function AdjustStockModal({ isOpen, onClose, row, onSuccess }: Ad
         <form onSubmit={handleSubmit}>
           <div className="mb-5 flex items-center justify-between">
             <DialogTitle className="text-xl font-medium text-ink">Adjust stock</DialogTitle>
-            <button
+            <Button
               type="button"
               onClick={onClose}
               className="flex h-8 w-8 items-center justify-center rounded-control bg-brand-tint text-secondary"
             >
               <X className="h-3.5 w-3.5" />
-            </button>
+            </Button>
           </div>
           <p className="mb-5 text-sm text-secondary">
             {row.generic_name} &mdash; current qty {row.quantity_in_stock}
@@ -136,21 +138,21 @@ export default function AdjustStockModal({ isOpen, onClose, row, onSuccess }: Ad
           {error && <p className="mt-3 text-xs text-stock-out">{error}</p>}
           <p className="mt-3.5 text-xs text-muted">Every change is recorded — full stock history is kept.</p>
           <div className="mt-5 flex gap-3">
-            <button
+            <Button
               type="button"
               onClick={onClose}
               disabled={adjustMutation.isPending}
               className="h-12 flex-1 rounded-control border border-hairline text-[15px] font-medium text-secondary"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={adjustMutation.isPending}
               className="h-12 flex-1 rounded-control bg-brand text-[15px] font-medium text-white disabled:opacity-60"
             >
               {adjustMutation.isPending ? 'Saving…' : 'Save'}
-            </button>
+            </Button>
           </div>
         </form>
       </DialogContent>

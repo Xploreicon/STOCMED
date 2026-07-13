@@ -30,7 +30,7 @@ export default function DesignSystemPage() {
           
           <div className="space-y-8">
             <div>
-              <h3 className="text-lg font-medium mb-4">Primary Brand (#0066CC HSL Scale)</h3>
+              <h3 className="text-lg font-medium mb-4">Primary Brand (var(--primary) HSL Scale)</h3>
               <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
                 {[50, 100, 200, 300, 400, 500, 600, 700, 800, 900].map(weight => (
                   <div key={weight} className="space-y-2">
@@ -46,19 +46,19 @@ export default function DesignSystemPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="p-4 rounded-card bg-surface border border-border">
                   <div className="text-sm font-semibold text-ink">Surface</div>
-                  <div className="text-xs text-muted-foreground mt-1">bg-surface / #F0F7FF</div>
+                  <div className="text-xs text-muted-foreground mt-1">bg-surface / var(--surface)</div>
                 </div>
                 <div className="p-4 rounded-card bg-primary text-primary-foreground">
                   <div className="text-sm font-semibold">Primary</div>
-                  <div className="text-xs opacity-90 mt-1">bg-primary / #0066CC</div>
+                  <div className="text-xs opacity-90 mt-1">bg-primary / var(--primary)</div>
                 </div>
                 <div className="p-4 rounded-card bg-card border border-border shadow-card">
                   <div className="text-sm font-semibold text-card-foreground">Card</div>
-                  <div className="text-xs text-muted-foreground mt-1">bg-card / #FFFFFF</div>
+                  <div className="text-xs text-muted-foreground mt-1">bg-card / var(--white)</div>
                 </div>
                 <div className="p-4 rounded-card bg-background border border-border">
                   <div className="text-sm font-semibold text-foreground">Background</div>
-                  <div className="text-xs text-muted-foreground mt-1">bg-background / #FFFFFF</div>
+                  <div className="text-xs text-muted-foreground mt-1">bg-background / var(--white)</div>
                 </div>
               </div>
             </div>
@@ -72,11 +72,11 @@ export default function DesignSystemPage() {
                 </div>
                 <div className="p-4 rounded-card bg-warning/5 text-warning border border-warning/20">
                   <div className="text-sm font-semibold">Warning / Low-stock</div>
-                  <div className="text-xs opacity-80 mt-1">#FF9500 text + 50 bg</div>
+                  <div className="text-xs opacity-80 mt-1">var(--ios-warning) text + 50 bg</div>
                 </div>
                 <div className="p-4 rounded-card bg-danger/5 text-danger border border-danger/20">
                   <div className="text-sm font-semibold">Danger / Out-of-stock</div>
-                  <div className="text-xs opacity-80 mt-1">#FF3B30 text + 50 bg</div>
+                  <div className="text-xs opacity-80 mt-1">var(--ios-danger) text + 50 bg</div>
                 </div>
                 <div className="p-4 rounded-card bg-primary/5 text-primary border border-primary/20">
                   <div className="text-sm font-semibold">Information</div>

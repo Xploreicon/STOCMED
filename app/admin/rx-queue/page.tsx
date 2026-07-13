@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useUser } from '@/hooks/useUser';
@@ -76,7 +78,7 @@ function InventoryMatcher({ productName }: { productName: string }) {
   }, [productName]);
 
   if (loading) {
-    return <span className="text-[10px] text-slate-400 mt-1.5 block">Checking stocking outlets...</span>;
+    return <span className="text-[10px] text-ink-light mt-1.5 block">Checking stocking outlets...</span>;
   }
 
   if (matchingOutlets.length === 0) {
@@ -85,15 +87,15 @@ function InventoryMatcher({ productName }: { productName: string }) {
 
   return (
     <div className="space-y-1.5 mt-2.5">
-      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Stocking Outlets ({matchingOutlets.length})</span>
-      <div className="space-y-1.5 bg-slate-50 border border-slate-100 p-2.5 rounded-xl max-h-32 overflow-y-auto">
+      <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Stocking Outlets ({matchingOutlets.length})</span>
+      <div className="space-y-1.5 bg-surface border border-surface p-2.5 rounded-xl max-h-32 overflow-y-auto">
         {matchingOutlets.map((outlet, i) => (
-          <div key={i} className="text-[11px] border-b border-slate-100 last:border-0 pb-1.5 last:pb-0">
-            <span className="font-bold text-slate-800">{outlet.name}</span>
-            <span className="text-slate-400 block text-[10px]">{outlet.address}, {outlet.city}</span>
+          <div key={i} className="text-[11px] border-b border-surface last:border-0 pb-1.5 last:pb-0">
+            <span className="font-bold text-ink">{outlet.name}</span>
+            <span className="text-ink-light block text-[10px]">{outlet.address}, {outlet.city}</span>
             <div className="flex flex-wrap gap-1 mt-1">
               {outlet.items.map((item: any, j: number) => (
-                <span key={j} className="bg-white border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded text-[9px] font-medium font-sans">
+                <span key={j} className="bg-white border border-border text-ink px-1.5 py-0.5 rounded text-[9px] font-medium font-sans">
                   {item.name} ({item.qty} in stock)
                 </span>
               ))}
@@ -211,23 +213,23 @@ export default function RxQueuePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+      <div className="flex items-center justify-between border-b border-border pb-4">
         <div>
-          <h1 className="text-2xl font-bold font-display text-slate-900">
+          <h1 className="text-2xl font-bold font-display text-ink">
             Prescription Queue (Rx Verification)
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-surface0 mt-1">
             Review uploaded patient doctor prescriptions and verify POM access tokens.
           </p>
         </div>
 
         {/* Filter controls */}
         <div className="flex items-center space-x-2">
-          <span className="text-xs font-semibold text-slate-500">Filter status:</span>
+          <span className="text-xs font-semibold text-surface0">Filter status:</span>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="text-xs bg-white border border-slate-200 rounded-lg p-2 font-medium"
+            className="text-xs bg-white border border-border rounded-lg p-2 font-medium"
           >
             <option value="all">All submissions</option>
             <option value="submitted">Submitted</option>
@@ -241,15 +243,15 @@ export default function RxQueuePage() {
         {/* Submissions List Column */}
         <div className="lg:col-span-2 space-y-3">
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-20 bg-white border border-slate-200 rounded-2xl">
+            <div className="flex flex-col items-center justify-center p-20 bg-white border border-border rounded-2xl">
               <Loader2 className="w-8 h-8 text-blue-600 animate-spin mb-3" />
-              <span className="text-sm text-slate-500">Syncing prescription queue...</span>
+              <span className="text-sm text-surface0">Syncing prescription queue...</span>
             </div>
           ) : submissions.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-20 bg-white border border-slate-200 border-dashed rounded-2xl">
-              <FileText className="w-12 h-12 text-slate-300 mb-3" />
-              <span className="text-sm font-semibold text-slate-600">No submissions found</span>
-              <span className="text-xs text-slate-400 mt-1">Everything is clear for this filter status.</span>
+            <div className="flex flex-col items-center justify-center p-20 bg-white border border-border border-dashed rounded-2xl">
+              <FileText className="w-12 h-12 text-border mb-3" />
+              <span className="text-sm font-semibold text-ink-muted">No submissions found</span>
+              <span className="text-xs text-ink-light mt-1">Everything is clear for this filter status.</span>
             </div>
           ) : (
             submissions.map((item) => (
@@ -257,12 +259,12 @@ export default function RxQueuePage() {
                 key={item.id}
                 onClick={() => setSelectedSub(item)}
                 className={`p-4 bg-white border rounded-xl shadow-sm hover:shadow-md cursor-pointer transition-all flex items-start justify-between ${
-                  selectedSub?.id === item.id ? 'border-2 border-blue-600' : 'border-slate-200'
+                  selectedSub?.id === item.id ? 'border-2 border-blue-600' : 'border-border'
                 }`}
               >
                 <div className="space-y-1.5 text-left">
                   <div className="flex items-center space-x-2">
-                    <span className="text-xs font-bold text-slate-900">Rx Review</span>
+                    <span className="text-xs font-bold text-ink">Rx Review</span>
                     <span
                       className={`text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded-full ${
                         item.status === 'submitted'
@@ -276,18 +278,18 @@ export default function RxQueuePage() {
                     </span>
                   </div>
 
-                  <p className="text-xs text-slate-600 font-semibold">
-                    Medication: <span className="text-slate-900 font-bold">{item.product_name}</span>
+                  <p className="text-xs text-ink-muted font-semibold">
+                    Medication: <span className="text-ink font-bold">{item.product_name}</span>
                   </p>
 
-                  <div className="flex items-center space-x-3 text-[11px] text-slate-400 font-medium">
+                  <div className="flex items-center space-x-3 text-[11px] text-ink-light font-medium">
                     <span>Submitted: {new Date(item.created_at).toLocaleString()}</span>
                   </div>
                 </div>
 
-                <button className="p-2 hover:bg-slate-50 text-slate-400 hover:text-slate-700 rounded-lg transition-colors">
+                <Button className="p-2 hover:bg-surface text-ink-light hover:text-ink rounded-lg transition-colors">
                   <Eye className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             ))
           )}
@@ -296,21 +298,21 @@ export default function RxQueuePage() {
         {/* Selected Submission details */}
         <div className="lg:col-span-1">
           {selectedSub ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-5 text-left sticky top-6">
+            <div className="bg-white border border-border rounded-2xl p-5 shadow-sm space-y-5 text-left sticky top-6">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 font-display">Prescription Review</h3>
-                <p className="text-[11px] text-slate-400 font-mono mt-0.5">ID: {selectedSub.id}</p>
+                <h3 className="text-sm font-bold text-ink font-display">Prescription Review</h3>
+                <p className="text-[11px] text-ink-light font-mono mt-0.5">ID: {selectedSub.id}</p>
               </div>
 
-              <div className="space-y-3.5 border-b border-slate-150 pb-4">
+              <div className="space-y-3.5 border-b border-surface pb-4">
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Target Drug</span>
-                  <p className="text-xs text-slate-900 font-bold mt-1">{selectedSub.product_name}</p>
+                  <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Target Drug</span>
+                  <p className="text-xs text-ink font-bold mt-1">{selectedSub.product_name}</p>
                   <InventoryMatcher productName={selectedSub.product_name} />
                 </div>
 
                 <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Uploaded File</span>
+                  <span className="text-[10px] font-bold text-ink-light uppercase tracking-wider block">Uploaded File</span>
                   {signedFileUrl ? (
                     <a
                       href={signedFileUrl}
@@ -322,7 +324,7 @@ export default function RxQueuePage() {
                       <span>View Uploaded Document</span>
                     </a>
                   ) : (
-                    <span className="text-[10px] text-slate-400 mt-1 block">Resolving secure URL...</span>
+                    <span className="text-[10px] text-ink-light mt-1 block">Resolving secure URL...</span>
                   )}
                 </div>
               </div>
@@ -330,35 +332,35 @@ export default function RxQueuePage() {
               {selectedSub.status === 'submitted' ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    <label className="block text-[10px] font-bold text-ink-light uppercase tracking-wider">
                       Reviewer Notes
                     </label>
                     <textarea
                       value={reviewNotes}
                       onChange={(e) => setReviewNotes(e.target.value)}
                       placeholder="Write validation notes (e.g. signature check, expiration validation)..."
-                      className="w-full mt-1.5 p-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all resize-none h-20"
+                      className="w-full mt-1.5 p-3 text-xs bg-surface border border-border rounded-xl focus:border-blue-500 focus:bg-white focus:outline-none transition-all resize-none h-20"
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <button
+                    <Button
                       onClick={() => handleReview('rejected')}
                       disabled={isSubmitting}
                       className="py-2.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold rounded-xl border border-red-200 flex items-center justify-center space-x-1.5 transition-all shadow-sm"
                     >
                       <XCircle className="w-4 h-4" />
                       <span>Reject Rx</span>
-                    </button>
+                    </Button>
 
-                    <button
+                    <Button
                       onClick={() => handleReview('verified')}
                       disabled={isSubmitting}
                       className="py-2.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold rounded-xl flex items-center justify-center space-x-1.5 transition-all shadow-md"
                     >
                       <CheckCircle className="w-4 h-4" />
                       <span>Approve & Verify</span>
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (
@@ -384,9 +386,9 @@ export default function RxQueuePage() {
               )}
             </div>
           ) : (
-            <div className="bg-slate-50 border border-slate-200 border-dashed rounded-2xl p-8 text-center">
-              <ClipboardCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-              <span className="text-xs font-semibold text-slate-500">Select an Rx submission to verify</span>
+            <div className="bg-surface border border-border border-dashed rounded-2xl p-8 text-center">
+              <ClipboardCheck className="w-10 h-10 text-border mx-auto mb-2" />
+              <span className="text-xs font-semibold text-surface0">Select an Rx submission to verify</span>
             </div>
           )}
         </div>

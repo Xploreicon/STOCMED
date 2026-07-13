@@ -1,5 +1,7 @@
 'use client';
 
+import { Button } from '@/components/ui/button'
+
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -142,7 +144,7 @@ export default function Login() {
                   onChange={(e) => setRememberMe(e.target.checked)}
                   disabled={isLoading}
                   className="w-4 h-4"
-                  style={{ accentColor: '#0066CC' }}
+                  style={{ accentColor: 'var(--primary)' }}
                 />
                 <span>Remember me</span>
               </label>
@@ -151,13 +153,13 @@ export default function Login() {
               </Link>
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={isLoading}
-              className="h-12 w-full bg-primary text-white text-[16px] font-medium rounded-button mt-2 hover:bg-[#0052A3] disabled:opacity-60"
+              className="h-12 w-full bg-primary text-white text-[16px] font-medium rounded-button mt-2 hover:bg-[var(--primary-hover)] disabled:opacity-60"
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
-            </button>
+            </Button>
           </form>
 
           <div className="flex items-center gap-3 my-7">
