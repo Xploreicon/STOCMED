@@ -7,6 +7,7 @@ import {
   Package,
   ShieldCheck,
   Info,
+  Pill,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -328,7 +329,7 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                 )}
               </div>
             </div>
-            {drug.image_url && (
+            {drug.image_url ? (
               <Image
                 src={drug.image_url}
                 alt={drug.name || drug.brand_name || 'Drug image'}
@@ -337,6 +338,10 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                 className="mt-4 sm:mt-0 h-28 w-28 rounded-lg border border-border object-cover"
                 unoptimized
               />
+            ) : (
+              <div className="mt-4 sm:mt-0 h-28 w-28 rounded-lg border border-dashed border-border flex items-center justify-center bg-surface shrink-0">
+                <Pill className="w-8 h-8 text-muted-foreground/30" />
+              </div>
             )}
           </div>
 

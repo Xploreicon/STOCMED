@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, Plus, ArrowLeft, Check, AlertCircle, Camera, X } from 'lucide-react';
+import { Loader2, Search, Plus, ArrowLeft, Check, AlertCircle, Camera, X, Pill } from 'lucide-react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
@@ -87,6 +87,10 @@ export default function AddDrugModal({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
+  // Pharmacy-level image for stock step (add from catalogue)
+  const [pharmacyImageFile, setPharmacyImageFile] = useState<File | null>(null);
+  const [pharmacyImagePreview, setPharmacyImagePreview] = useState<string | null>(null);
+
   // Debounced search effect
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -140,6 +144,8 @@ export default function AddDrugModal({
       setImagePreview(null);
       setUploadError(null);
       setIsUploading(false);
+      setPharmacyImageFile(null);
+      setPharmacyImagePreview(null);
     }
   }, [isOpen, preselectedProduct]);
 
@@ -223,6 +229,33 @@ export default function AddDrugModal({
 
     setFormError(null);
     try {
+      let pharmacyImageUrl: string | null = null;
+
+      // Upload pharmacy-level image if provided
+      if (pharmacyImageFile) {
+        setIsUploading(true);
+        const supabase = createClient();
+        const fileExt = pharmacyImageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
+        const uniqueId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+        const filePath = `drugs/${uniqueId}.${fileExt}`;
+
+        const { error: uploadErr } = await supabase.storage
+          .from('drug-images')
+          .upload(filePath, pharmacyImageFile, {
+            cacheControl: '3600',
+            contentType: pharmacyImageFile.type,
+            upsert: false,
+          });
+
+        if (uploadErr) throw new Error(uploadErr.message);
+
+        const { data: { publicUrl } } = supabase.storage.from('drug-images').getPublicUrl(filePath);
+        pharmacyImageUrl = publicUrl;
+        setIsUploading(false);
+      }
+
       await addInventoryMutation.mutateAsync({
         product_id: selectedProduct.id,
         price: parseFloat(stockForm.price),
@@ -230,9 +263,11 @@ export default function AddDrugModal({
         low_stock_threshold: parseInt(stockForm.low_stock_threshold),
         batch_number: stockForm.batch_number,
         expiry_date: stockForm.expiry_date,
+        pharmacy_image_url: pharmacyImageUrl,
       });
     } catch (err: any) {
       setFormError(err.message || 'An error occurred while adding to inventory.');
+      setIsUploading(false);
     }
   };
 
@@ -580,8 +615,8 @@ export default function AddDrugModal({
                   />
                 </div>
               ) : (
-                <div className="h-16 w-16 rounded-lg bg-white border border-dashed border-border flex items-center justify-center text-xs text-ink-light shrink-0">
-                  No image
+                <div className="h-16 w-16 rounded-lg bg-white border border-dashed border-border flex items-center justify-center shrink-0">
+                  <Pill className="w-6 h-6 text-muted-foreground/30" />
                 </div>
               )}
               <div className="flex-1">
@@ -603,6 +638,57 @@ export default function AddDrugModal({
               >
                 Change Product
               </Button>
+            </div>
+
+            {/* Pharmacy Image Upload */}
+            <div className="border border-dashed border-border rounded-lg p-4 bg-surface/30">
+              <label className="block text-sm font-medium text-ink-muted mb-2">
+                Your Photo (optional)
+              </label>
+              <p className="text-[10px] text-ink-muted mb-3">
+                Upload your own photo of this stock. Falls back to the catalogue image if not set.
+              </p>
+              <div className="flex items-center gap-3">
+                {pharmacyImagePreview ? (
+                  <div className="relative h-20 w-20 rounded-lg overflow-hidden border border-border bg-white shrink-0">
+                    <Image
+                      src={pharmacyImagePreview}
+                      alt="Your stock photo"
+                      fill
+                      sizes="80px"
+                      className="object-cover"
+                      unoptimized
+                    />
+                    <Button
+                      type="button"
+                      onClick={() => { setPharmacyImageFile(null); setPharmacyImagePreview(null); }}
+                      className="absolute top-0.5 right-0.5 bg-white/90 hover:bg-white text-ink rounded-full p-0.5 border border-border shadow"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer flex flex-col items-center justify-center h-20 w-20 rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-surface/50 bg-white transition-all shrink-0">
+                    <Camera className="w-6 h-6 text-ink-light mb-1" />
+                    <span className="text-[9px] font-medium text-ink-muted">Upload</span>
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (!file.type.startsWith('image/')) { setUploadError('Please select a valid image.'); return; }
+                        if (file.size > 1024 * 1024) { setUploadError('Image must be 1MB or less.'); return; }
+                        setUploadError(null);
+                        setPharmacyImageFile(file);
+                        setPharmacyImagePreview(URL.createObjectURL(file));
+                      }}
+                    />
+                  </label>
+                )}
+                {uploadError && <p className="text-xs text-danger">{uploadError}</p>}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -684,11 +770,11 @@ export default function AddDrugModal({
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={addInventoryMutation.isPending}>
-                {addInventoryMutation.isPending ? (
+              <Button type="submit" disabled={addInventoryMutation.isPending || isUploading}>
+                {addInventoryMutation.isPending || isUploading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Adding...
+                    {isUploading ? 'Uploading...' : 'Adding...'}
                   </>
                 ) : (
                   'Add to Inventory'

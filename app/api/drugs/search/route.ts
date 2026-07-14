@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
         low_stock_threshold,
         updated_at,
         created_at,
+        image_url,
         products!inner (
           id,
           generic_name,
@@ -72,6 +73,7 @@ export async function GET(request: NextRequest) {
       `)
       .eq('pharmacies.is_active', true)
       .eq('is_listed', true)
+      .is('deleted_at', null)
       .or(`search_vector.plfts.${query},generic_name.ilike.%${query}%,brand_name.ilike.%${query}%`, { foreignTable: 'products' })
 
     // Apply category filter
@@ -116,6 +118,7 @@ export async function GET(request: NextRequest) {
               low_stock_threshold,
               updated_at,
               created_at,
+              image_url,
               products!inner (
                 id,
                 generic_name,
@@ -146,6 +149,7 @@ export async function GET(request: NextRequest) {
             `)
             .eq('pharmacies.is_active', true)
             .eq('is_listed', true)
+            .is('deleted_at', null)
             .in('product_id', productIds)
 
           if (category) {
@@ -218,7 +222,7 @@ export async function GET(request: NextRequest) {
         expiry_date: expiryDate,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        image_url: product?.image_url || null,
+        image_url: row.image_url || product?.image_url || null,
         pharmacies: pharmacy || null,
         price_range_min: Number.isFinite(price) ? Math.max(Math.round((price - (priceDelta ?? 0)) / 10) * 10, 0) : null,
         price_range_max: Number.isFinite(price) ? Math.round((price + (priceDelta ?? 0)) / 10) * 10 : null,

@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, AlertCircle, Camera, X } from 'lucide-react';
+import { Loader2, AlertCircle, Camera, X, ImageIcon, Pill } from 'lucide-react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 
@@ -35,9 +35,14 @@ export default function EditDrugModal({
   });
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Image states
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  // Pharmacy-level image states
+  const [pharmacyImageFile, setPharmacyImageFile] = useState<File | null>(null);
+  const [pharmacyImagePreview, setPharmacyImagePreview] = useState<string | null>(null);
+
+  // Catalogue-level image states
+  const [catalogueImageFile, setCatalogueImageFile] = useState<File | null>(null);
+  const [catalogueImagePreview, setCatalogueImagePreview] = useState<string | null>(null);
+
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
@@ -47,41 +52,79 @@ export default function EditDrugModal({
         price: drug.price?.toString() || '',
         low_stock_threshold: drug.low_stock_threshold?.toString() || '10',
       });
-      setImagePreview(drug.image_url || null);
-      setImageFile(null);
+      setPharmacyImagePreview(drug.pharmacy_image_url || null);
+      setCatalogueImagePreview(drug.image_url || null);
+      setPharmacyImageFile(null);
+      setCatalogueImageFile(null);
       setUploadError(null);
       setIsUploading(false);
       setFormError(null);
     }
   }, [drug]);
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      setImageFile(null);
-      setImagePreview(drug?.image_url || null);
-      return;
+  const validateImageFile = (file: File): string | null => {
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      return 'Please select a valid image file (PNG, JPG, or WebP).';
     }
-
-    if (!file.type.startsWith('image/')) {
-      setUploadError('Please select a valid image file (PNG or JPG).');
-      return;
-    }
-
     if (file.size > 1024 * 1024) {
-      setUploadError('Image size must be 1MB or less.');
-      return;
+      return 'Image size must be 1MB or less.';
     }
-
-    setUploadError(null);
-    setImageFile(file);
-    setImagePreview(URL.createObjectURL(file));
+    return null;
   };
 
-  const clearImage = () => {
-    setImageFile(null);
-    setImagePreview(null);
+  const handlePharmacyImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const error = validateImageFile(file);
+    if (error) { setUploadError(error); return; }
     setUploadError(null);
+    setPharmacyImageFile(file);
+    setPharmacyImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleCatalogueImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const error = validateImageFile(file);
+    if (error) { setUploadError(error); return; }
+    setUploadError(null);
+    setCatalogueImageFile(file);
+    setCatalogueImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearPharmacyImage = () => {
+    setPharmacyImageFile(null);
+    setPharmacyImagePreview(null);
+    setUploadError(null);
+  };
+
+  const clearCatalogueImage = () => {
+    setCatalogueImageFile(null);
+    setCatalogueImagePreview(null);
+    setUploadError(null);
+  };
+
+  const uploadImage = async (file: File): Promise<string> => {
+    const supabase = createClient();
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const uniqueId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const filePath = `drugs/${uniqueId}.${fileExt}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from('drug-images')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadErr) throw new Error(uploadErr.message);
+
+    const { data: { publicUrl } } = supabase.storage.from('drug-images').getPublicUrl(filePath);
+    return publicUrl;
   };
 
   const editDrugMutation = useMutation({
@@ -115,40 +158,33 @@ export default function EditDrugModal({
     setFormError(null);
 
     try {
-      let imageUrl = drug.image_url;
+      setIsUploading(true);
 
-      if (imagePreview === null) {
-        imageUrl = null;
-      } else if (imageFile) {
-        setIsUploading(true);
-        const supabase = createClient();
-        const fileExt = imageFile.name.split('.').pop()?.toLowerCase() || 'jpg';
-        const uniqueId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
-        const filePath = `drugs/${uniqueId}.${fileExt}`;
-
-        const { error: uploadErr } = await supabase.storage
-          .from('drug-images')
-          .upload(filePath, imageFile, {
-            cacheControl: '3600',
-            contentType: imageFile.type,
-            upsert: false,
-          });
-
-        if (uploadErr) {
-          throw new Error(uploadErr.message);
-        }
-
-        const { data: { publicUrl } } = supabase.storage.from('drug-images').getPublicUrl(filePath);
-        imageUrl = publicUrl;
+      // Resolve pharmacy-level image
+      let pharmacyImageUrl: string | null | undefined = undefined;
+      if (pharmacyImagePreview === null && drug.pharmacy_image_url) {
+        // User explicitly cleared the pharmacy image
+        pharmacyImageUrl = null;
+      } else if (pharmacyImageFile) {
+        pharmacyImageUrl = await uploadImage(pharmacyImageFile);
       }
 
-      await editDrugMutation.mutateAsync({
+      // Resolve catalogue-level image
+      let catalogueImageUrl: string | null | undefined = undefined;
+      if (catalogueImagePreview === null && drug.image_url) {
+        catalogueImageUrl = null;
+      } else if (catalogueImageFile) {
+        catalogueImageUrl = await uploadImage(catalogueImageFile);
+      }
+
+      const payload: any = {
         price: parseFloat(formData.price),
         low_stock_threshold: parseInt(formData.low_stock_threshold),
-        image_url: imageUrl,
-      });
+      };
+      if (pharmacyImageUrl !== undefined) payload.pharmacy_image_url = pharmacyImageUrl;
+      if (catalogueImageUrl !== undefined) payload.image_url = catalogueImageUrl;
+
+      await editDrugMutation.mutateAsync(payload);
     } catch (error: any) {
       setFormError(error.message || 'Failed to update drug');
     } finally {
@@ -165,6 +201,8 @@ export default function EditDrugModal({
   };
 
   if (!drug) return null;
+
+  const displayImage = pharmacyImagePreview || catalogueImagePreview || null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -184,40 +222,23 @@ export default function EditDrugModal({
 
         <form onSubmit={handleSubmit}>
           <div className="p-6 space-y-6">
-            {/* Display Locked Product Attributes */}
+            {/* Product info header with display image */}
             <div className="bg-surface border border-border rounded-lg p-4 flex gap-4">
-              {imagePreview ? (
-                <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-border bg-white shrink-0 group">
+              {displayImage ? (
+                <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-border bg-white shrink-0">
                   <Image
-                    src={imagePreview}
+                    src={displayImage}
                     alt={drug.brand_name || drug.name || drug.generic_name}
                     fill
                     sizes="64px"
                     className="object-cover"
                     unoptimized
                   />
-                  <Button
-                    type="button"
-                    onClick={clearImage}
-                    className="absolute top-0.5 right-0.5 bg-white/90 hover:bg-white text-ink rounded-full p-0.5 border border-border shadow transition-transform hover:scale-110"
-                    title="Remove image"
-                    disabled={editDrugMutation.isPending || isUploading}
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
                 </div>
               ) : (
-                <label className="cursor-pointer flex flex-col items-center justify-center h-16 w-16 rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-surface/50 bg-white shrink-0 transition-all shadow-sm">
-                  <Camera className="w-5 h-5 text-ink-light mb-0.5" />
-                  <span className="text-[8px] font-medium text-ink-muted">Add Image</span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    className="hidden"
-                    onChange={handleImageChange}
-                    disabled={editDrugMutation.isPending || isUploading}
-                  />
-                </label>
+                <div className="h-16 w-16 rounded-lg bg-white border border-dashed border-border flex items-center justify-center shrink-0">
+                  <Pill className="w-6 h-6 text-muted-foreground/30" />
+                </div>
               )}
               <div className="flex-1 min-w-0">
                 <h4 className="text-xs font-semibold text-ink-light uppercase tracking-wider">
@@ -228,6 +249,96 @@ export default function EditDrugModal({
                 </div>
                 <div className="text-xs text-ink-muted mt-1 truncate">
                   {drug.strength} • {drug.dosage_form} • {drug.category}
+                </div>
+              </div>
+            </div>
+
+            {/* Image Upload Section */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold text-ink-light uppercase tracking-wider">
+                Product Images
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Pharmacy Image (Override) */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ink-muted flex items-center gap-1">
+                    <Camera className="w-3 h-3" />
+                    Your Photo
+                  </label>
+                  {pharmacyImagePreview ? (
+                    <div className="relative h-20 w-full rounded-lg overflow-hidden border border-border bg-white group">
+                      <Image
+                        src={pharmacyImagePreview}
+                        alt="Pharmacy image"
+                        fill
+                        sizes="200px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                      <Button
+                        type="button"
+                        onClick={clearPharmacyImage}
+                        className="absolute top-1 right-1 bg-white/90 hover:bg-white text-ink rounded-full p-0.5 border border-border shadow transition-transform hover:scale-110"
+                        disabled={editDrugMutation.isPending || isUploading}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center justify-center h-20 w-full rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-surface/50 bg-white transition-all">
+                      <Camera className="w-5 h-5 text-ink-light mb-1" />
+                      <span className="text-[9px] font-medium text-ink-muted">Upload Photo</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={handlePharmacyImageChange}
+                        disabled={editDrugMutation.isPending || isUploading}
+                      />
+                    </label>
+                  )}
+                  <p className="text-[9px] text-ink-muted">Your own photo of this stock</p>
+                </div>
+
+                {/* Catalogue Image */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-ink-muted flex items-center gap-1">
+                    <ImageIcon className="w-3 h-3" />
+                    Catalogue Image
+                  </label>
+                  {catalogueImagePreview ? (
+                    <div className="relative h-20 w-full rounded-lg overflow-hidden border border-border bg-white group">
+                      <Image
+                        src={catalogueImagePreview}
+                        alt="Catalogue image"
+                        fill
+                        sizes="200px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                      <Button
+                        type="button"
+                        onClick={clearCatalogueImage}
+                        className="absolute top-1 right-1 bg-white/90 hover:bg-white text-ink rounded-full p-0.5 border border-border shadow transition-transform hover:scale-110"
+                        disabled={editDrugMutation.isPending || isUploading}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center justify-center h-20 w-full rounded-lg border border-dashed border-border hover:border-primary/50 hover:bg-surface/50 bg-white transition-all">
+                      <ImageIcon className="w-5 h-5 text-ink-light mb-1" />
+                      <span className="text-[9px] font-medium text-ink-muted">Add Image</span>
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={handleCatalogueImageChange}
+                        disabled={editDrugMutation.isPending || isUploading}
+                      />
+                    </label>
+                  )}
+                  <p className="text-[9px] text-ink-muted">Shared product photo (all pharmacies)</p>
                 </div>
               </div>
             </div>

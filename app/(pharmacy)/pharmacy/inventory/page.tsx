@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
 import {
   AlertTriangle,
+  ArchiveX,
   Boxes,
   CalendarClock,
   CheckCircle2,
@@ -31,6 +32,7 @@ export default function PharmacyInventory() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const showDelisted = filterStatus === 'delisted';
 
   const addProductId = searchParams.get('add_product_id');
   const addProductName = searchParams.get('name');
@@ -67,9 +69,12 @@ export default function PharmacyInventory() {
   }, [user, authLoading, isPharmacy, router]);
 
   const { data: drugsData, isLoading, refetch } = useQuery({
-    queryKey: ['pharmacy-drugs'],
+    queryKey: ['pharmacy-drugs', showDelisted],
     queryFn: async () => {
-      const response = await fetch('/api/pharmacy/drugs');
+      const url = showDelisted
+        ? '/api/pharmacy/drugs?show_delisted=true'
+        : '/api/pharmacy/drugs';
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error('Failed to fetch drugs');
       }
@@ -123,28 +128,34 @@ export default function PharmacyInventory() {
       : true;
 
     let matchesStatus = true;
-    if (filterStatus === 'in_stock') {
-      matchesStatus = drug.quantity_in_stock > (drug.low_stock_threshold || 10);
+    if (filterStatus === 'delisted') {
+      matchesStatus = !!drug.deleted_at;
+    } else if (filterStatus === 'in_stock') {
+      matchesStatus = !drug.deleted_at && drug.quantity_in_stock > (drug.low_stock_threshold || 10);
     } else if (filterStatus === 'low_stock') {
       matchesStatus =
+        !drug.deleted_at &&
         drug.quantity_in_stock > 0 &&
         drug.quantity_in_stock <= (drug.low_stock_threshold || 10);
     } else if (filterStatus === 'out_of_stock') {
-      matchesStatus = drug.quantity_in_stock === 0;
+      matchesStatus = !drug.deleted_at && drug.quantity_in_stock === 0;
     } else if (filterStatus === 'expiring_soon') {
-      if (!drug.expiry_date) {
+      if (!drug.expiry_date || drug.deleted_at) {
         matchesStatus = false;
       } else {
         const exp = new Date(drug.expiry_date);
         matchesStatus = exp >= today && exp <= ninetyDaysFromNow;
       }
     } else if (filterStatus === 'expired') {
-      if (!drug.expiry_date) {
+      if (!drug.expiry_date || drug.deleted_at) {
         matchesStatus = false;
       } else {
         const exp = new Date(drug.expiry_date);
         matchesStatus = exp < today;
       }
+    } else {
+      // 'all' — only show active items
+      matchesStatus = !drug.deleted_at;
     }
 
     return matchesSearch && matchesStatus;
@@ -158,6 +169,8 @@ export default function PharmacyInventory() {
     { label: 'Expiring soon', value: expiringSoon, icon: CalendarClock, color: 'var(--warning)' },
   ];
 
+  const delistedCount = drugs.filter((d: any) => !!d.deleted_at).length;
+
   const filterOptions = [
     { value: 'all', label: 'All' },
     { value: 'in_stock', label: 'In stock' },
@@ -165,6 +178,7 @@ export default function PharmacyInventory() {
     { value: 'out_of_stock', label: 'Out of stock' },
     { value: 'expiring_soon', label: 'Expiring soon' },
     { value: 'expired', label: 'Expired' },
+    { value: 'delisted', label: `Delisted${delistedCount > 0 ? ` (${delistedCount})` : ''}` },
   ];
 
   return (
