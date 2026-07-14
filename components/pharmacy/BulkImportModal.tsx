@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { X } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 
 interface BulkImportModalProps {
   isOpen: boolean;
@@ -277,8 +277,8 @@ export default function BulkImportModal({ isOpen, onClose, onSuccess }: BulkImpo
         {step === 'upload' && (
           <>
             <div className="flex flex-col items-center gap-2 rounded-card border-2 border-dashed border-hairline px-6 py-10 text-center">
-              <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-card bg-brand-tint text-[22px]">
-                📥
+              <div className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Upload className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
               </div>
               <h3 className="text-[16px] font-medium text-ink">Upload CSV or Excel file</h3>
               <p className="text-sm leading-relaxed text-secondary">

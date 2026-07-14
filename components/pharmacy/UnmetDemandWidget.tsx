@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, TrendingUp, AlertTriangle, Plus } from 'lucide-react';
+import { CheckCircle2, Loader2, TrendingUp, AlertTriangle, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 export default function UnmetDemandWidget() {
@@ -57,8 +57,11 @@ export default function UnmetDemandWidget() {
 
       <div className="divide-y divide-border bg-card">
         {unmetDemand.length === 0 ? (
-          <div className="py-16 text-center text-muted-foreground/50 text-sm">
-            ✨ Your inventory perfectly covers all local searches in your radius!
+          <div className="flex flex-col items-center gap-2 py-16 text-center text-muted-foreground/70 text-sm">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+              <CheckCircle2 className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+            </span>
+            <span>Your inventory perfectly covers all local searches in your radius.</span>
           </div>
         ) : (
           unmetDemand.map((item: any) => {

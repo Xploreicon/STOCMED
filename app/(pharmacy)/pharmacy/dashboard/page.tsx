@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, BarChart3, Boxes, CheckCircle2, Loader2, Tags, Upload, XCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { ReorderSuggestions } from '@/components/pharmacy/ReorderSuggestions';
 
@@ -82,17 +82,17 @@ export default function PharmacyDashboard() {
 
   const pct = total ? Math.round((inStock / total) * 100) : 0;
 
-  const stats = [
-    { label: 'Total products', value: total, sub: 'across catalogue', dot: null, valueColor: 'var(--navy)' },
-    { label: 'In stock', value: inStock, sub: `${pct}% of catalogue`, dot: 'var(--success)', valueColor: 'var(--success)' },
-    { label: 'Low stock', value: lowStock, sub: 'reorder suggested', dot: 'var(--warning)', valueColor: 'var(--warning)' },
-    { label: 'Out of stock', value: outOfStock, sub: 'restock needed', dot: 'var(--danger)', valueColor: 'var(--danger)' },
+  const stats: Array<{ label: string; value: number; sub: string; icon: LucideIcon; valueColor: string }> = [
+    { label: 'Total products', value: total, sub: 'across catalogue', icon: Boxes, valueColor: 'var(--navy)' },
+    { label: 'In stock', value: inStock, sub: `${pct}% of catalogue`, icon: CheckCircle2, valueColor: 'var(--success)' },
+    { label: 'Low stock', value: lowStock, sub: 'reorder suggested', icon: AlertTriangle, valueColor: 'var(--warning)' },
+    { label: 'Out of stock', value: outOfStock, sub: 'restock needed', icon: XCircle, valueColor: 'var(--danger)' },
   ];
 
   const actions = [
-    { icon: '📥', title: 'Update stock levels', sub: 'Bulk edit or CSV upload', href: '/pharmacy/inventory/import' },
-    { icon: '🏷️', title: 'Update prices', sub: 'Manage margins and pricing', href: '/pharmacy/inventory' },
-    { icon: '📈', title: 'Demand near you', sub: 'What patients searched for', href: '/pharmacy/inventory' }, // links to inventory since insights isn't fully separate
+    { icon: Upload, title: 'Update stock levels', sub: 'Bulk edit or CSV upload', href: '/pharmacy/inventory/import' },
+    { icon: Tags, title: 'Update prices', sub: 'Manage margins and pricing', href: '/pharmacy/inventory' },
+    { icon: BarChart3, title: 'Demand near you', sub: 'What patients searched for', href: '/pharmacy/inventory' }, // links to inventory since insights isn't fully separate
   ];
 
   const activity = [
@@ -142,21 +142,26 @@ export default function PharmacyDashboard() {
 
       {/* Stat cards */}
       <div className="grid min-w-0 grid-cols-2 lg:grid-cols-4 gap-4 mt-7">
-        {stats.map((s, idx) => (
-          <div key={idx} className="min-w-0 border border-border rounded-card p-4 sm:p-5 bg-white shadow-xs">
-            <div className="flex items-center gap-1.5">
-              {s.dot && <span style={{ backgroundColor: s.dot }} className="w-2 h-2 rounded-full" />}
-              <span className="text-[13px] text-ink-light">{s.label}</span>
+        {stats.map((s, idx) => {
+          const Icon = s.icon
+          return (
+            <div key={idx} className="min-w-0 border border-border rounded-card p-4 sm:p-5 bg-white shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                </span>
+                <span className="text-[13px] text-ink-light">{s.label}</span>
+              </div>
+              <div
+                style={{ color: s.valueColor }}
+                className="text-[30px] font-medium mt-2 tabular-nums"
+              >
+                {s.value}
+              </div>
+              <div className="text-[13px] text-ink-muted mt-1 break-words">{s.sub}</div>
             </div>
-            <div
-              style={{ color: s.valueColor }}
-              className="text-[30px] font-medium mt-2 tabular-nums"
-            >
-              {s.value}
-            </div>
-            <div className="text-[13px] text-ink-muted mt-1 break-words">{s.sub}</div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       <ReorderSuggestions />
@@ -165,21 +170,24 @@ export default function PharmacyDashboard() {
       <div className="mt-10">
         <h2 className="text-[16px] font-medium text-ink mb-4">Quick actions</h2>
         <div className="grid min-w-0 grid-cols-1 lg:grid-cols-3 gap-4">
-          {actions.map((a) => (
-            <Link
-              key={a.title}
-              href={a.href}
-              className="min-w-0 border border-border rounded-card p-5 flex items-center gap-3.5 hover:border-primary/40 hover:bg-surface transition-all bg-white shadow-xs"
-            >
-              <div className="w-11 h-11 rounded-lg bg-[var(--surface)] flex items-center justify-center text-[20px] flex-shrink-0">
-                {a.icon}
-              </div>
-              <div className="min-w-0">
-                <div className="text-[15px] font-medium text-ink break-words">{a.title}</div>
-                <div className="text-[13px] text-ink-light mt-0.5 break-words">{a.sub}</div>
-              </div>
-            </Link>
-          ))}
+          {actions.map((a) => {
+            const Icon = a.icon
+            return (
+              <Link
+                key={a.title}
+                href={a.href}
+                className="min-w-0 border border-border rounded-card p-5 flex items-center gap-3.5 hover:border-primary/40 hover:bg-surface transition-all bg-white shadow-xs"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[15px] font-medium text-ink break-words">{a.title}</div>
+                  <div className="text-[13px] text-ink-light mt-0.5 break-words">{a.sub}</div>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </div>
 

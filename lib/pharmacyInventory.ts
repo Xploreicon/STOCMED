@@ -46,12 +46,19 @@ export interface EnrichedInventoryRow {
   strength: string
   pack_size: string | null
   requires_prescription: boolean
+  /** Catalogue-level image from products table (shared across pharmacies) */
   image_url: string | null
+  /** Pharmacy-level image override from pharmacy_inventory table */
+  pharmacy_image_url: string | null
+  /** Resolved display image: pharmacy override → catalogue image → null */
+  display_image_url: string | null
   price: number
   quantity_in_stock: number
   low_stock_threshold: number
   notes: string | null
   is_listed: boolean
+  /** Non-null when the item has been soft-deleted (delisted) */
+  deleted_at: string | null
   created_at: string
   updated_at: string
   stock_status: 'in' | 'low' | 'out'
@@ -81,13 +88,20 @@ function daysFromNow(dateStr: string): number {
  */
 export async function getEnrichedInventory(
   supabase: SupabaseServerClient,
-  pharmacyId: string
+  pharmacyId: string,
+  options: { showDelisted?: boolean } = {}
 ): Promise<{ rows: EnrichedInventoryRow[]; stats: InventoryStats }> {
-  const { data: inventoryRows, error: invError } = await supabase
+  let query = supabase
     .from('pharmacy_inventory')
     .select('*, products(*), batches(*)')
     .eq('pharmacy_id', pharmacyId)
     .order('created_at', { ascending: false })
+
+  if (!options.showDelisted) {
+    query = query.is('deleted_at', null)
+  }
+
+  const { data: inventoryRows, error: invError } = await query
 
   if (invError) throw invError
 
@@ -136,6 +150,10 @@ export async function getEnrichedInventory(
     const threshold = inv.low_stock_threshold
     const stockStatus: 'in' | 'low' | 'out' = qty <= 0 ? 'out' : qty <= threshold ? 'low' : 'in'
 
+    const catalogueImage = product?.image_url ?? null
+    const pharmacyImage = inv.image_url ?? null
+    const displayImage = pharmacyImage || catalogueImage || null
+
     return {
       id: inv.id,
       pharmacy_id: inv.pharmacy_id,
@@ -151,12 +169,15 @@ export async function getEnrichedInventory(
       strength: product?.strength ?? '',
       pack_size: product?.pack_size ?? null,
       requires_prescription: product?.requires_prescription ?? false,
-      image_url: product?.image_url ?? null,
+      image_url: catalogueImage,
+      pharmacy_image_url: pharmacyImage,
+      display_image_url: displayImage,
       price: inv.price,
       quantity_in_stock: qty,
       low_stock_threshold: threshold,
       notes: inv.notes ?? null,
       is_listed: inv.is_listed,
+      deleted_at: inv.deleted_at ?? null,
       created_at: inv.created_at,
       updated_at: inv.updated_at,
       stock_status: stockStatus,

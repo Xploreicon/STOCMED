@@ -6,7 +6,17 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
-import { Loader2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  Boxes,
+  CalendarClock,
+  CheckCircle2,
+  Loader2,
+  Package,
+  Plus,
+  XCircle,
+  type LucideIcon,
+} from 'lucide-react';
 import InventoryTable from '@/components/pharmacy/InventoryTable';
 import AddDrugModal from '@/components/pharmacy/AddDrugModal';
 
@@ -140,12 +150,12 @@ export default function PharmacyInventory() {
     return matchesSearch && matchesStatus;
   });
 
-  const stats = [
-    { label: 'Total products', value: totalProducts, icon: '📦', color: 'var(--navy)' },
-    { label: 'In stock', value: inStock, icon: '🟢', color: 'var(--success)' },
-    { label: 'Low stock', value: lowStock, icon: '🟡', color: 'var(--warning)' },
-    { label: 'Out of stock', value: outOfStock, icon: '🔴', color: 'var(--danger)' },
-    { label: 'Expiring soon', value: expiringSoon, icon: '⚠️', color: 'var(--warning)' },
+  const stats: Array<{ label: string; value: number; icon: LucideIcon; color: string }> = [
+    { label: 'Total products', value: totalProducts, icon: Boxes, color: 'var(--navy)' },
+    { label: 'In stock', value: inStock, icon: CheckCircle2, color: 'var(--success)' },
+    { label: 'Low stock', value: lowStock, icon: AlertTriangle, color: 'var(--warning)' },
+    { label: 'Out of stock', value: outOfStock, icon: XCircle, color: 'var(--danger)' },
+    { label: 'Expiring soon', value: expiringSoon, icon: CalendarClock, color: 'var(--warning)' },
   ];
 
   const filterOptions = [
@@ -189,7 +199,8 @@ export default function PharmacyInventory() {
             onClick={() => setIsAddModalOpen(true)}
             className="h-11 flex items-center px-4 bg-primary text-white font-medium text-[14px] rounded-button hover:bg-[var(--primary-hover)] transition-colors"
           >
-            + Add drug
+            <Plus className="mr-2 h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            Add drug
           </Button>
         </div>
       </div>
@@ -199,7 +210,9 @@ export default function PharmacyInventory() {
         {stats.map((s, idx) => (
           <div key={idx} className="border border-border rounded-card p-3.5 bg-white">
             <div className="flex items-center gap-1.5">
-              <span className="text-[15px]">{s.icon}</span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <s.icon className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              </span>
               <span className="min-w-0 text-[12px] text-ink-light leading-tight">{s.label}</span>
             </div>
             <div
@@ -244,8 +257,8 @@ export default function PharmacyInventory() {
       {/* Main Inventory Content */}
       {filteredDrugs.length === 0 ? (
         <div className="border border-dashed border-border rounded-card-lg p-16 flex flex-col items-center justify-center text-center gap-2 bg-white">
-          <div className="w-14 h-14 rounded-card bg-[var(--surface)] flex items-center justify-center text-[24px] mb-2">
-            📦
+          <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+            <Package className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
           </div>
           <h3 className="text-[18px] font-medium text-ink">
             {drugs.length === 0 ? 'Your inventory is empty' : 'No matching medications'}
@@ -267,7 +280,8 @@ export default function PharmacyInventory() {
                 onClick={() => setIsAddModalOpen(true)}
                 className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[var(--primary-hover)] transition-colors"
               >
-                + Add your first drug
+                <Plus className="mr-2 h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                Add your first drug
               </Button>
             </div>
           )}

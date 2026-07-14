@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Loader2, Phone } from 'lucide-react';
+import { BadgeCheck, Lightbulb, Loader2, Phone, Truck } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 export const dynamic = 'force-dynamic';
@@ -277,7 +277,9 @@ export default function SearchResults() {
 
       {/* Alternative suggestion banner */}
       <div className="mt-7 bg-[var(--surface)] border border-border rounded-card p-4 flex items-start gap-3">
-        <span className="text-[18px] mt-0.5">💡</span>
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Lightbulb className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+        </span>
         <p className="text-[14px] font-normal text-ink-muted leading-relaxed">
           Need a cheaper option? Ask StocMed to check for generic alternatives or brands with the same active ingredients.
         </p>
@@ -337,7 +339,10 @@ export default function SearchResults() {
                   <span className="text-[14px] text-ink-light font-normal">PCN license</span>
                   <span className="text-[14px] text-ink font-medium text-right">
                     {selectedItem.pharmacies.license_number || 'PCN/PREM/48213'}{' '}
-                    <span className="text-success font-medium">✓ verified</span>
+                    <span className="inline-flex items-center gap-1 text-success font-medium">
+                      <BadgeCheck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                      Verified
+                    </span>
                   </span>
                 </div>
                 <div className="h-px bg-border" />
@@ -375,7 +380,8 @@ export default function SearchResults() {
                   rel="noreferrer"
                   className="w-full h-12 bg-[var(--legacy-success)] hover:bg-[var(--legacy-success-hover)] text-white text-[15px] font-medium rounded-button transition-colors flex items-center justify-center space-x-2"
                 >
-                  <span className="font-bold">⚡ Deliver with Chowdeck</span>
+                  <Truck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                  <span className="font-bold">Deliver with Chowdeck</span>
                 </a>
               </div>
             </div>

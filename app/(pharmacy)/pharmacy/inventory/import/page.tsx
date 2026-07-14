@@ -454,10 +454,10 @@ export default function BulkImportWizard() {
                                 }}
                                 className="w-[220px] px-2 py-1.5 border border-border rounded-md focus:ring-1 focus:ring-primary text-xs bg-white"
                               >
-                                {source === 'quickbooks' ? <option value="">Select a catalogue match</option> : <option value="create_new">🆕 Add as Unverified Catalogue Item</option>}
+                                {source === 'quickbooks' ? <option value="">Select a catalogue match</option> : <option value="create_new">Add as unverified catalogue item</option>}
                                 {row.matches && row.matches.map((m: any) => (
                                   <option key={m.id} value={m.id}>
-                                    ✨ {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}) - {Math.round(m.confidence * 100)}% Match
+                                    {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}) - {Math.round(m.confidence * 100)}% match
                                   </option>
                                 ))}
                               </select>

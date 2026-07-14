@@ -5,6 +5,7 @@ import {
   RESTRICTED_LIST,
   POM_MOLECULES_LIST,
   OTC_MOLECULES_LIST,
+  GENERIC_SYMPTOMS_LIST,
   KeywordConfig,
 } from './keyword-lists';
 
@@ -110,6 +111,17 @@ export function classifyDeterministically(rawQuery: string): TriageResult | null
       confidence: 1.0,
       raw_query: rawQuery,
       layers_triggered: ['deterministic_otc_molecules'],
+    };
+  }
+
+  // 6. Generic symptoms always enter pharmacist intake, never medication search.
+  if (matchesConfig(normalized, GENERIC_SYMPTOMS_LIST)) {
+    return {
+      intent: 'SYMPTOM_GENERIC',
+      risk_tier: 'CARE_REDIRECT',
+      confidence: 1.0,
+      raw_query: rawQuery,
+      layers_triggered: ['deterministic_generic_symptom'],
     };
   }
 

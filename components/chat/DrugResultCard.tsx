@@ -111,11 +111,6 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
 
         if (!isMounted) return;
 
-        if (!response.ok) {
-          setDetailError('Unable to load assistant insights right now.');
-          return;
-        }
-
         const data = await response.json();
         if (typeof data?.message === 'string') {
           setDetailMessage(data.message);

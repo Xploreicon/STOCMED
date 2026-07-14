@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Banknote, ChevronDown, ChevronUp, History, Printer, RefreshCw } from 'lucide-react'
+import { Banknote, CheckCircle2, ChevronDown, ChevronUp, History, Printer, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -167,7 +167,7 @@ export default function ShiftsPage() {
             <section>
               <label className="mb-2 block text-sm font-medium" htmlFor="counted-cash">Counted cash</label>
               <Input id="counted-cash" type="number" min="0" step="0.01" inputMode="decimal" placeholder="0.00" value={countedCash} onChange={(event) => setCountedCash(event.target.value)} />
-              {countedCash !== '' && <p className={`mt-3 text-lg font-bold ${variance === 0 ? 'text-success' : variance < 0 ? 'text-destructive' : 'text-warning'}`}>{variance === 0 ? 'Balanced ✓' : `${money(Math.abs(variance))} ${variance < 0 ? 'SHORT' : 'OVER'}`}</p>}
+              {countedCash !== '' && <p className={`mt-3 flex items-center gap-2 text-lg font-bold ${variance === 0 ? 'text-success' : variance < 0 ? 'text-destructive' : 'text-warning'}`}>{variance === 0 ? <><CheckCircle2 className="h-5 w-5" strokeWidth={2} aria-hidden="true" />Balanced</> : `${money(Math.abs(variance))} ${variance < 0 ? 'SHORT' : 'OVER'}`}</p>}
               <Button variant="ghost" className="mt-3 px-0" onClick={() => setShowDenominations((value) => !value)}>{showDenominations ? <ChevronUp className="mr-2 h-4 w-4" /> : <ChevronDown className="mr-2 h-4 w-4" />}Count by denomination</Button>
               {showDenominations && <div className="grid grid-cols-2 gap-2 border-t border-border pt-3 sm:grid-cols-4">{denominations.map((denomination) => <label key={denomination} className="text-xs text-ink-muted">₦{denomination}<Input className="mt-1" type="number" min="0" inputMode="numeric" value={counts[denomination] || ''} onChange={(event) => { const next = { ...counts, [denomination]: Number(event.target.value) }; setCounts(next); setCountedCash(String(denominations.reduce((sum, note) => sum + note * (next[note] || 0), 0))) }} /></label>)}<p className="col-span-full text-right text-sm font-semibold">Total {money(denominationTotal)}</p></div>}
               <Textarea className="mt-3" placeholder="Optional note" value={notes} onChange={(event) => setNotes(event.target.value)} />

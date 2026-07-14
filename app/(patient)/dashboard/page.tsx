@@ -2,15 +2,17 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
+import { ArrowRight, HeartPulse, ShieldCheck, Stethoscope, Syringe, type LucideIcon } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
+
 const SUGGESTIONS = [
-  { icon: '🦟', label: 'Malaria treatment', q: 'Malaria treatment' },
-  { icon: '❤️', label: 'Blood pressure medication', q: 'Blood pressure medication' },
-  { icon: '🤰', label: 'Prenatal vitamins', q: 'Prenatal vitamins' },
-  { icon: '💉', label: 'Diabetes management', q: 'Diabetes management' },
-]
+  { icon: Stethoscope, label: 'Malaria treatment', q: 'Malaria treatment' },
+  { icon: HeartPulse, label: 'Blood pressure medication', q: 'Blood pressure medication' },
+  { icon: ShieldCheck, label: 'Prenatal vitamins', q: 'Prenatal vitamins' },
+  { icon: Syringe, label: 'Diabetes management', q: 'Diabetes management' },
+] satisfies Array<{ icon: LucideIcon; label: string; q: string }>
 
 function greeting() {
   const h = new Date().getHours()
@@ -34,28 +36,22 @@ export default async function PatientDashboard() {
     .single()
 
   const { data: recentSearchesData } = await supabase
-    .from('searches')
-    .select('id, query_text, location, timestamp, results_count, metadata')
+    .from('user_search_history')
+    .select('id, query_text, location, searched_at, results_count')
     .eq('user_id', user.id)
-    .order('timestamp', { ascending: false })
+    .order('searched_at', { ascending: false })
     .limit(3)
 
   type Row = {
     id: string
-    query_text: string | null
+    query_text: string
     location: string | null
-    timestamp: string
+    searched_at: string
     results_count: number | null
-    metadata: Record<string, unknown> | null
   }
 
   const recent = ((recentSearchesData ?? []) as Row[]).map((s) => {
-    let name = ''
-    if (s.metadata && typeof s.metadata === 'object') {
-      const m = s.metadata as { drug_name?: string; query?: string }
-      name = m.drug_name ?? m.query ?? ''
-    }
-    if (!name) name = s.query_text ?? 'Search'
+    const name = s.query_text
     const count = s.results_count ?? 0
     const dot = count === 0 ? 'bg-danger' : count <= 1 ? 'bg-warning' : 'bg-success'
     const meta =
@@ -67,8 +63,8 @@ export default async function PatientDashboard() {
       name,
       meta,
       dot,
-      when: formatDistanceToNow(new Date(s.timestamp), { addSuffix: true }),
-      q: s.query_text ?? name,
+      when: formatDistanceToNow(new Date(s.searched_at), { addSuffix: true }),
+      q: s.query_text,
     }
   })
 
@@ -92,10 +88,10 @@ export default async function PatientDashboard() {
           </Link>
           <Link
             href="/chat"
-            className="w-[52px] h-[52px] flex-shrink-0 rounded-button bg-primary flex items-center justify-center text-white text-lg hover:bg-[var(--primary-hover)]"
+            className="w-[52px] h-[52px] flex-shrink-0 rounded-button bg-primary flex items-center justify-center text-white hover:bg-[var(--primary-hover)]"
             aria-label="Start chat search"
           >
-            →
+            <ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
           </Link>
         </div>
         <p className="text-[13px] text-ink-muted mt-3">e.g. &ldquo;Where can I get Coartem near Yaba?&rdquo; or &ldquo;I have a fever and body pain&rdquo;</p>
@@ -131,14 +127,21 @@ export default async function PatientDashboard() {
         <h2 className="text-[16px] font-medium text-ink mb-4">Suggested for you</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SUGGESTIONS.map((s) => (
-            <Link
-              key={s.label}
-              href={`/chat?q=${encodeURIComponent(s.q)}`}
-              className="border border-border rounded-card p-4 flex items-center gap-3 hover:border-primary/40 hover:bg-surface transition-colors"
-            >
-              <span className="text-xl">{s.icon}</span>
-              <span className="text-[14px] font-medium text-ink">{s.label}</span>
-            </Link>
+            (() => {
+              const Icon = s.icon
+              return (
+                <Link
+                  key={s.label}
+                  href={`/chat?q=${encodeURIComponent(s.q)}`}
+                  className="border border-border rounded-card p-4 flex items-center gap-3 hover:border-primary/40 hover:bg-surface transition-colors"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Icon className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+                  </span>
+                  <span className="text-[14px] font-medium text-ink">{s.label}</span>
+                </Link>
+              )
+            })()
           ))}
         </div>
       </div>

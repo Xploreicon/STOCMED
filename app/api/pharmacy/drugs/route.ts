@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const showDelisted = request.nextUrl.searchParams.get('show_delisted') === 'true'
 
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
 
     let inventory
     try {
-      inventory = await getEnrichedInventory(supabase, pharmacy.id)
+      inventory = await getEnrichedInventory(supabase, pharmacy.id, { showDelisted })
     } catch (inventoryError) {
       console.error('Error fetching inventory:', inventoryError)
       return NextResponse.json(
@@ -112,7 +113,8 @@ export async function POST(request: NextRequest) {
         price: body.price,
         low_stock_threshold: body.low_stock_threshold !== undefined && body.low_stock_threshold !== null ? Number(body.low_stock_threshold) : 10,
         quantity_in_stock: 0, // will be updated via trigger
-        is_listed: true
+        is_listed: true,
+        image_url: body.pharmacy_image_url || null,
       })
       .select()
       .single()

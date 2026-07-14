@@ -3,6 +3,23 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  BarChart3,
+  Bell,
+  Boxes,
+  Calculator,
+  ClipboardList,
+  Clock3,
+  Home,
+  LayoutDashboard,
+  MessageCircle,
+  Package,
+  Settings,
+  Upload,
+  User,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SidebarProps {
@@ -13,26 +30,28 @@ interface SidebarProps {
 
 interface NavItem {
   label: string;
-  emoji: string;
+  icon: LucideIcon;
   href: string;
 }
 
 const patientNavItems: NavItem[] = [
-  { label: 'Home', emoji: '🏠', href: '/dashboard' },
-  { label: 'Chat search', emoji: '💬', href: '/chat' },
-  { label: 'History', emoji: '🕒', href: '/history' },
-  { label: 'Settings', emoji: '⚙️', href: '/settings' },
+  { label: 'Home', icon: Home, href: '/dashboard' },
+  { label: 'Chat search', icon: MessageCircle, href: '/chat' },
+  { label: 'History', icon: Clock3, href: '/history' },
+  { label: 'Profile', icon: User, href: '/profile' },
+  { label: 'Settings', icon: Settings, href: '/settings' },
 ];
 
 const pharmacyNavItems: NavItem[] = [
-  { label: 'Dashboard', emoji: '📊', href: '/pharmacy/dashboard' },
-  { label: 'Inventory', emoji: '📦', href: '/pharmacy/inventory' },
-  { label: 'Procurement', emoji: '🚚', href: '/pharmacy/procurement' },
-  { label: 'POS', emoji: '🧾', href: '/pharmacy/pos' },
-  { label: 'Shifts', emoji: '💵', href: '/pharmacy/shifts' },
-  { label: 'Reports', emoji: '📈', href: '/pharmacy/reports' },
-  { label: 'Reservations', emoji: '🔔', href: '/pharmacy/reservations' },
-  { label: 'Settings', emoji: '⚙️', href: '/pharmacy/settings' },
+  { label: 'Dashboard', icon: LayoutDashboard, href: '/pharmacy/dashboard' },
+  { label: 'Inventory', icon: Boxes, href: '/pharmacy/inventory' },
+  { label: 'Import', icon: Upload, href: '/pharmacy/inventory/import' },
+  { label: 'Procurement', icon: ClipboardList, href: '/pharmacy/procurement' },
+  { label: 'POS', icon: Calculator, href: '/pharmacy/pos' },
+  { label: 'Shifts', icon: Wallet, href: '/pharmacy/shifts' },
+  { label: 'Reports', icon: BarChart3, href: '/pharmacy/reports' },
+  { label: 'Reservations', icon: Bell, href: '/pharmacy/reservations' },
+  { label: 'Settings', icon: Settings, href: '/pharmacy/settings' },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ userType, className, onNavigate }) => {
@@ -48,6 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userType, className, onNavigat
     >
       {navItems.map((item) => {
         const isActive = pathname === item.href;
+        const Icon = item.icon;
 
         return (
           <Link
@@ -61,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ userType, className, onNavigat
                 : 'text-ink-muted hover:bg-surface hover:text-ink'
             )}
           >
-            <span className="text-lg flex-shrink-0">{item.emoji}</span>
+            <Icon className="h-5 w-5 flex-shrink-0" strokeWidth={2} aria-hidden="true" />
             <span>{item.label}</span>
           </Link>
         );

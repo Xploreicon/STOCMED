@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Clock, MapPin, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatDistanceToNow } from 'date-fns';
-import { createClient } from '@/lib/supabase/client';
 
 interface SearchRecord {
   id: string;
@@ -21,10 +20,9 @@ interface RecentSearchesProps {
 
 type SearchRow = {
   id: string;
-  query_text: string | null;
+  query_text: string;
   location: string | null;
   timestamp: string;
-  metadata: Record<string, unknown> | null;
 };
 
 export default function RecentSearches({ searches }: RecentSearchesProps) {
@@ -43,53 +41,20 @@ export default function RecentSearches({ searches }: RecentSearchesProps) {
 
   useEffect(() => {
     let isMounted = true;
-    const supabase = createClient();
-
     const loadSearches = async () => {
       try {
         setIsLoading(true);
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const response = await fetch('/api/searches');
+        if (!response.ok) throw new Error(`Search history failed (${response.status})`);
+        const data = (await response.json()) as SearchRow[];
 
-        if (!user) {
-          if (isMounted) {
-            setRecentSearches([]);
-            setIsLoading(false);
-          }
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('searches')
-          .select('id, query_text, location, timestamp, metadata')
-          .eq('user_id', user.id)
-          .order('timestamp', { ascending: false })
-          .limit(5);
-
-        if (error) {
-          throw error;
-        }
-
-        const mapped: SearchRecord[] = ((data ?? []) as SearchRow[]).map((search) => {
-          let displayName = '';
-          if (search.metadata && typeof search.metadata === 'object') {
-            const metadata = search.metadata as { drug_name?: string; query?: string };
-            displayName = metadata.drug_name ?? metadata.query ?? '';
-          }
-
-          if (!displayName) {
-            displayName = search.query_text ?? '';
-          }
-
-          return {
+        const mapped: SearchRecord[] = data.slice(0, 5).map((search) => ({
             id: search.id,
-            query: search.query_text ?? '',
-            displayName,
+            query: search.query_text,
+            displayName: search.query_text,
             location: search.location,
             timestamp: search.timestamp,
-          };
-        });
+          }));
 
         if (isMounted) {
           setRecentSearches(mapped);

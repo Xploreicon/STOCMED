@@ -20,4 +20,15 @@ describe('positive-signal-only triage', () => {
     expect(classifyDeterministically('I cannot breathe')?.risk_tier).toBe('REDIRECT')
     expect(classifyDeterministically('I feel unwell')).toBeNull()
   })
+
+  it('routes generic headache and fever symptoms to pharmacist intake', () => {
+    expect(classifyDeterministically('something for headache')).toMatchObject({
+      intent: 'SYMPTOM_GENERIC',
+      risk_tier: 'CARE_REDIRECT',
+    })
+    expect(classifyDeterministically('I have a fever')).toMatchObject({
+      intent: 'SYMPTOM_GENERIC',
+      risk_tier: 'CARE_REDIRECT',
+    })
+  })
 })

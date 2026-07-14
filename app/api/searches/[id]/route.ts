@@ -19,9 +19,9 @@ export async function DELETE(
       )
     }
 
-    // Verify search belongs to this user
+    // Verify the patient-owned history record belongs to this user.
     const { data: existingSearch, error: checkError } = await supabase
-      .from('searches')
+      .from('user_search_history')
       .select('user_id')
       .eq('id', id)
       .single()
@@ -33,7 +33,7 @@ export async function DELETE(
       )
     }
 
-    if ((existingSearch as any).user_id !== user.id) {
+    if ((existingSearch as { user_id: string }).user_id !== user.id) {
       return NextResponse.json(
         { error: 'Forbidden: Search does not belong to you' },
         { status: 403 }
@@ -42,7 +42,7 @@ export async function DELETE(
 
     // Delete search
     const { error: deleteError } = await supabase
-      .from('searches')
+      .from('user_search_history')
       .delete()
       .eq('id', id)
 

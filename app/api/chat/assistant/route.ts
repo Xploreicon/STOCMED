@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAnthropicClient, runClaudeRequest } from '@/lib/anthropic'
+import {
+  ClaudeRequestError,
+  DEFAULT_CLAUDE_MODEL,
+  getAnthropicClient,
+  reportClaudeFailure,
+  toClaudeRequestError,
+  toClaudeEmptyResponseError,
+} from '@/lib/anthropic'
 import { triageQuery } from '@/lib/triage/classifier'
 import { getSafeResponse } from '@/lib/triage/safe-responses'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { logger } from '@/lib/observability'
 import { z } from 'zod'
+
+const ASSISTANT_MODEL =
+  process.env.ANTHROPIC_ASSISTANT_MODEL || DEFAULT_CLAUDE_MODEL
 
 const chatMessageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant']),
@@ -21,9 +32,33 @@ const assistantPayloadSchema = z.object({
     })
     .nullable()
     .optional(),
+  searchLocation: z.string().trim().max(200).nullable().optional(),
   pharmacies: z.array(z.record(z.string(), z.any())).optional(),
 })
 
+
+const streamHeaders = {
+  'Content-Type': 'text/event-stream; charset=utf-8',
+  'Cache-Control': 'no-cache, no-transform',
+  Connection: 'keep-alive',
+}
+
+function encodeEvent(event: Record<string, unknown>): Uint8Array {
+  return new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`)
+}
+
+function staticAssistantResponse(message: string, model?: string): Response {
+  return new Response(
+    new ReadableStream({
+      start(controller) {
+        controller.enqueue(encodeEvent({ type: 'delta', text: message }))
+        controller.enqueue(encodeEvent({ type: 'done', model }))
+        controller.close()
+      },
+    }),
+    { headers: streamHeaders }
+  )
+}
 
 // Scope-locked clinical-concierge prompt (C.1)
 const SYSTEM_PROMPT = `You are StocMed's scope-locked patient concierge.
@@ -37,12 +72,39 @@ CRITICAL MEDICAL COMPLIANCE RULES:
 6. Refuse to answer queries outside the scope of medication search, pharmacy directory, or basic drug information.
 
 Tone & Style:
-- Professional, concise, supportive, and plain-language (clear for low-literacy users).
-- Max 3 sentences. No fluff.
-- Format pharmacy lists as clean bullet points: bold pharmacy name, price (₦ symbol), stock availability, and distance.`
+- Warm, concise, direct, and plain-language. Use at most 3 short sentences.
+- Never introduce yourself, greet, restate your capabilities, or show a capability menu. The application handles the one-time greeting.
+- Answer the current request immediately. Do not add generic offers to help.
+- When the application has already sent a REQUIRED RESULT LEAD, return exactly this sentence and nothing else: "Check the result card below for pharmacy details."
+- When no match exists, say that directly and suggest checking the spelling or asking a pharmacist about an equivalent product.
+- Markdown is allowed only when it improves readability; never output a capability list.`
 
 const GREETING_REGEX =
   /^(hi|hello|hey|hiya|good morning|good afternoon|good evening)(?:[!\.\s]*)$/i
+
+function assistantFailureMessage(error: ClaudeRequestError): string {
+  switch (error.kind) {
+    case 'auth':
+      return 'The assistant service needs an account configuration update. Medication search is still available while it is restored.'
+    case 'credit':
+      return 'The assistant is temporarily unavailable while its service credit is restored. Medication search is still available.'
+    case 'rate_limit': {
+      const wait = error.retryAfterSeconds
+        ? ` Please wait ${error.retryAfterSeconds} seconds and try again.`
+        : ' Please wait a moment and try again.'
+      return `The assistant is receiving too many requests.${wait} Medication search is still available.`
+    }
+    case 'model_access':
+      return 'The assistant model is temporarily unavailable for this service account. Medication search is still available.'
+    case 'timeout':
+    case 'transient':
+      return 'The assistant service is temporarily unavailable. Please try again in a moment; medication search is still available.'
+    case 'invalid_request':
+      return 'The assistant could not process this request. Please shorten the message or start a new chat.'
+    default:
+      return 'The assistant could not complete this request. Medication search is still available while the issue is investigated.'
+  }
+}
 
 export async function POST(request: NextRequest) {
   const rateLimit = checkRateLimit(request, 'chat-assistant', 15, 60_000)
@@ -61,7 +123,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { conversation, query, userLocation, pharmacies } = parsed.data
+    const { conversation, query, userLocation, searchLocation, pharmacies } = parsed.data
 
 
     const lastUserMessage =
@@ -72,10 +134,7 @@ export async function POST(request: NextRequest) {
       GREETING_REGEX.test(lastUserMessage.trim()) &&
       (!query || !query.trim())
     ) {
-      return NextResponse.json({
-        message: 'Hi! What medication are you looking for today?',
-        triage: { intent: 'OUT_OF_SCOPE', risk_tier: 'ALLOW' }
-      })
+      return staticAssistantResponse('Hi! What medication are you looking for today?')
     }
 
     // 1. Server-Side Triage Gating (C.2)
@@ -89,10 +148,7 @@ export async function POST(request: NextRequest) {
       triageResult.risk_tier === 'REDIRECT'
     ) {
       const safeResponse = getSafeResponse(triageResult.intent, triageResult.risk_tier);
-      return NextResponse.json({
-        message: safeResponse.message,
-        triage: triageResult
-      });
+      return staticAssistantResponse(safeResponse.message)
     }
 
     // 2. Prepare Context for ALLOW / GATE queries
@@ -102,8 +158,11 @@ export async function POST(request: NextRequest) {
       `Triage Intent: ${triageResult.intent}`,
       userLocation
         ? `User location: ${userLocation.label} (${userLocation.latitude}, ${userLocation.longitude})`
-        : 'User location: not provided',
+        : searchLocation
+          ? `User location: ${searchLocation}`
+          : 'User location: not provided',
     ]
+    let requiredResultLead: string | null = null
 
     // If GATE (POM) is active, indicate prescription restriction
     if (triageResult.risk_tier === 'GATE') {
@@ -116,51 +175,41 @@ export async function POST(request: NextRequest) {
           ? `₦${value.toLocaleString()}`
           : null
 
-      const describeStock = (
-        quantity: number | null | undefined,
-        threshold?: number | null
-      ) => {
-        if (quantity === null || quantity === undefined) return 'Stock unknown'
-        if (quantity <= 0) return 'Out of stock'
-        if (threshold && quantity <= threshold)
-          return `Low stock (${quantity} remaining)`
-        return `In stock (${quantity} available)`
-      }
-
-      const topPharmacies = pharmacies
-        .slice(0, 5)
-        .map((item: Record<string, any>, index: number) => {
+      const distinctPharmacies = new Set(
+        pharmacies.map((item: Record<string, any>, index: number) => {
           const pharmacy = (item.pharmacies || {}) as Record<string, any>
-          const distance =
-            typeof item.distance_km === 'number'
-              ? `${item.distance_km.toFixed(1)} km`
-              : 'n/a'
-          const priceRange =
-            typeof item.price_range_min === 'number' &&
-            typeof item.price_range_max === 'number'
-              ? `${formatCurrency(item.price_range_min as number)} – ${formatCurrency(
-                  item.price_range_max as number
-                )}`
-              : formatCurrency(item.price as number | null) ?? 'Price unavailable'
-          const medicationName =
-            item.name || item.brand_name || item.generic_name || 'Medication'
-          const strength = item.strength ? ` (${item.strength})` : ''
-          const stockText = describeStock(
-            (item.quantity_in_stock as number | null) ?? null,
-            item.low_stock_threshold as number | null
-          )
-          return `- Pharmacy ${index + 1}: ${pharmacy.pharmacy_name || 'Unknown pharmacy'} | Product: ${medicationName}${strength} | Price: ${priceRange} | ${stockText} | Distance: ${distance}`
+          return pharmacy.id || item.pharmacy_id || pharmacy.pharmacy_name || `result-${index}`
         })
-        .join('\n')
-
+      ).size
+      const prices = pharmacies
+        .map((item: Record<string, any>) => item.price)
+        .filter((value): value is number => typeof value === 'number' && !Number.isNaN(value))
+      const minimumPrice = prices.length ? Math.min(...prices) : null
+      const firstResult = pharmacies[0] as Record<string, any>
+      const medicationName =
+        firstResult.generic_name || firstResult.name || firstResult.brand_name || query
+      const pharmacyWord = distinctPharmacies === 1 ? 'pharmacy' : 'pharmacies'
+      const locationPhrase = searchLocation || userLocation?.label ? ' near you' : ''
+      const pricePhrase = minimumPrice === null ? '' : `, from ${formatCurrency(minimumPrice)}`
+      requiredResultLead = `I found ${medicationName} at ${distinctPharmacies} ${pharmacyWord}${locationPhrase}${pricePhrase}.`
 
       contextLines.push(
-        `Nearby pharmacies:\n${topPharmacies || 'No pharmacies available'}`
+        'RESULT CARD: available. The application already sent the exact medication, count, location, and price. Return exactly: "Check the result card below for pharmacy details."'
       )
     } else if (triageResult.risk_tier === 'GATE') {
       contextLines.push('Nearby pharmacies: hidden (requires prescription verification)')
     } else {
       contextLines.push('Nearby pharmacies: none supplied')
+    }
+
+    if (
+      triageResult.risk_tier === 'ALLOW' &&
+      (!pharmacies || pharmacies.length === 0)
+    ) {
+      const locationPhrase = searchLocation ? ` in ${searchLocation}` : ''
+      return staticAssistantResponse(
+        `I couldn't find ${query || 'that medication'}${locationPhrase} right now. Check the spelling or ask a pharmacist about an equivalent product.`
+      )
     }
 
     // Filter and map conversation messages to match Anthropic message format
@@ -171,48 +220,124 @@ export async function POST(request: NextRequest) {
         content: msg.content,
       }))
 
-    const anthropic = getAnthropicClient()
-
-    if (anthropic) {
-      const response = await runClaudeRequest(
-        () => anthropic.messages.create({
-          model: process.env.ANTHROPIC_ASSISTANT_MODEL || 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
-          temperature: 0.2,
-          system: SYSTEM_PROMPT + '\n\n' + contextLines.join('\n'),
-          messages: messages,
-        }),
-        10_000
-      )
-
-      if (response) {
-        const assistantMessage = response.content[0].type === 'text'
-          ? response.content[0].text
-          : 'I am unable to provide additional details right now.'
-
-        return NextResponse.json({
-          message: assistantMessage,
-          triage: triageResult
-        })
-      }
+    // React state may not yet contain the just-submitted turn. Never omit the active query.
+    if (
+      query.trim() &&
+      (messages.at(-1)?.role !== 'user' || messages.at(-1)?.content.trim() !== query.trim())
+    ) {
+      messages.push({ role: 'user', content: query.trim() })
     }
 
-    // Search remains usable when Anthropic is unavailable or out of credit.
-    return NextResponse.json(
-      {
-        message:
-          'I am unable to reach the assistant service right now, but I can still help with basic search results.',
-      },
-      { status: 200 }
+    const anthropic = getAnthropicClient()
+    if (!anthropic) {
+      const configurationError = new Error('ANTHROPIC_API_KEY is not configured')
+      console.error('[anthropic.configuration_error]', configurationError.message)
+      logger.error('anthropic_configuration_error', configurationError, {
+        model: ASSISTANT_MODEL,
+        operation: 'assistant',
+      })
+      return staticAssistantResponse(
+        'The assistant service needs an account configuration update. Medication search is still available while it is restored.'
+      )
+    }
+
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          let receivedText = false
+          let responseId = 'stream'
+          let responseModel = ASSISTANT_MODEL
+          let stopReason: string | null = null
+
+          try {
+            if (requiredResultLead) {
+              controller.enqueue(
+                encodeEvent({ type: 'delta', text: `${requiredResultLead} ` })
+              )
+            }
+
+            const stream = anthropic.messages.stream(
+              {
+                model: ASSISTANT_MODEL,
+                max_tokens: 60,
+                temperature: 0,
+                system: SYSTEM_PROMPT + '\n\n' + contextLines.join('\n'),
+                messages,
+              },
+              { timeout: 10_000, maxRetries: 1 }
+            )
+
+            for await (const event of stream) {
+              if (event.type === 'message_start') {
+                responseId = event.message.id
+                responseModel = event.message.model
+              } else if (event.type === 'message_delta') {
+                stopReason = event.delta.stop_reason
+              } else if (
+                event.type === 'content_block_delta' &&
+                event.delta.type === 'text_delta'
+              ) {
+                receivedText = true
+                controller.enqueue(encodeEvent({ type: 'delta', text: event.delta.text }))
+              }
+            }
+
+            if (!receivedText) {
+              throw toClaudeEmptyResponseError(
+                { model: ASSISTANT_MODEL, operation: 'assistant' },
+                {
+                  id: responseId,
+                  model: responseModel,
+                  stopReason,
+                  contentTypes: [],
+                }
+              )
+            }
+
+            controller.enqueue(encodeEvent({ type: 'done', model: responseModel }))
+          } catch (error: unknown) {
+            const claudeError = toClaudeRequestError(error, {
+              model: ASSISTANT_MODEL,
+              operation: 'assistant',
+            })
+            reportClaudeFailure(claudeError)
+            controller.enqueue(
+              encodeEvent({
+                type: 'error',
+                message: assistantFailureMessage(claudeError),
+                reason: claudeError.kind,
+              })
+            )
+          } finally {
+            controller.close()
+          }
+        },
+      }),
+      { headers: streamHeaders }
     )
-  } catch (error: any) {
-    const status = error?.status ?? error?.statusCode ?? 'unknown'
-    const errorMessage = error?.message ?? String(error)
-    console.error(`Assistant route error [${status}]:`, errorMessage)
+  } catch (error: unknown) {
+    if (error instanceof ClaudeRequestError) {
+      return NextResponse.json({
+        message: assistantFailureMessage(error),
+        assistant_status: {
+          available: false,
+          reason: error.kind,
+          retry_after_seconds: error.retryAfterSeconds,
+        },
+      })
+    }
+
+    const routeError = error instanceof Error ? error : new Error(String(error))
+    console.error('[assistant.route_error]', routeError)
+    logger.error('assistant_route_error', routeError, {
+      model: ASSISTANT_MODEL,
+      operation: 'assistant',
+    })
     return NextResponse.json(
       {
         message:
-          'I ran into an unexpected error while contacting the assistant service.',
+          'The assistant could not complete this request. Medication search is still available while the issue is investigated.',
+        assistant_status: { available: false, reason: 'unknown' },
       },
       { status: 200 }
     )

@@ -1,6 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button'
+import { Building2, UserRound } from 'lucide-react'
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -251,7 +252,9 @@ export default function Signup() {
               variant="outline"
               className="h-auto items-start justify-start whitespace-normal text-left cursor-pointer border-[1.5px] border-border rounded-card p-8 flex flex-col gap-2 hover:border-primary/50 transition-colors"
             >
-              <div className="w-12 h-12 rounded-card bg-surface flex items-center justify-center text-[22px] mb-2">🧑</div>
+              <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+                <UserRound className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
+              </div>
               <h3 className="text-[19px] font-medium text-ink">I&apos;m a patient</h3>
               <p className="text-[14px] leading-[1.55] text-ink-muted">Search for medication and find nearby pharmacies with stock.</p>
               <span className="mt-4 text-[14px] font-medium text-primary">Continue as patient →</span>
@@ -261,7 +264,9 @@ export default function Signup() {
               variant="outline"
               className="h-auto items-start justify-start whitespace-normal text-left cursor-pointer border-[1.5px] border-border rounded-card p-8 flex flex-col gap-2 hover:border-primary/50 transition-colors"
             >
-              <div className="w-12 h-12 rounded-card bg-surface flex items-center justify-center text-[22px] mb-2">🏥</div>
+              <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+                <Building2 className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
+              </div>
               <h3 className="text-[19px] font-medium text-ink">I&apos;m a pharmacy</h3>
               <p className="text-[14px] leading-[1.55] text-ink-muted">List and manage your inventory so patients can find you.</p>
               <span className="mt-4 text-[14px] font-medium text-primary">Continue as pharmacy →</span>

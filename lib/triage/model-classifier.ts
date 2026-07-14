@@ -1,4 +1,10 @@
-import { getAnthropicClient, runClaudeRequest } from '@/lib/anthropic';
+import {
+  DEFAULT_CLAUDE_MODEL,
+  getAnthropicClient,
+  reportClaudeFailure,
+  runClaudeRequest,
+  toClaudeEmptyResponseError,
+} from '@/lib/anthropic';
 import { TriageResult, TriageIntent, RiskTier } from './types';
 
 const SYSTEM_PROMPT = `You are a strict safety and compliance classifier for a Nigerian telepharmacy application called StocMed.
@@ -69,19 +75,35 @@ export async function classifyWithModel(
   if (!anthropic) return null;
 
   try {
+    const model = process.env.ANTHROPIC_TRIAGE_MODEL || DEFAULT_CLAUDE_MODEL;
     const response = await runClaudeRequest(
       () => anthropic.messages.create({
-        model: process.env.ANTHROPIC_TRIAGE_MODEL || 'claude-haiku-4-5-20251001',
+        model,
         max_tokens: 150,
         temperature: 0,
         system: SYSTEM_PROMPT,
         messages: [{ role: 'user', content: rawQuery }],
       }),
-      timeoutMs
+      timeoutMs,
+      { model, operation: 'triage' }
     );
-    if (!response) return null;
 
-    const text = response.content[0].type === 'text' ? response.content[0].text : '';
+    const textBlock = response.content.find((block) => block.type === 'text');
+    if (!textBlock || textBlock.type !== 'text') {
+      const emptyResponseError = toClaudeEmptyResponseError(
+        { model, operation: 'triage' },
+        {
+          id: response.id,
+          model: response.model,
+          stopReason: response.stop_reason,
+          contentTypes: response.content.map((block) => block.type),
+        }
+      );
+      reportClaudeFailure(emptyResponseError);
+      throw emptyResponseError;
+    }
+
+    const text = textBlock.text;
     
     // Parse the JSON output
     const jsonMatch = text.match(/\{[\s\S]*\}/);

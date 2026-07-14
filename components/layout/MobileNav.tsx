@@ -3,6 +3,21 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  BarChart3,
+  Boxes,
+  Calculator,
+  ClipboardList,
+  Clock3,
+  Home,
+  LayoutDashboard,
+  MessageCircle,
+  Settings,
+  Upload,
+  User,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface MobileNavProps {
@@ -12,24 +27,26 @@ interface MobileNavProps {
 
 interface NavItem {
   label: string;
-  emoji: string;
+  icon: LucideIcon;
   href: string;
 }
 
 const patientNavItems: NavItem[] = [
-  { label: 'Home', emoji: '🏠', href: '/dashboard' },
-  { label: 'Chat', emoji: '💬', href: '/chat' },
-  { label: 'History', emoji: '🕒', href: '/history' },
-  { label: 'Settings', emoji: '⚙️', href: '/settings' },
+  { label: 'Home', icon: Home, href: '/dashboard' },
+  { label: 'Chat', icon: MessageCircle, href: '/chat' },
+  { label: 'History', icon: Clock3, href: '/history' },
+  { label: 'Profile', icon: User, href: '/profile' },
+  { label: 'Settings', icon: Settings, href: '/settings' },
 ];
 
 const pharmacyNavItems: NavItem[] = [
-  { label: 'Dashboard', emoji: '📊', href: '/pharmacy/dashboard' },
-  { label: 'Inventory', emoji: '📦', href: '/pharmacy/inventory' },
-  { label: 'Procure', emoji: '🚚', href: '/pharmacy/procurement' },
-  { label: 'POS', emoji: '🧾', href: '/pharmacy/pos' },
-  { label: 'Shifts', emoji: '💵', href: '/pharmacy/shifts' },
-  { label: 'Reports', emoji: '📈', href: '/pharmacy/reports' },
+  { label: 'Dashboard', icon: LayoutDashboard, href: '/pharmacy/dashboard' },
+  { label: 'Inventory', icon: Boxes, href: '/pharmacy/inventory' },
+  { label: 'Import', icon: Upload, href: '/pharmacy/inventory/import' },
+  { label: 'Procure', icon: ClipboardList, href: '/pharmacy/procurement' },
+  { label: 'POS', icon: Calculator, href: '/pharmacy/pos' },
+  { label: 'Shifts', icon: Wallet, href: '/pharmacy/shifts' },
+  { label: 'Reports', icon: BarChart3, href: '/pharmacy/reports' },
 ];
 
 export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => {
@@ -47,6 +64,7 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
     >
       {navItems.map((item) => {
         const isActive = pathname === item.href;
+        const Icon = item.icon;
         return (
           <Link
             key={item.href}
@@ -56,8 +74,8 @@ export const MobileNav: React.FC<MobileNavProps> = ({ userType, className }) => 
               isActive ? 'text-primary' : 'text-ink-muted hover:text-ink'
             )}
           >
-            <span className="text-xl flex-shrink-0">{item.emoji}</span>
-            <span className={cn('text-[11px]', isActive ? 'font-medium' : 'font-normal')}>{item.label}</span>
+            <Icon className="h-5 w-5 flex-shrink-0" strokeWidth={2} aria-hidden="true" />
+            <span className={cn('max-w-full truncate text-[10px]', isActive ? 'font-medium' : 'font-normal')}>{item.label}</span>
           </Link>
         );
       })}

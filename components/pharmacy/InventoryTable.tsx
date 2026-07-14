@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import {
   Pencil,
@@ -10,9 +11,11 @@ import {
   AlertTriangle,
   XCircle,
   RefreshCw,
-  Calendar,
-  Layers,
-  Activity
+  CalendarClock,
+  Pill,
+  RotateCcw,
+  ArchiveX,
+  Loader2,
 } from 'lucide-react';
 import EditDrugModal from './EditDrugModal';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
@@ -78,6 +81,34 @@ function getExpiryAlert(expiryDateStr: string | null) {
   };
 }
 
+/** Renders the drug image with pharmacy override → catalogue → placeholder fallback */
+function DrugImage({ drug, size = 'md' }: { drug: any; size?: 'sm' | 'md' }) {
+  const imageUrl = drug.display_image_url || drug.pharmacy_image_url || drug.image_url;
+  const dims = size === 'sm' ? 'h-12 w-12' : 'h-16 w-16';
+  const imgSize = size === 'sm' ? '48px' : '64px';
+
+  if (imageUrl) {
+    return (
+      <div className={`relative ${dims} rounded-lg overflow-hidden border border-border shrink-0 bg-surface`}>
+        <Image
+          src={imageUrl}
+          alt={drug.name || drug.brand_name || 'Drug image'}
+          fill
+          sizes={imgSize}
+          className="object-cover"
+          unoptimized
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${dims} rounded-lg bg-surface flex items-center justify-center shrink-0 border border-dashed border-border`}>
+      <Pill className="w-5 h-5 text-muted-foreground/40" />
+    </div>
+  );
+}
+
 export default function InventoryTable({
   drugs,
   onRefetch,
@@ -86,12 +117,36 @@ export default function InventoryTable({
   const [editingDrug, setEditingDrug] = useState<any | null>(null);
   const [deletingDrug, setDeletingDrug] = useState<any | null>(null);
   const [adjustingDrug, setAdjustingDrug] = useState<any | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  const restoreMutation = useMutation({
+    mutationFn: async (drugId: string) => {
+      setRestoringId(drugId);
+      const response = await fetch(`/api/pharmacy/drugs/${drugId}/restore`, {
+        method: 'PATCH',
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to restore drug');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'], refetchType: 'active' });
+      onRefetch();
+    },
+    onSettled: () => {
+      setRestoringId(null);
+    },
+  });
 
   if (viewMode === 'grid') {
     return (
       <>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
           {drugs.map((drug) => {
+            const isDelisted = !!drug.deleted_at;
             const stockBadge = getStockBadge(
               drug.quantity_in_stock,
               drug.low_stock_threshold
@@ -102,27 +157,22 @@ export default function InventoryTable({
             return (
               <div
                 key={drug.id}
-                className="bg-card rounded-card border border-border overflow-hidden shadow-card hover:shadow-card-hover transition-shadow duration-200 flex flex-col justify-between"
+                className={`bg-card rounded-card border border-border overflow-hidden shadow-card hover:shadow-card-hover transition-shadow duration-200 flex flex-col justify-between ${
+                  isDelisted ? 'opacity-60 ring-1 ring-warning/30' : ''
+                }`}
               >
                 <div className="p-5 space-y-4">
+                  {/* Delisted badge */}
+                  {isDelisted && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-warning bg-warning/10 border border-warning/20">
+                      <ArchiveX className="w-3.5 h-3.5" />
+                      Delisted
+                    </div>
+                  )}
+
                   {/* Image & Main Info */}
                   <div className="flex gap-4">
-                    {drug.image_url ? (
-                      <div className="relative h-16 w-16 rounded-lg overflow-hidden border border-border shrink-0 bg-surface">
-                        <Image
-                          src={drug.image_url}
-                          alt={drug.name || drug.brand_name || 'Drug image'}
-                          fill
-                          sizes="64px"
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-16 w-16 rounded-lg bg-surface flex items-center justify-center text-xs text-muted-foreground shrink-0 border border-dashed border-border">
-                        No image
-                      </div>
-                    )}
+                    <DrugImage drug={drug} size="md" />
                     <div>
                       <div className="font-semibold text-ink line-clamp-1">
                         {drug.name || drug.brand_name}
@@ -150,13 +200,14 @@ export default function InventoryTable({
                     <div
                       className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${expiryAlert.colorClass}`}
                     >
-                      <Calendar className="w-3.5 h-3.5" />
+                      <CalendarClock className="w-3.5 h-3.5" strokeWidth={2} />
                       <span>{expiryAlert.text}</span>
                     </div>
 
-                    {drug.quantity_in_stock <= (drug.low_stock_threshold || 10) && (
+                    {drug.quantity_in_stock <= (drug.low_stock_threshold || 10) && !isDelisted && (
                       <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-danger bg-danger/5 border border-danger/20">
-                        ⚠️ Reorder
+                        <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                        Reorder
                       </div>
                     )}
                   </div>
@@ -174,28 +225,54 @@ export default function InventoryTable({
 
                 {/* Card Actions */}
                 <div className="bg-surface border-t border-border px-5 py-3 flex justify-between gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAdjustingDrug(drug)}
-                    className="flex-1 text-xs hover:bg-primary/5 hover:text-primary hover:border-primary/20"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                    Adjust Stock
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setEditingDrug(drug)}
-                    className="h-9 w-9 hover:bg-surface"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </Button>
+                  {isDelisted ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => restoreMutation.mutate(drug.id)}
+                      disabled={restoringId === drug.id}
+                      className="flex-1 text-xs text-primary hover:bg-primary/5 hover:text-primary hover:border-primary/20"
+                    >
+                      {restoringId === drug.id ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                          Restoring...
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+                          Restore
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAdjustingDrug(drug)}
+                        className="flex-1 text-xs hover:bg-primary/5 hover:text-primary hover:border-primary/20"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                        Adjust Stock
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setEditingDrug(drug)}
+                        className="h-9 w-9 hover:bg-surface"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
+                    </>
+                  )}
                   <Button
                     variant="outline"
                     size="icon"
                     onClick={() => setDeletingDrug(drug)}
-                    className="h-9 w-9 text-danger hover:bg-danger/5 hover:text-danger hover:border-danger/20"
+                    className={`h-9 w-9 ${isDelisted ? 'text-danger hover:bg-danger/5 hover:text-danger hover:border-danger/20' : 'text-danger hover:bg-danger/5 hover:text-danger hover:border-danger/20'}`}
+                    title={isDelisted ? 'Already delisted' : 'Remove'}
+                    disabled={isDelisted}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -279,6 +356,7 @@ export default function InventoryTable({
           </thead>
           <tbody className="divide-y divide-border">
             {drugs.map((drug) => {
+              const isDelisted = !!drug.deleted_at;
               const stockBadge = getStockBadge(
                 drug.quantity_in_stock,
                 drug.low_stock_threshold
@@ -287,28 +365,21 @@ export default function InventoryTable({
               const StockIcon = stockBadge.icon;
 
               return (
-                <tr key={drug.id} className="hover:bg-surface/50 transition-colors">
+                <tr key={drug.id} className={`hover:bg-surface/50 transition-colors ${isDelisted ? 'opacity-50 bg-warning/5' : ''}`}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {drug.image_url ? (
-                      <div className="relative h-12 w-12 rounded-md overflow-hidden border border-border">
-                        <Image
-                          src={drug.image_url}
-                          alt={drug.name || drug.brand_name || 'Drug image'}
-                          fill
-                          sizes="48px"
-                          className="object-cover"
-                          unoptimized
-                        />
-                      </div>
-                    ) : (
-                      <div className="h-12 w-12 rounded-md bg-surface border border-dashed border-border flex items-center justify-center text-xs text-muted-foreground">
-                        No image
-                      </div>
-                    )}
+                    <DrugImage drug={drug} size="sm" />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="font-semibold text-ink">
-                      {drug.name || drug.brand_name}
+                    <div className="flex items-center gap-2">
+                      <div className="font-semibold text-ink">
+                        {drug.name || drug.brand_name}
+                      </div>
+                      {isDelisted && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-warning bg-warning/10 border border-warning/20">
+                          <ArchiveX className="w-2.5 h-2.5" />
+                          Delisted
+                        </span>
+                      )}
                     </div>
                     {drug.generic_name && drug.generic_name !== drug.name && (
                       <div className="text-xs text-muted-foreground mt-0.5">
@@ -338,9 +409,12 @@ export default function InventoryTable({
                         <StockIcon className="w-3.5 h-3.5" />
                         <span className="tabular-nums">{drug.quantity_in_stock}</span>
                       </div>
-                      {drug.quantity_in_stock <= (drug.low_stock_threshold || 10) && (
+                      {drug.quantity_in_stock <= (drug.low_stock_threshold || 10) && !isDelisted && (
                         <div className="text-[10px] text-danger font-bold block pl-1">
-                          ⚠️ Reorder Suggested
+                          <span className="inline-flex items-center gap-1">
+                            <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />
+                            Reorder suggested
+                          </span>
                         </div>
                       )}
                     </div>
@@ -354,33 +428,54 @@ export default function InventoryTable({
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <div className="flex gap-1 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setAdjustingDrug(drug)}
-                        className="hover:bg-primary/5 hover:text-primary"
-                        title="Adjust Stock"
-                      >
-                        <RefreshCw className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setEditingDrug(drug)}
-                        className="hover:bg-surface"
-                        title="Edit Details"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setDeletingDrug(drug)}
-                        className="hover:bg-danger/5 hover:text-danger"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {isDelisted ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => restoreMutation.mutate(drug.id)}
+                          disabled={restoringId === drug.id}
+                          className="text-xs text-primary hover:bg-primary/5 hover:text-primary"
+                        >
+                          {restoringId === drug.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                              Restore
+                            </>
+                          )}
+                        </Button>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setAdjustingDrug(drug)}
+                            className="hover:bg-primary/5 hover:text-primary"
+                            title="Adjust Stock"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setEditingDrug(drug)}
+                            className="hover:bg-surface"
+                            title="Edit Details"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setDeletingDrug(drug)}
+                            className="hover:bg-danger/5 hover:text-danger"
+                            title="Remove"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

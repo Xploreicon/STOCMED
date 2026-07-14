@@ -225,3 +225,28 @@ export const OTC_MOLECULES_LIST: KeywordConfig = {
     /\bamatem\b/i
   ]
 };
+
+export const GENERIC_SYMPTOMS_LIST: KeywordConfig = {
+  terms: [
+    'headache',
+    'head pain',
+    'fever',
+    'body pain',
+    'stomach ache',
+    'stomach pain',
+    'sore throat',
+    'runny nose',
+    'blocked nose',
+    'nausea',
+    'vomiting',
+    'diarrhoea',
+    'diarrhea',
+    'cough',
+    'cold',
+  ],
+  patterns: [
+    /\bi\s+(have|feel|am having)\s+(a\s+)?(headache|fever|cold|cough)\b/i,
+    /\bsomething\s+for\s+(a\s+)?(headache|fever|cold|cough|pain)\b/i,
+    /\bwhat\s+(can|should)\s+i\s+take\b/i,
+  ],
+};

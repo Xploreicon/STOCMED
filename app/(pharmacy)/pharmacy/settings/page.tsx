@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { BadgeCheck, Loader2 } from 'lucide-react';
 
 export default function PharmacySettings() {
   const router = useRouter();
@@ -223,8 +223,9 @@ export default function PharmacySettings() {
                 disabled
                 className="flex-1 h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-[var(--surface)] cursor-not-allowed focus:outline-none"
               />
-              <span className="text-[13px] font-medium text-[var(--success)] bg-[var(--success-tint)] px-3.5 py-2 rounded-button whitespace-nowrap">
-                ✓ Verified
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--success)] bg-[var(--success-tint)] px-3.5 py-2 rounded-button whitespace-nowrap">
+                <BadgeCheck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                Verified
               </span>
             </div>
           </div>

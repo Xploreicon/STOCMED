@@ -212,6 +212,38 @@ export interface Database {
           product_id?: string | null
         }
       }
+      user_search_history: {
+        Row: {
+          id: string
+          user_id: string
+          query_text: string
+          product_id: string | null
+          results_count: number | null
+          location: string | null
+          searched_at: string
+          expires_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          query_text: string
+          product_id?: string | null
+          results_count?: number | null
+          location?: string | null
+          searched_at?: string
+          expires_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          query_text?: string
+          product_id?: string | null
+          results_count?: number | null
+          location?: string | null
+          searched_at?: string
+          expires_at?: string
+        }
+      }
       chat_messages: {
         Row: {
           id: string
@@ -670,6 +702,20 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
+      match_catalogue_product: {
+        Args: { search_query: string }
+        Returns: {
+          id: string
+          generic_name: string
+          brand_name: string | null
+          manufacturer: string | null
+          strength: string | null
+          dosage_form: string
+          category: string
+          pack_size: string | null
+          confidence: number
+        }[]
+      }
       sync_shift_open: {
         Args: { p_shift_id: string; p_pharmacy_id: string; p_opening_float: number; p_opened_at: string }
         Returns: Json

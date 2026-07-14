@@ -2,6 +2,19 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Logo, LogoMark } from '@/components/brand/Logo';
+import { ArrowRight, Banknote, MapPin, MessageCircle, PackageCheck, Search, type LucideIcon } from 'lucide-react';
+
+const VALUE_PROPS = [
+  { icon: MessageCircle, title: 'Ask in plain language', body: "Describe your symptom or type a brand name — StocMed's AI understands local names, generics, and dosages." },
+  { icon: MapPin, title: 'Real-time, nearby stock', body: 'See exactly which pharmacies near you have it in stock right now — not a guess, a live inventory feed.' },
+  { icon: Banknote, title: 'Compare prices instantly', body: 'Prices vary a lot between pharmacies. StocMed shows you the cheapest option within your reach.' },
+] satisfies Array<{ icon: LucideIcon; title: string; body: string }>;
+
+const HOW_IT_WORKS = [
+  { n: '01', icon: MessageCircle, title: 'Tell us what you need', body: 'Type a medication name, upload a prescription photo, or describe your symptom.' },
+  { n: '02', icon: Search, title: 'See who has it', body: 'StocMed checks live inventory across nearby partner pharmacies and ranks results by distance and price.' },
+  { n: '03', icon: PackageCheck, title: 'Reserve & go', body: "Reserve your medication so it's held for you, then walk in and pick it up." },
+] satisfies Array<{ n: string; icon: LucideIcon; title: string; body: string }>;
 
 export default async function Landing() {
   const supabase = await createClient();
@@ -79,7 +92,9 @@ export default async function Landing() {
           <div className="order-1 lg:order-2">
             <div className="bg-white border border-border rounded-card-lg overflow-hidden shadow-lg">
               <div className="px-5 py-4 border-b border-border flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-surface flex items-center justify-center text-sm">🔍</div>
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Search className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                </div>
                 <span className="text-[14px] font-medium text-ink">Searching &ldquo;Amoxicillin 500mg&rdquo; near Ikeja</span>
               </div>
               <div className="px-5 py-4 flex flex-col gap-3">
@@ -109,17 +124,18 @@ export default async function Landing() {
             <h2 className="font-display font-medium text-[36px] leading-[1.2] text-ink">Built for how Nigerians actually find medication</h2>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {[
-              { icon: '💬', title: 'Ask in plain language', body: "Describe your symptom or type a brand name — StocMed's AI understands local names, generics, and dosages." },
-              { icon: '📍', title: 'Real-time, nearby stock', body: 'See exactly which pharmacies near you have it in stock right now — not a guess, a live inventory feed.' },
-              { icon: '₦', title: 'Compare prices instantly', body: 'Prices vary a lot between pharmacies. StocMed shows you the cheapest option within your reach.' },
-            ].map((c) => (
-              <div key={c.title} className="border border-border rounded-card p-8">
-                <div className="w-11 h-11 rounded-lg bg-surface flex items-center justify-center text-xl mb-5">{c.icon}</div>
-                <h3 className="text-[19px] font-medium text-ink mb-2.5">{c.title}</h3>
-                <p className="text-[15px] leading-[1.6] text-ink-muted">{c.body}</p>
-              </div>
-            ))}
+            {VALUE_PROPS.map((c) => {
+              const Icon = c.icon
+              return (
+                <div key={c.title} className="border border-border rounded-card p-8">
+                  <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Icon className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
+                  </div>
+                  <h3 className="text-[19px] font-medium text-ink mb-2.5">{c.title}</h3>
+                  <p className="text-[15px] leading-[1.6] text-ink-muted">{c.body}</p>
+                </div>
+              )
+            })}
           </div>
         </div>
       </section>
@@ -129,17 +145,21 @@ export default async function Landing() {
         <div className="mx-auto max-w-[1200px]">
           <h2 className="font-display font-medium text-[36px] text-ink mb-14 text-center">How it works</h2>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {[
-              { n: '01', title: 'Tell us what you need', body: 'Type a medication name, upload a prescription photo, or describe your symptom.' },
-              { n: '02', title: 'See who has it', body: 'StocMed checks live inventory across nearby partner pharmacies and ranks results by distance and price.' },
-              { n: '03', title: 'Reserve & go', body: "Reserve your medication so it's held for you, then walk in and pick it up." },
-            ].map((s) => (
+            {HOW_IT_WORKS.map((s) => {
+              const Icon = s.icon
+              return (
               <div key={s.n} className="bg-white border border-border rounded-card-lg px-7 py-9">
-                <div className="font-display font-medium text-[32px] text-primary mb-4">{s.n}</div>
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Icon className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
+                  </div>
+                  <span className="font-display font-medium text-[24px] text-primary">{s.n}</span>
+                </div>
                 <h3 className="text-[18px] font-medium text-ink mb-2.5">{s.title}</h3>
                 <p className="text-[15px] leading-[1.6] text-ink-muted">{s.body}</p>
               </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </section>
@@ -172,7 +192,9 @@ export default async function Landing() {
               </div>
               <div className="px-4 py-3 border-t border-border flex items-center gap-2.5">
                 <div className="flex-1 h-11 border border-border rounded-button flex items-center px-3.5 text-[14px] text-ink-light">Ask about a medication or symptom…</div>
-                <div className="w-11 h-11 rounded-button bg-primary flex items-center justify-center text-white text-base">→</div>
+                <div className="w-11 h-11 rounded-button bg-primary flex items-center justify-center text-white">
+                  <ArrowRight className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+                </div>
               </div>
             </div>
           </div>

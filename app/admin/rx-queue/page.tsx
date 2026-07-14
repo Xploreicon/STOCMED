@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import React, { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useUser } from '@/hooks/useUser';
-import { FileText, Clock, CheckCircle, XCircle, Eye, Loader2, ClipboardCheck } from 'lucide-react';
+import { AlertTriangle, FileText, Clock, CheckCircle, XCircle, Eye, Loader2, ClipboardCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 function InventoryMatcher({ productName }: { productName: string }) {
@@ -82,7 +82,7 @@ function InventoryMatcher({ productName }: { productName: string }) {
   }
 
   if (matchingOutlets.length === 0) {
-    return <span className="text-[10px] text-amber-600 font-semibold mt-1.5 block">⚠️ No outlets currently in stock.</span>;
+    return <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-semibold text-amber-600"><AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} aria-hidden="true" />No outlets currently in stock.</span>;
   }
 
   return (

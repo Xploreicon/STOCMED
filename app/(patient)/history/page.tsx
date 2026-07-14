@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/hooks/useUser';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Search } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface SearchHistory {
@@ -15,7 +15,6 @@ interface SearchHistory {
   results_count: number | null;
   timestamp: string;
   location?: string | null;
-  metadata?: any;
 }
 
 type Stock = 'in' | 'low' | 'out';
@@ -116,9 +115,8 @@ export default function History() {
       {items.length > 0 ? (
         <div className="border border-border rounded-card overflow-hidden divide-y divide-border mt-6">
           {items.map((it) => {
-            const isHashed = it.query_text && it.query_text.startsWith('hash:');
-            const displayText = isHashed ? 'Medication Search' : (it.query_text || 'Search');
-            const href = isHashed ? '/chat' : `/chat?q=${encodeURIComponent(it.query_text || '')}`;
+            const displayText = it.query_text || 'Search';
+            const href = `/chat?q=${encodeURIComponent(it.query_text || '')}`;
             return (
               <Link
                 key={it.id}
@@ -143,7 +141,9 @@ export default function History() {
         </div>
       ) : (
         <div className="mt-6 border border-dashed border-border rounded-card-lg px-8 py-16 flex flex-col items-center text-center gap-2">
-          <div className="w-14 h-14 rounded-card-lg bg-surface flex items-center justify-center text-2xl mb-2">🔍</div>
+          <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
+            <Search className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
+          </div>
           <h3 className="text-[17px] font-medium text-ink">No searches here</h3>
           <p className="text-[14px] text-ink-muted max-w-[320px] leading-[1.55]">
             Nothing in your history matches this filter. Try a different filter, or start a new search.

@@ -48,6 +48,7 @@ export function checkRateLimit(
       response: NextResponse.json(
         {
           error: 'Too many requests. Please slow down and try again.',
+          message: 'You have sent several requests in a short time. Please wait before trying the assistant again.',
           code: 'RATE_LIMIT_EXCEEDED',
           retryAfterSeconds,
         },

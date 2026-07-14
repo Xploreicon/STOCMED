@@ -22,6 +22,8 @@ import PrescriptionUpload from '@/components/chat/PrescriptionUpload';
 import SymptomIntakeForm from '@/components/chat/SymptomIntakeForm';
 import IntakeStatusTracker from '@/components/chat/IntakeStatusTracker';
 import ConsentPrompt from '@/components/chat/ConsentPrompt';
+import ChatMarkdown from '@/components/chat/ChatMarkdown';
+import { consumeAssistantResponse } from '@/lib/chat-stream';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +34,7 @@ interface Message {
   role: MessageRole;
   content: string;
   results?: any[];
+  streaming?: boolean;
   createdAt: string;
 }
 
@@ -399,7 +402,7 @@ export default function Chat() {
     if (isUserLoading || isNameLoading) return;
     if (!welcomeShownRef.current && messages.length === 0) {
       const nameToUse = userName || 'there';
-      const welcome = `Hi ${nameToUse} 👋 I'm your StocMed assistant. Tell me what medication you need, or describe how you're feeling.`;
+      const welcome = `Hi ${nameToUse}. I'm your StocMed assistant. Tell me what medication you need, or describe how you're feeling.`;
       pushAssistantMessage(welcome);
       welcomeShownRef.current = true;
     }
@@ -411,16 +414,15 @@ export default function Chat() {
       query: string;
       pharmacies: any[];
       userLocation: UserLocation | null;
-    }) => {
+      searchLocation: string | null;
+    }, onDelta: (text: string) => void) => {
       try {
         const response = await fetch('/api/chat/assistant', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-        if (!response.ok) return null;
-        const data = await response.json();
-        return typeof data.message === 'string' ? data.message : null;
+        return await consumeAssistantResponse(response, onDelta);
       } catch (error) {
         console.error('Assistant fetch error:', error);
         return null;
@@ -439,8 +441,9 @@ export default function Chat() {
     }) => {
       const trimmedMedication = medication.trim();
       if (!trimmedMedication) return;
+      const effectiveLocation = locationOverride ?? pendingLocationLabel;
 
-      if (!userLocation && !locationOverride) {
+      if (!userLocation && !effectiveLocation) {
         pushAssistantMessage(
           'Share your area so I can rank pharmacies by distance (e.g. “Ikeja”, “Lekki”).'
         );
@@ -458,8 +461,8 @@ export default function Chat() {
           params.set('lat', String(userLocation.latitude));
           params.set('lng', String(userLocation.longitude));
         }
-        if (locationOverride) {
-          params.set('location', locationOverride);
+        if (effectiveLocation) {
+          params.set('location', effectiveLocation);
         }
 
         const response = await fetch(`/api/drugs/search?${params.toString()}`);
@@ -474,31 +477,52 @@ export default function Chat() {
             product_id: results[0]?.product_id ?? null,
             results_count: data.count || 0,
             location:
-              locationOverride ??
+              effectiveLocation ??
               userLocation?.label ??
-              (pendingLocationLabel ?? null),
+              null,
             metadata: {
               source: 'chat',
               latitude: userLocation?.latitude ?? null,
               longitude: userLocation?.longitude ?? null,
               location_label:
-                locationOverride ?? userLocation?.label ?? pendingLocationLabel ?? null,
+                effectiveLocation ?? userLocation?.label ?? null,
             },
           }),
         });
         setLastResults(results);
         setLastQueryText(trimmedMedication);
         setPendingMedication(trimmedMedication);
-        setPendingLocationLabel(locationOverride || null);
+        setPendingLocationLabel(effectiveLocation || null);
 
+        const assistantMessageId = generateMessageId();
+        appendMessage({
+          id: assistantMessageId,
+          role: 'assistant',
+          content: '',
+          results,
+          streaming: true,
+          createdAt: new Date().toISOString(),
+        });
+
+        let streamedMessage = '';
         const assistantReply = await requestAssistantMessage({
           conversation,
           query: trimmedMedication,
           pharmacies: results,
           userLocation,
+          searchLocation: effectiveLocation ?? userLocation?.label ?? null,
+        }, (delta) => {
+          streamedMessage += delta;
+          setMessages((previous) =>
+            previous.map((message) =>
+              message.id === assistantMessageId
+                ? { ...message, content: streamedMessage }
+                : message
+            )
+          );
         });
 
-        const locationHint = locationOverride || userLocation?.label || '';
+        const locationHint = effectiveLocation || userLocation?.label || '';
         let finalMessage = `Found it. ${trimmedMedication} is in stock at ${results.length} pharmacies within 3km of ${locationHint || 'your area'}.`;
 
         if (results.length > 0) {
@@ -517,7 +541,17 @@ export default function Chat() {
           finalMessage = assistantReply.trim();
         }
 
-        pushAssistantMessage(finalMessage, { results });
+        setMessages((previous) =>
+          previous.map((message) =>
+            message.id === assistantMessageId
+              ? { ...message, content: finalMessage, streaming: false }
+              : message
+          )
+        );
+        setConversation((previous) => [
+          ...previous.slice(-10),
+          { role: 'assistant', content: finalMessage },
+        ]);
         setStage('FOLLOW_UP');
       } catch (error) {
         console.error('Search error:', error);
@@ -530,6 +564,7 @@ export default function Chat() {
     },
     [
       conversation,
+      appendMessage,
       pushAssistantMessage,
       requestAssistantMessage,
       userLocation,
@@ -902,8 +937,11 @@ export default function Chat() {
             return (
               <Fragment key={message.id}>
                 {isAssistant ? (
-                  <div className="self-start bg-[var(--surface)] text-[var(--ink)] text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_12px_2px] max-w-[85%] whitespace-pre-line text-left">
-                    {message.content}
+                  <div className="self-start bg-[var(--surface)] text-[var(--ink)] text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_12px_2px] max-w-[85%] text-left">
+                    <ChatMarkdown content={message.content} />
+                    {message.streaming && (
+                      <span className="ml-0.5 inline-block h-4 w-0.5 animate-pulse bg-primary align-middle" />
+                    )}
                   </div>
                 ) : (
                   <div className="self-end bg-[var(--primary)] text-white text-[15px] font-normal leading-[1.55] px-[18px] py-[14px] rounded-[12px_12px_2px_12px] max-w-[80%] whitespace-pre-line text-left">
@@ -936,7 +974,7 @@ export default function Chat() {
           })}
 
           {/* Typing Indicator */}
-          {isLoading && (
+          {isLoading && !messages.some((message) => message.streaming) && (
             <div className="self-start flex items-center gap-1.5 px-[18px] py-[14px]">
               <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce" />
               <span className="w-1.5 h-1.5 rounded-full bg-ink-light animate-bounce [animation-delay:0.2s]" />
