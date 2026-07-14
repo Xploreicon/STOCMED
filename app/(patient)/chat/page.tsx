@@ -787,7 +787,7 @@ export default function Chat() {
       : quickActionsIntro;
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-white relative">
+    <div className="flex-1 flex flex-col h-[100dvh] max-h-[100dvh] min-h-0 bg-white relative">
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-6 py-8 min-h-0">
         <div className="max-w-[720px] mx-auto flex flex-col gap-5">

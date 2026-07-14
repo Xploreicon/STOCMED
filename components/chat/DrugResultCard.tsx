@@ -157,8 +157,8 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                   alt={`${pharmacy.pharmacy_name} logo`}
                   width={32}
                   height={32}
+                  sizes="32px"
                   className="h-8 w-8 rounded-full border border-border object-cover"
-                  unoptimized
                 />
               ) : (
                 <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold flex-shrink-0">
@@ -307,8 +307,8 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                   alt={`${pharmacy.pharmacy_name} logo`}
                   width={48}
                   height={48}
+                  sizes="48px"
                   className="h-12 w-12 rounded-full border border-border object-cover"
-                  unoptimized
                 />
               ) : (
                 <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center text-lg font-semibold">
@@ -335,8 +335,8 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                 alt={drug.name || drug.brand_name || 'Drug image'}
                 width={112}
                 height={112}
+                sizes="112px"
                 className="mt-4 sm:mt-0 h-28 w-28 rounded-lg border border-border object-cover"
-                unoptimized
               />
             ) : (
               <div className="mt-4 sm:mt-0 h-28 w-28 rounded-lg border border-dashed border-border flex items-center justify-center bg-surface shrink-0">

@@ -1,8 +1,13 @@
-const CACHE_NAME = 'stocmed-v2';
+const CACHE_NAME = 'stocmed-v3';
 const ASSETS_TO_CACHE = [
   '/',
+  '/dashboard',
+  '/chat',
+  '/history',
+  '/offline.html',
   '/manifest.json',
-  '/favicon.png',
+  '/icon-192.png',
+  '/icon-512.png',
   '/logo.png'
 ];
 
@@ -31,30 +36,51 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Only cache GET requests
+  // Only intercept GET requests
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
 
-  // Only intercept http/https requests (skip chrome-extension://, data:, etc.)
+  // Skip non-http requests
   if (!url.protocol.startsWith('http')) return;
 
-  // Skip API routes and Supabase server traffic
+  // Stale-While-Revalidate for safe user search history endpoint
+  if (url.pathname === '/api/searches') {
+    event.respondWith(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          const fetchPromise = fetch(event.request)
+            .then((networkResponse) => {
+              if (networkResponse && networkResponse.status === 200) {
+                cache.put(event.request, networkResponse.clone());
+              }
+              return networkResponse;
+            })
+            .catch(() => cachedResponse);
+
+          return cachedResponse || fetchPromise;
+        });
+      })
+    );
+    return;
+  }
+
+  // Bypass other API routes and Supabase internal traffic
   if (url.pathname.startsWith('/api') || url.pathname.includes('/supabase')) {
     return;
   }
 
+  // Stale-while-revalidate for page assets & static resources
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch in the background to update cache (stale-while-revalidate)
         fetch(event.request).then((networkResponse) => {
-          if (networkResponse.status === 200) {
+          if (networkResponse && networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, networkResponse);
             });
           }
-        }).catch(() => {/* Ignore network errors offline */});
+        }).catch(() => {/* Ignore background network failure */});
         
         return cachedResponse;
       }
@@ -71,9 +97,9 @@ self.addEventListener('fetch', (event) => {
 
         return networkResponse;
       }).catch(() => {
-        // If offline and request is HTML/page, return the cached pos page
-        if (event.request.headers.get('accept').includes('text/html')) {
-          return caches.match('/pharmacy/pos');
+        // If offline and request is an HTML page navigation, return offline fallback
+        if (event.request.headers.get('accept')?.includes('text/html')) {
+          return caches.match('/offline.html');
         }
       });
     })

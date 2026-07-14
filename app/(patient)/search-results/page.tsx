@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BadgeCheck, Lightbulb, Loader2, Phone, Truck } from 'lucide-react';
+import { BadgeCheck, Lightbulb, Loader2, Phone, Truck, WifiOff, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 export const dynamic = 'force-dynamic';
@@ -45,47 +45,50 @@ export default function SearchResults() {
 
   const [results, setResults] = useState<DrugSearchResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<DrugSearchResult | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [reserving, setReserving] = useState(false);
+
+  const fetchResults = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const storedLoc = localStorage.getItem('stocmed:userLocation');
+      let lat = '';
+      let lng = '';
+      if (storedLoc) {
+        const parsed = JSON.parse(storedLoc);
+        lat = parsed.latitude;
+        lng = parsed.longitude;
+      }
+
+      const params = new URLSearchParams();
+      params.set('q', query);
+      if (lat && lng) {
+        params.set('lat', String(lat));
+        params.set('lng', String(lng));
+      }
+
+      const response = await fetch(`/api/drugs/search?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`Server status ${response.status}`);
+      }
+      const data = await response.json();
+      setResults(data.results || []);
+    } catch (err) {
+      console.error('Failed to load search results:', err);
+      setError('Could not connect to server. Please check your network connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!query) {
       router.push('/chat');
       return;
     }
-
-    const fetchResults = async () => {
-      setLoading(true);
-      try {
-        const storedLoc = localStorage.getItem('stocmed:userLocation');
-        let lat = '';
-        let lng = '';
-        if (storedLoc) {
-          const parsed = JSON.parse(storedLoc);
-          lat = parsed.latitude;
-          lng = parsed.longitude;
-        }
-
-        const params = new URLSearchParams();
-        params.set('q', query);
-        if (lat && lng) {
-          params.set('lat', String(lat));
-          params.set('lng', String(lng));
-        }
-
-        const response = await fetch(`/api/drugs/search?${params.toString()}`);
-        if (response.ok) {
-          const data = await response.json();
-          setResults(data.results || []);
-        }
-      } catch (err) {
-        console.error('Failed to load search results:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchResults();
   }, [query, router]);
 
@@ -108,7 +111,6 @@ export default function SearchResults() {
     if (!selectedItem) return;
     setReserving(true);
     try {
-      // Simulate booking reservation
       await new Promise((resolve) => setTimeout(resolve, 1000));
       alert(`Medication successfully reserved at ${selectedItem.pharmacies.pharmacy_name}! Please pick up within 24 hours.`);
       setIsDetailOpen(false);
@@ -121,9 +123,53 @@ export default function SearchResults() {
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] gap-3">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-ink-muted text-[15px]">Searching pharmacies...</p>
+      <div className="w-full max-w-[760px] mx-auto px-4 py-8 pb-24 space-y-6">
+        <div className="space-y-2">
+          <div className="h-4 w-24 bg-slate-200 rounded animate-pulse" />
+          <div className="h-8 w-3/4 bg-slate-200 rounded animate-pulse" />
+          <div className="h-4 w-1/2 bg-slate-100 rounded animate-pulse" />
+        </div>
+
+        <div className="space-y-4">
+          <div className="h-4 w-32 bg-slate-200 rounded animate-pulse" />
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="border border-border rounded-card p-5 bg-white flex justify-between items-center gap-4 shadow-xs"
+            >
+              <div className="flex-1 space-y-2.5">
+                <div className="h-5 w-48 bg-slate-200 rounded animate-pulse" />
+                <div className="h-4 w-36 bg-slate-100 rounded animate-pulse" />
+                <div className="h-3 w-64 bg-slate-100 rounded animate-pulse" />
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <div className="h-6 w-20 bg-slate-200 rounded-button animate-pulse" />
+                <div className="h-6 w-16 bg-slate-200 rounded animate-pulse" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full max-w-[760px] mx-auto px-4 py-12 text-center">
+        <div className="border border-red-200 bg-red-50/50 rounded-card-lg p-8 flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+            <WifiOff className="h-6 w-6" />
+          </div>
+          <h2 className="text-lg font-medium text-ink">Connection Failed</h2>
+          <p className="text-sm text-ink-muted max-w-md leading-relaxed">{error}</p>
+          <Button
+            onClick={fetchResults}
+            className="mt-2 inline-flex items-center gap-2 bg-primary text-white text-sm font-medium px-5 py-2.5 rounded-button hover:bg-[var(--primary-hover)] transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry Search
+          </Button>
+        </div>
       </div>
     );
   }

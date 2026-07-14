@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/hooks/useUser';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2, Search, WifiOff, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface SearchHistory {
@@ -43,24 +43,30 @@ export default function History() {
   const { user, isLoading: authLoading } = useUser();
   const [searches, setSearches] = useState<SearchHistory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | Stock>('all');
   const [query, setQuery] = useState('');
+
+  const fetchHistory = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/searches');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSearches(await res.json());
+    } catch (e) {
+      console.error('Error fetching search history:', e);
+      setError('Could not load search history. Please check your internet connection.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login?redirectTo=/history');
     } else if (user) {
-      (async () => {
-        setIsLoading(true);
-        try {
-          const res = await fetch('/api/searches');
-          if (res.ok) setSearches(await res.json());
-        } catch (e) {
-          console.error('Error fetching search history:', e);
-        } finally {
-          setIsLoading(false);
-        }
-      })();
+      fetchHistory();
     }
   }, [user, authLoading, router]);
 
@@ -74,8 +80,49 @@ export default function History() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="w-full max-w-[760px] mx-auto px-4 py-8 space-y-6">
+        <div className="space-y-2">
+          <div className="h-8 w-48 bg-slate-200 rounded animate-pulse" />
+          <div className="h-4 w-72 bg-slate-100 rounded animate-pulse" />
+        </div>
+        <div className="h-12 w-full bg-slate-100 rounded-button animate-pulse" />
+        <div className="flex gap-2 flex-wrap">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-9 w-24 bg-slate-200 rounded-full animate-pulse" />
+          ))}
+        </div>
+        <div className="border border-border rounded-card divide-y divide-border overflow-hidden">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="p-4 bg-white flex justify-between items-center gap-4">
+              <div className="flex-1 space-y-2">
+                <div className="h-5 w-40 bg-slate-200 rounded animate-pulse" />
+                <div className="h-4 w-56 bg-slate-100 rounded animate-pulse" />
+              </div>
+              <div className="h-7 w-28 bg-slate-200 rounded-button animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="w-full max-w-[760px] mx-auto px-4 py-12 text-center">
+        <div className="border border-red-200 bg-red-50/50 rounded-card-lg p-8 flex flex-col items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+            <WifiOff className="h-6 w-6" />
+          </div>
+          <h2 className="text-lg font-medium text-ink">Connection Failed</h2>
+          <p className="text-sm text-ink-muted max-w-md leading-relaxed">{error}</p>
+          <Button
+            onClick={fetchHistory}
+            className="mt-2 inline-flex items-center gap-2 bg-primary text-white text-sm font-medium px-5 py-2.5 rounded-button hover:bg-[var(--primary-hover)] transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry
+          </Button>
+        </div>
       </div>
     );
   }

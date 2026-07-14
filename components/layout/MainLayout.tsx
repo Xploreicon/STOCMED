@@ -4,6 +4,7 @@ import React from 'react';
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
+import IosInstallPrompt from '@/components/patient/IosInstallPrompt';
 import { useQuery } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -55,6 +56,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
         </main>
       </div>
 
+      {role === 'patient' && <IosInstallPrompt />}
       <MobileNav userType={role} />
     </div>
   );

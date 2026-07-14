@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Source_Serif_4 } from 'next/font/google'
 import './globals.css'
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider'
@@ -16,6 +16,15 @@ const sourceSerif = Source_Serif_4({
   variable: '--font-source-serif',
   display: 'swap',
 })
+
+export const viewport: Viewport = {
+  themeColor: '#0066CC',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
+}
 
 export const metadata: Metadata = {
   title: 'StocMed - Find Medications in Nigeria | AI-Powered Pharmacy Search',
@@ -59,8 +68,14 @@ export const metadata: Metadata = {
   alternates: {
     canonical: 'https://askstocmed.com',
   },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'StocMed',
+  },
   icons: {
-    icon: '/favicon.png',
+    icon: '/icon-192.png',
+    apple: '/apple-touch-icon.png',
   },
   manifest: '/manifest.json',
 }
