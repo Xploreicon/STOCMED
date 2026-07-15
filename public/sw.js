@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stocmed-v3';
+const CACHE_NAME = 'stocmed-v4';
 const ASSETS_TO_CACHE = [
   '/',
   '/dashboard',
@@ -43,6 +43,9 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-http requests
   if (!url.protocol.startsWith('http')) return;
+
+  // Skip cross-origin requests (never intercept third-party assets like fonts, analytics, etc.)
+  if (url.origin !== self.location.origin) return;
 
   // Stale-While-Revalidate for safe user search history endpoint
   if (url.pathname === '/api/searches') {
