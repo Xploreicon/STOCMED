@@ -96,17 +96,13 @@ self.addEventListener('fetch', (event) => {
         });
 
         return networkResponse;
-      }).catch(() => {
+      }).catch((err) => {
         // If offline and request is an HTML page navigation, return offline fallback
         if (event.request.headers.get('accept')?.includes('text/html')) {
           return caches.match('/offline.html');
         }
-        // Return a valid Response object for assets to prevent TypeError: Failed to fetch
-        return new Response('Offline - resource unavailable', {
-          status: 503,
-          statusText: 'Service Unavailable',
-          headers: { 'Content-Type': 'text/plain' }
-        });
+        // Rethrow the error so that the browser and Next.js can handle aborts and network failures natively
+        throw err;
       });
     })
   );
