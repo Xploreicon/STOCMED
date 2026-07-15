@@ -101,6 +101,12 @@ self.addEventListener('fetch', (event) => {
         if (event.request.headers.get('accept')?.includes('text/html')) {
           return caches.match('/offline.html');
         }
+        // Return a valid Response object for assets to prevent TypeError: Failed to fetch
+        return new Response('Offline - resource unavailable', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain' }
+        });
       });
     })
   );

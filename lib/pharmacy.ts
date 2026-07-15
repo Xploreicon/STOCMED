@@ -73,12 +73,19 @@ export async function ensurePharmacyRecord(
   }
 
   if (existingPharmacy) {
-    await supabase.auth.updateUser({
-      data: {
-        pharmacy_id: existingPharmacy.id,
-        pharmacy_profile: null,
-      },
-    })
+    try {
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: {
+          pharmacy_id: existingPharmacy.id,
+          pharmacy_profile: null,
+        },
+      })
+      if (updateError) {
+        console.warn('Non-fatal: Failed to update user metadata with pharmacy_id:', updateError.message)
+      }
+    } catch (err) {
+      console.warn('Non-fatal: Exception updating user metadata with pharmacy_id:', err)
+    }
     return existingPharmacy as PharmacyRow
   }
 
@@ -109,12 +116,19 @@ export async function ensurePharmacyRecord(
     throw insertError
   }
 
-  await supabase.auth.updateUser({
-    data: {
-      pharmacy_id: insertedPharmacy.id,
-      pharmacy_profile: null,
-    },
-  })
+  try {
+    const { error: updateError } = await supabase.auth.updateUser({
+      data: {
+        pharmacy_id: insertedPharmacy.id,
+        pharmacy_profile: null,
+      },
+    })
+    if (updateError) {
+      console.warn('Non-fatal: Failed to update user metadata with inserted pharmacy_id:', updateError.message)
+    }
+  } catch (err) {
+    console.warn('Non-fatal: Exception updating user metadata after insert:', err)
+  }
 
   return insertedPharmacy as PharmacyRow
 }

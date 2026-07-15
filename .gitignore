@@ -33,6 +33,11 @@ test_*.js
 run_migration_local*.js
 lib/db/run-migration.js
 scripts/scratch/
+scripts/check-db.js
+scripts/check-fonts-in-html.js
+scripts/simulate-route.js
+scripts/test-sync-execution.js
+scripts/provision-test-accounts.mjs
 *.sql.dump
 *.backup.sql
 backup*.sql
