@@ -128,7 +128,10 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('pharmacies.is_active', true)
-      .eq('products.is_verified', true)
+      // Product verification describes the quality/review state of the shared
+      // catalogue record. It must not hide a verified pharmacy's real stock.
+      // Patient visibility is governed by the pharmacy lifecycle plus the
+      // inventory row's listing, deletion, and stock state below.
       .eq('is_listed', true)
       .is('deleted_at', null)
       .or(`search_vector.plfts.${query},generic_name.ilike.%${query}%,brand_name.ilike.%${query}%`, { foreignTable: 'products' })
@@ -211,7 +214,6 @@ export async function GET(request: NextRequest) {
               )
             `)
             .eq('pharmacies.is_active', true)
-            .eq('products.is_verified', true)
             .eq('is_listed', true)
             .is('deleted_at', null)
             .in('product_id', productIds)
