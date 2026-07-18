@@ -52,6 +52,24 @@ export async function POST(request: NextRequest) {
 
     console.log(`Starting POS Sync for pharmacy ${pharmacy.id} (user ${user.id}): shifts=${parsed.data.shifts.length}, sales=${parsed.data.sales.length}`)
 
+    const foreignShift = parsed.data.shifts.find(
+      (shift) => shift.pharmacy_id !== pharmacy.id || shift.cashier_id !== user.id
+    )
+    const foreignSale = parsed.data.sales.find(
+      (sale) => sale.pharmacy_id !== pharmacy.id || sale.cashier_id !== user.id
+    )
+    if (foreignShift || foreignSale) {
+      console.error('POS Sync rejected stale or cross-account client context', {
+        authenticatedUserId: user.id,
+        authenticatedPharmacyId: pharmacy.id,
+        recordId: foreignShift?.id ?? foreignSale?.id,
+      })
+      return NextResponse.json(
+        { error: 'POS records belong to a different signed-in pharmacy account' },
+        { status: 409 }
+      )
+    }
+
     // Closed offline shifts must first exist as open records so queued sales can attach.
     for (const shift of parsed.data.shifts) {
       const { error } = await shiftRpc(supabase, 'sync_shift_open', {

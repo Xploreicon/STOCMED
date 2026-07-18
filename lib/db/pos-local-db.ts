@@ -51,6 +51,7 @@ export interface LocalSale {
   change_due: number | null;
   status: 'pending' | 'completed' | 'cancelled';
   created_at: string;
+  reservation_id?: string;
   items: LocalSaleItem[];
   // Sync metadata
   sync_status: 'pending' | 'synced' | 'error';

@@ -12,6 +12,7 @@ interface ImportRow {
     category?: string
     pack_size?: string
     manufacturer?: string
+    image_url?: string
   }
   price: number | string
   quantity: number | string
@@ -71,22 +72,22 @@ export async function POST(request: NextRequest) {
             throw new Error('New product requires at least a generic name and strength')
           }
 
-          const { data: createdProduct, error: productError } = await (supabase
-            .from('products') as any)
-            .insert({
-              generic_name: row.new_product.generic_name,
-              brand_name: row.new_product.brand_name || null,
-              strength: row.new_product.strength,
-              dosage_form: row.new_product.dosage_form || null,
-              category: row.new_product.category || null,
-              pack_size: row.new_product.pack_size || null,
-              manufacturer: row.new_product.manufacturer || null,
-              is_verified: false,
-            })
-            .select()
-            .single()
+          const { data: createdProduct, error: productError } = await (supabase.rpc as any)(
+            'create_unverified_catalog_product',
+            {
+              p_pharmacy_id: pharmacy.id,
+              p_generic_name: row.new_product.generic_name,
+              p_brand_name: row.new_product.brand_name || null,
+              p_manufacturer: row.new_product.manufacturer || null,
+              p_strength: row.new_product.strength,
+              p_dosage_form: row.new_product.dosage_form || null,
+              p_category: row.new_product.category || null,
+              p_pack_size: row.new_product.pack_size || null,
+              p_image_url: row.new_product.image_url || null,
+            }
+          )
 
-          if (productError) throw new Error('Failed to create product in catalogue')
+          if (productError || !createdProduct?.id) throw new Error('Failed to create product in catalogue')
           resolvedProductId = createdProduct.id
         }
 
@@ -129,15 +130,17 @@ export async function POST(request: NextRequest) {
         }
 
         if (quantityNum > 0) {
-          const { error: movementError } = await (supabase.from('stock_movements') as any).insert({
-            inventory_id: inventoryRow.id,
-            batch_id: batchId,
-            type: 'opening',
-            quantity: quantityNum,
-            reason: 'Bulk import opening stock',
-            reference: 'BULK_IMPORT',
-            created_by: user.id,
-          })
+          const { error: movementError } = await (supabase.rpc as any)(
+            'create_guarded_stock_adjustment',
+            {
+              p_pharmacy_id: pharmacy.id,
+              p_inventory_id: inventoryRow.id,
+              p_batch_id: batchId,
+              p_type: 'opening',
+              p_quantity: quantityNum,
+              p_reason: 'Bulk import opening stock',
+            }
+          )
           if (movementError) throw new Error('Failed to record opening stock')
         }
 

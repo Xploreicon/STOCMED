@@ -23,12 +23,35 @@ export default function ReactQueryProvider({
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       if (process.env.NODE_ENV !== 'production') {
-        navigator.serviceWorker.getRegistrations().then((registrations) => {
-          registrations.forEach((registration) => registration.unregister());
+        const cleanupDevServiceWorker = async () => {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(
+              keys
+                .filter((key) => key.startsWith('stocmed-'))
+                .map((key) => caches.delete(key))
+            );
+          }
+
+          // Unregistering does not release a page that is already controlled.
+          // Reload once after cleanup so the next navigation bypasses the old worker.
+          const reloadKey = 'stocmed-dev-sw-cleanup-reload';
+          if (navigator.serviceWorker.controller) {
+            if (sessionStorage.getItem(reloadKey) !== 'true') {
+              sessionStorage.setItem(reloadKey, 'true');
+              window.location.reload();
+            }
+          } else {
+            sessionStorage.removeItem(reloadKey);
+          }
+        };
+
+        void cleanupDevServiceWorker().catch((error) => {
+          console.warn('Failed to clean up the development service worker:', error);
         });
-        if ('caches' in window) {
-          caches.keys().then((keys) => keys.filter((key) => key.startsWith('stocmed-')).forEach((key) => caches.delete(key)));
-        }
         return;
       }
       navigator.serviceWorker

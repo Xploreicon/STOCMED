@@ -68,7 +68,7 @@ CRITICAL MEDICAL COMPLIANCE RULES:
 2. NEVER prescribe or recommend medication. If they ask "what should I take for headache?", list categories of information (e.g. Analgesics) but DO NOT recommend a specific drug.
 3. NEVER provide dosage instructions or medical treatment suggestions. Refer to the product packaging or a pharmacist.
 4. ONLY help locate named medications in our registered pharmacy database, check pricing, and answer basic factual queries about the drugs (manufacturer, pack size) using PROVIDED CONTEXT.
-5. If the drug is a Prescription-Only Medication (POM), explicitly remind the user: "This medication requires a valid prescription to purchase or view pricing/locations."
+5. If the drug is a Prescription-Only Medication (POM), explicitly remind the user: "This medication requires a valid prescription to purchase. You can still view pharmacy availability and pricing; a verified licensed pharmacist must pre-review any digital hold, and the destination pharmacy makes the final dispensing decision."
 6. Refuse to answer queries outside the scope of medication search, pharmacy directory, or basic drug information.
 
 Tone & Style:
@@ -147,7 +147,14 @@ export async function POST(request: NextRequest) {
       triageResult.risk_tier === 'CARE_REDIRECT' ||
       triageResult.risk_tier === 'REDIRECT'
     ) {
-      const safeResponse = getSafeResponse(triageResult.intent, triageResult.risk_tier);
+      const symptomIntakeEnabled =
+        process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
+        && process.env.SYMPTOM_INTAKE_ENABLED === 'true'
+      const safeResponse = getSafeResponse(
+        triageResult.intent,
+        triageResult.risk_tier,
+        { symptomIntakeEnabled }
+      );
       return staticAssistantResponse(safeResponse.message)
     }
 
@@ -164,12 +171,16 @@ export async function POST(request: NextRequest) {
     ]
     let requiredResultLead: string | null = null
 
-    // If GATE (POM) is active, indicate prescription restriction
+    // POM availability and pricing remain visible. The prescription gate applies
+    // to purchase and destination-pharmacy digital reservation, not discovery.
     if (triageResult.risk_tier === 'GATE') {
-      contextLines.push('RESTRICTION: This is a Prescription-Only Medication (POM). Do not list pharmacy details or prices until prescription is uploaded.');
+      contextLines.push('POM NOTICE: Pharmacy availability and pricing are visible. A valid prescription is required to purchase. A verified licensed pharmacist must pre-review a digital hold; final dispensing remains with the selected destination pharmacy.');
     }
 
-    if (pharmacies && pharmacies.length > 0 && triageResult.risk_tier === 'ALLOW') {
+    const isMedicationSearch =
+      triageResult.risk_tier === 'ALLOW' || triageResult.risk_tier === 'GATE'
+
+    if (pharmacies && pharmacies.length > 0 && isMedicationSearch) {
       const formatCurrency = (value: number | null | undefined) =>
         typeof value === 'number' && !Number.isNaN(value)
           ? `₦${value.toLocaleString()}`
@@ -192,18 +203,19 @@ export async function POST(request: NextRequest) {
       const locationPhrase = searchLocation || userLocation?.label ? ' near you' : ''
       const pricePhrase = minimumPrice === null ? '' : `, from ${formatCurrency(minimumPrice)}`
       requiredResultLead = `I found ${medicationName} at ${distinctPharmacies} ${pharmacyWord}${locationPhrase}${pricePhrase}.`
+      if (triageResult.risk_tier === 'GATE') {
+        requiredResultLead += ' A valid prescription is required to purchase or reserve it digitally.'
+      }
 
       contextLines.push(
         'RESULT CARD: available. The application already sent the exact medication, count, location, and price. Return exactly: "Check the result card below for pharmacy details."'
       )
-    } else if (triageResult.risk_tier === 'GATE') {
-      contextLines.push('Nearby pharmacies: hidden (requires prescription verification)')
     } else {
       contextLines.push('Nearby pharmacies: none supplied')
     }
 
     if (
-      triageResult.risk_tier === 'ALLOW' &&
+      isMedicationSearch &&
       (!pharmacies || pharmacies.length === 0)
     ) {
       const locationPhrase = searchLocation ? ` in ${searchLocation}` : ''

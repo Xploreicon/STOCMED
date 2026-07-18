@@ -38,6 +38,7 @@ export const localSaleSchema = z.object({
   change_due: money.nullable(),
   status: z.enum(['pending', 'completed', 'cancelled']),
   created_at: z.string().datetime(),
+  reservation_id: uuid.optional(),
   items: z.array(localSaleItemSchema).min(1),
 }).passthrough()
 

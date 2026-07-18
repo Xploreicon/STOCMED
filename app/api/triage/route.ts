@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
+import { getAdminClient } from '@/lib/supabase/admin';
 import { triageQuery } from '@/lib/triage/classifier';
 import { normalizeQuery } from '@/lib/triage/deterministic-classifier';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -52,13 +53,19 @@ export async function POST(request: NextRequest) {
       .update(normalized)
       .digest('hex');
 
-    // Attempt to log audit trail to DB (graceful fallback if DB fails/offline)
+    // Write the audit trail through the server-only service client. Client and
+    // anonymous roles have no INSERT grant or RLS policy on triage_logs.
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
-      const { error: insertError } = await (supabase.from('triage_logs') as any)
+      const adminClient = getAdminClient();
+      if (!adminClient) {
+        throw new Error('Server audit client is not configured');
+      }
+
+      const { error: insertError } = await (adminClient.from('triage_logs') as any)
         .insert({
           query_hash: queryHash,
           intent: triageResult.intent,

@@ -6,6 +6,13 @@ export interface SafeResponse {
   details?: Record<string, any>;
 }
 
+export interface SafeResponseOptions {
+  symptomIntakeEnabled?: boolean;
+}
+
+export const SYMPTOM_INTAKE_UNAVAILABLE_MESSAGE =
+  'Pharmacist symptom review is not available during the pilot. Please contact a licensed pharmacist or clinician for assessment. If your symptoms become severe or urgent, call 112 or go to the nearest emergency department.';
+
 export const SAFE_RESPONSES: Record<RiskTier, SafeResponse> = {
   CRISIS: {
     message: `I hear you, and I want you to know that support is available. Please reach out to someone who can help.
@@ -32,8 +39,7 @@ For your safety and legal compliance, please consult a licensed medical practiti
     actionRequired: 'emergency',
   },
   CARE_REDIRECT: {
-    message: `A pharmacist can review a symptom intake, or you can continue with a medication or pharmacy search.`,
-    actionRequired: 'symptom_intake',
+    message: SYMPTOM_INTAKE_UNAVAILABLE_MESSAGE,
   },
   GATE: {
     message: `This medication is classified as Prescription-Only (POM). To comply with PCN regulations, we cannot fulfill or show detailed sourcing for this drug until a valid prescription is verified by our pharmacist.
@@ -49,7 +55,11 @@ Please upload a clear photo of your doctor's prescription using the button below
 /**
  * Gets a safe response template based on intent and risk tier.
  */
-export function getSafeResponse(intent: TriageIntent, tier: RiskTier): SafeResponse {
+export function getSafeResponse(
+  intent: TriageIntent,
+  tier: RiskTier,
+  options: SafeResponseOptions = {}
+): SafeResponse {
   if (intent === 'RED_FLAG') {
     return SAFE_RESPONSES.REDIRECT;
   }
@@ -60,6 +70,9 @@ export function getSafeResponse(intent: TriageIntent, tier: RiskTier): SafeRespo
     return SAFE_RESPONSES.BLOCK_SOURCING;
   }
   if (intent === 'SYMPTOM_GENERIC') {
+    if (!options.symptomIntakeEnabled) {
+      return SAFE_RESPONSES.CARE_REDIRECT;
+    }
     return {
       message: `For generic symptom inquiries, you can fill out our brief pharmacist symptom intake form so a licensed pharmacist can review your situation and advise you, or browse common OTC categories.`,
       actionRequired: 'symptom_intake',

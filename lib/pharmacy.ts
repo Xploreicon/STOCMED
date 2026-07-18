@@ -1,5 +1,6 @@
 import type { SupabaseClient, User } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { isPcnNumberFormatValid, normalizePcnNumber } from '@/lib/validation/pcn'
 
 type PharmacyRow = Database['public']['Tables']['pharmacies']['Row']
 
@@ -54,6 +55,7 @@ export async function ensurePharmacyRecord(
       .from('pharmacies')
       .select('*')
       .eq('id', metadataPharmacyId)
+      .eq('user_id', user.id)
       .maybeSingle()
 
     if (!error && data) {
@@ -65,6 +67,7 @@ export async function ensurePharmacyRecord(
     .from('pharmacies')
     .select('*')
     .eq('user_id', user.id)
+    .eq('is_active', true)
     .maybeSingle()
 
   if (lookupError && lookupError.code !== 'PGRST116') {
@@ -95,21 +98,24 @@ export async function ensurePharmacyRecord(
     return null
   }
 
-  const { data: insertedPharmacy, error: insertError } = await (supabase
-    .from('pharmacies') as any)
-    .insert({
-      user_id: user.id,
-      pharmacy_name: pendingProfile.pharmacy_name,
-      license_number: pendingProfile.license_number,
-      address: pendingProfile.address,
-      city: pendingProfile.city,
-      state: pendingProfile.state,
-      phone: pendingProfile.phone,
-      logo_url: pendingProfile.logo_url ?? null,
-      is_active: true,
-    })
-    .select('*')
-    .single()
+  if (!isPcnNumberFormatValid(pendingProfile.license_number)) {
+    throw new Error('The saved PCN premises number has an invalid format')
+  }
+
+  const { data: registrationResult, error: insertError } = await (supabase.rpc as any)(
+    'register_provisional_pharmacy',
+    {
+      p_pharmacy_name: pendingProfile.pharmacy_name.trim(),
+      p_license_number: normalizePcnNumber(pendingProfile.license_number),
+      p_address: pendingProfile.address.trim(),
+      p_city: pendingProfile.city.trim(),
+      p_state: pendingProfile.state.trim(),
+      p_phone: pendingProfile.phone.trim(),
+    }
+  )
+  const insertedPharmacy = Array.isArray(registrationResult)
+    ? registrationResult[0]
+    : registrationResult
 
   if (insertError || !insertedPharmacy) {
     console.error('Error auto-creating pharmacy during login:', insertError)

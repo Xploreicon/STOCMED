@@ -1,12 +1,16 @@
 'use client';
 
-import { Button } from '@/components/ui/button'
+import { Button } from '@/components/ui/button';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BadgeCheck, Lightbulb, Loader2, Phone, Truck, WifiOff, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import EmergencyScreen from '@/components/chat/EmergencyScreen';
+import RestrictedScreen from '@/components/chat/RestrictedScreen';
+import CrisisScreen from '@/components/chat/CrisisScreen';
+import type { DeterministicSafetyRedirect } from '@/lib/triage/deterministic-safety-redirect';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,11 +22,16 @@ interface Pharmacy {
   phone: string;
   operating_hours?: string;
   license_number?: string;
-  p2p_verified?: boolean;
+  is_verified?: boolean;
+  verification_status?: 'provisional' | 'full' | 'revoked';
+  provisional_expires_at?: string | null;
+  reservations_enabled: boolean;
+  digital_prescription_reservations_enabled?: boolean;
 }
 
 interface DrugSearchResult {
   id: string;
+  product_id: string;
   name: string;
   brand_name: string;
   generic_name: string;
@@ -33,8 +42,27 @@ interface DrugSearchResult {
   price_range_max?: number;
   quantity_in_stock: number;
   low_stock_threshold?: number;
+  reserved_quantity?: number;
+  requires_prescription?: boolean;
   distance_km?: number;
   pharmacies: Pharmacy;
+}
+
+function PomReservationMode({ item }: { item: DrugSearchResult }) {
+  if (!item.requires_prescription) return null;
+
+  const acceptsDigitalReservation =
+    item.pharmacies.digital_prescription_reservations_enabled === true && item.quantity_in_stock > 0;
+
+  return (
+    <span
+      className={acceptsDigitalReservation
+        ? 'mt-2 inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700'
+        : 'mt-2 inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600'}
+    >
+      {acceptsDigitalReservation ? 'Digital Rx reservation available' : 'Call pharmacy only'}
+    </span>
+  );
 }
 
 export default function SearchResults() {
@@ -49,10 +77,18 @@ export default function SearchResults() {
   const [selectedItem, setSelectedItem] = useState<DrugSearchResult | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [reserving, setReserving] = useState(false);
+  const [submittingPrescription, setSubmittingPrescription] = useState(false);
+  const [reservationQuantity, setReservationQuantity] = useState(1);
+  const [reservationMessage, setReservationMessage] = useState<string | null>(null);
+  const [reservationMessageKind, setReservationMessageKind] = useState<'success' | 'error'>('success');
+  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
+  const [safetyRedirect, setSafetyRedirect] = useState<DeterministicSafetyRedirect | null>(null);
+  const prescriptionInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchResults = async () => {
+  const fetchResults = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setSafetyRedirect(null);
     try {
       const storedLoc = localStorage.getItem('stocmed:userLocation');
       let lat = '';
@@ -71,10 +107,20 @@ export default function SearchResults() {
       }
 
       const response = await fetch(`/api/drugs/search?${params.toString()}`);
+      const data = await response.json();
+      const safetyRedirectAction = data?.safety_redirect?.action;
+      if (
+        safetyRedirectAction === 'crisis'
+        || safetyRedirectAction === 'emergency'
+        || safetyRedirectAction === 'restricted'
+      ) {
+        setResults([]);
+        setSafetyRedirect(data.safety_redirect as DeterministicSafetyRedirect);
+        return;
+      }
       if (!response.ok) {
         throw new Error(`Server status ${response.status}`);
       }
-      const data = await response.json();
       setResults(data.results || []);
     } catch (err) {
       console.error('Failed to load search results:', err);
@@ -82,7 +128,7 @@ export default function SearchResults() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [query]);
 
   useEffect(() => {
     if (!query) {
@@ -90,7 +136,7 @@ export default function SearchResults() {
       return;
     }
     fetchResults();
-  }, [query, router]);
+  }, [query, router, fetchResults]);
 
   const getStockInfo = (qty: number, threshold = 10) => {
     if (qty <= 0) {
@@ -104,22 +150,140 @@ export default function SearchResults() {
 
   const handleOpenDetail = (item: DrugSearchResult) => {
     setSelectedItem(item);
+    setReservationQuantity(1);
+    setReservationMessage(null);
+    setReservationMessageKind('success');
+    setPrescriptionFile(null);
+    if (prescriptionInputRef.current) prescriptionInputRef.current.value = '';
     setIsDetailOpen(true);
+  };
+
+  const reservationErrorMessage = (status: number) => {
+    if (status === 401) return 'Please sign in before submitting a reservation.';
+    if (status === 403) return 'This pharmacy is not accepting this reservation.';
+    if (status === 404) return 'This medicine is no longer available at the selected pharmacy.';
+    if (status === 409) return 'Availability changed while you were submitting. Please refresh and try again.';
+    if (status === 413) return 'The prescription file must be 5 MB or smaller.';
+    if (status === 415) return 'Upload a JPEG, PNG, or PDF prescription.';
+    if (status === 429) return 'Too many attempts. Please wait a moment and try again.';
+    if (status === 503) return 'Digital prescription reservations are temporarily unavailable. Please call the pharmacy.';
+    if (status >= 400 && status < 500) return 'Check the reservation details and try again.';
+    return 'We could not submit this reservation. Please try again.';
   };
 
   const handleReserve = async () => {
     if (!selectedItem) return;
+    if (!selectedItem.pharmacies.reservations_enabled || selectedItem.quantity_in_stock <= 0) return;
     setReserving(true);
+    setReservationMessage(null);
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      alert(`Medication successfully reserved at ${selectedItem.pharmacies.pharmacy_name}! Please pick up within 24 hours.`);
-      setIsDetailOpen(false);
+      const response = await fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventory_id: selectedItem.id, quantity: reservationQuantity }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(reservationErrorMessage(response.status));
+      if (!body?.reservation?.expires_at || !body?.reservation?.pickup_code) {
+        throw new Error('Your hold may not have completed. Please refresh before trying again.');
+      }
+      const until = new Date(body.reservation.expires_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      setReservationMessageKind('success');
+      setReservationMessage(`Hold confirmed. Your pickup code is ${body.reservation.pickup_code}. Collect by ${until}.`);
+      fetchResults();
     } catch (err) {
-      console.error(err);
+      setReservationMessageKind('error');
+      setReservationMessage(err instanceof Error ? err.message : 'Could not create your hold');
     } finally {
       setReserving(false);
     }
   };
+
+  const handlePrescriptionFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0] ?? null;
+    setReservationMessage(null);
+
+    if (!file) {
+      setPrescriptionFile(null);
+      return;
+    }
+
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'application/pdf']);
+    if (!allowedTypes.has(file.type)) {
+      event.currentTarget.value = '';
+      setPrescriptionFile(null);
+      setReservationMessageKind('error');
+      setReservationMessage('Upload a JPEG, PNG, or PDF prescription.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      event.currentTarget.value = '';
+      setPrescriptionFile(null);
+      setReservationMessageKind('error');
+      setReservationMessage('The prescription file must be 5 MB or smaller.');
+      return;
+    }
+
+    setPrescriptionFile(file);
+  };
+
+  const handlePrescriptionReservation = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedItem?.requires_prescription) return;
+
+    const maximumQuantity = Math.min(10, selectedItem.quantity_in_stock);
+    if (!selectedItem.pharmacies.digital_prescription_reservations_enabled || maximumQuantity < 1) {
+      setReservationMessageKind('error');
+      setReservationMessage('This pharmacy is not accepting prescription reservations for this item.');
+      return;
+    }
+    if (!Number.isInteger(reservationQuantity) || reservationQuantity < 1 || reservationQuantity > maximumQuantity) {
+      setReservationMessageKind('error');
+      setReservationMessage(`Enter an exact quantity between 1 and ${maximumQuantity}.`);
+      return;
+    }
+    if (!prescriptionFile) {
+      setReservationMessageKind('error');
+      setReservationMessage('Choose a JPEG, PNG, or PDF prescription before submitting.');
+      prescriptionInputRef.current?.focus();
+      return;
+    }
+
+    setSubmittingPrescription(true);
+    setReservationMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append('inventory_id', selectedItem.id);
+      formData.append('quantity', String(reservationQuantity));
+      formData.append('file', prescriptionFile);
+
+      const response = await fetch('/api/reservations/prescription', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!response.ok) throw new Error(reservationErrorMessage(response.status));
+
+      setReservationMessageKind('success');
+      setReservationMessage(
+        `Prescription submitted for licensed pharmacist pre-review for ${selectedItem.pharmacies.pharmacy_name}. If a hold is authorized, a pickup code will be created; the pharmacy makes the final dispensing decision.`,
+      );
+      setPrescriptionFile(null);
+      if (prescriptionInputRef.current) prescriptionInputRef.current.value = '';
+    } catch (err) {
+      setReservationMessageKind('error');
+      setReservationMessage(err instanceof Error ? err.message : 'We could not submit this reservation. Please try again.');
+    } finally {
+      setSubmittingPrescription(false);
+    }
+  };
+
+  const selectedItemCanReserve = Boolean(
+    selectedItem?.pharmacies.reservations_enabled
+      && selectedItem.quantity_in_stock > 0
+      && (!selectedItem.requires_prescription
+        || selectedItem.pharmacies.digital_prescription_reservations_enabled === true),
+  );
 
   if (loading) {
     return (
@@ -170,6 +334,23 @@ export default function SearchResults() {
             Retry Search
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (safetyRedirect) {
+    const returnToChat = () => router.push('/chat');
+    return (
+      <div className="w-full max-w-[760px] mx-auto px-4 py-8 pb-24">
+        {safetyRedirect.action === 'emergency' && (
+          <EmergencyScreen onBack={returnToChat} userState={locationLabel} />
+        )}
+        {safetyRedirect.action === 'restricted' && (
+          <RestrictedScreen onBack={returnToChat} />
+        )}
+        {safetyRedirect.action === 'crisis' && (
+          <CrisisScreen onBack={returnToChat} />
+        )}
       </div>
     );
   }
@@ -239,6 +420,7 @@ export default function SearchResults() {
                             <div className="text-[13px] font-normal text-ink-light mt-0.5 truncate">
                               {r.pharmacies.address} {distance && `· ${distance}`}
                             </div>
+                            <PomReservationMode item={r} />
                           </div>
                           <div className="flex flex-col items-end gap-2 flex-shrink-0 text-right">
                             <span
@@ -292,6 +474,7 @@ export default function SearchResults() {
                             <div className="text-[13px] font-normal text-ink-light mt-0.5 truncate">
                               {r.pharmacies.address} {distance && `· ${distance}`}
                             </div>
+                            <PomReservationMode item={r} />
                           </div>
                           <div className="flex flex-col items-end gap-2 flex-shrink-0 text-right">
                             <span
@@ -377,18 +560,24 @@ export default function SearchResults() {
                 <div className="flex justify-between gap-4">
                   <span className="text-[14px] text-ink-light font-normal">Opening hours</span>
                   <span className="text-[14px] text-ink font-medium text-right">
-                    {selectedItem.pharmacies.operating_hours || 'Mon–Sat, 8am – 9pm'}
+                    {selectedItem.pharmacies.operating_hours || 'Not provided'}
                   </span>
                 </div>
                 <div className="h-px bg-border" />
                 <div className="flex justify-between gap-4">
                   <span className="text-[14px] text-ink-light font-normal">PCN license</span>
                   <span className="text-[14px] text-ink font-medium text-right">
-                    {selectedItem.pharmacies.license_number || 'PCN/PREM/48213'}{' '}
-                    <span className="inline-flex items-center gap-1 text-success font-medium">
-                      <BadgeCheck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                      Verified
-                    </span>
+                    <span className="block">{selectedItem.pharmacies.license_number || 'Not provided'}</span>
+                    {selectedItem.pharmacies.verification_status === 'full' && selectedItem.pharmacies.is_verified ? (
+                      <span className="mt-1 inline-flex items-center gap-1 text-success font-medium">
+                        <BadgeCheck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                        Fully verified
+                      </span>
+                    ) : (
+                      <span className="mt-1 inline-flex text-xs font-medium text-warning">
+                        Provisional · PCN evidence pending
+                      </span>
+                    )}
                   </span>
                 </div>
                 <div className="h-px bg-border" />
@@ -402,33 +591,189 @@ export default function SearchResults() {
 
               {/* Action buttons */}
               <div className="flex flex-col gap-2 pt-2">
-                <div className="flex gap-3">
-                  <Button
-                    onClick={handleReserve}
-                    disabled={reserving}
-                    className="flex-1 h-12 bg-primary text-white text-[15px] font-medium rounded-button hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-60 flex items-center justify-center"
+                {reservationMessage && (
+                  <p
+                    className={reservationMessageKind === 'error'
+                      ? 'rounded-card border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700'
+                      : 'rounded-card border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800'}
+                    role={reservationMessageKind === 'error' ? 'alert' : 'status'}
+                    aria-live="polite"
                   >
-                    {reserving ? 'Reserving...' : 'Reserve medication'}
-                  </Button>
-                  {selectedItem.pharmacies.phone && (
+                    {reservationMessage}
+                  </p>
+                )}
+
+                {selectedItem.requires_prescription ? (
+                  selectedItemCanReserve ? (
+                    <form className="flex flex-col gap-4" onSubmit={handlePrescriptionReservation}>
+                      <p id="prescription-guidance" className="text-[13px] leading-relaxed text-ink-muted">
+                        Upload a clear prescription for this exact quantity. A verified licensed pilot pharmacist
+                        may pre-review it and authorize a pickup hold. The destination pharmacy makes the final dispensing decision.
+                      </p>
+
+                      <div className="grid gap-3 sm:grid-cols-[1fr_110px]">
+                        <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-ink">
+                          Prescription
+                          <input
+                            ref={prescriptionInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,application/pdf"
+                            required
+                            onChange={handlePrescriptionFileChange}
+                            aria-describedby="prescription-guidance prescription-format-help"
+                            className="min-w-0 rounded-button border border-border bg-white px-3 py-2 text-xs text-ink file:mr-3 file:rounded-button file:border-0 file:bg-surface file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                          <span id="prescription-format-help" className="text-xs font-normal text-ink-light">
+                            JPEG, PNG, or PDF · 5 MB maximum
+                          </span>
+                        </label>
+
+                        <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
+                          Exact quantity
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            min={1}
+                            max={Math.min(10, selectedItem.quantity_in_stock)}
+                            step={1}
+                            required
+                            value={reservationQuantity}
+                            onChange={(event) => setReservationQuantity(Number(event.target.value))}
+                            className="h-10 rounded-button border border-border px-3 text-right text-ink focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        {selectedItem.pharmacies.phone ? (
+                          <a
+                            href={`tel:${selectedItem.pharmacies.phone}`}
+                            className="flex h-12 items-center justify-center gap-2 rounded-button bg-primary px-3 text-center text-[14px] font-medium text-white transition-colors hover:bg-[var(--primary-hover)] focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            aria-label={`Call ${selectedItem.pharmacies.pharmacy_name}`}
+                          >
+                            <Phone className="h-4 w-4" aria-hidden="true" />
+                            Call pharmacy
+                          </a>
+                        ) : (
+                          <Button
+                            type="button"
+                            disabled
+                            className="h-12 gap-2 rounded-button bg-primary px-3 text-[14px] font-medium text-white disabled:opacity-50"
+                            aria-label="Call pharmacy; phone number unavailable"
+                          >
+                            <Phone className="h-4 w-4" aria-hidden="true" />
+                            Call pharmacy
+                          </Button>
+                        )}
+                        <Button
+                          type="submit"
+                          disabled={submittingPrescription}
+                          className="h-12 rounded-button bg-primary px-3 text-[14px] font-medium text-white transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-60"
+                        >
+                          {submittingPrescription ? (
+                            <span className="inline-flex items-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                              Submitting…
+                            </span>
+                          ) : 'Reserve with prescription'}
+                        </Button>
+                      </div>
+
+                      <p className="text-xs leading-relaxed text-ink-light">
+                        Hold authorization creates a pickup code; it is not dispensing approval or a dispensing guarantee.
+                        Final supply remains under the destination pharmacy&apos;s professional supervision.
+                      </p>
+                    </form>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-sm leading-relaxed text-ink-muted">
+                        {selectedItem.pharmacies.verification_status === 'provisional'
+                          ? 'This pharmacy has provisional visibility, so prescription medicines are call-only until its evidence receives full review.'
+                          : 'This pharmacy is not accepting digital prescription reservations for this item. You can still call about availability and the prescription process.'}
+                      </p>
+                      {selectedItem.pharmacies.phone ? (
+                        <a
+                          href={`tel:${selectedItem.pharmacies.phone}`}
+                          className="flex h-12 w-full items-center justify-center gap-2 rounded-button bg-primary px-4 text-[15px] font-medium text-white transition-colors hover:bg-[var(--primary-hover)] focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          aria-label={`Call ${selectedItem.pharmacies.pharmacy_name}`}
+                        >
+                          <Phone className="h-5 w-5" aria-hidden="true" />
+                          Call pharmacy
+                        </a>
+                      ) : (
+                        <Button
+                          type="button"
+                          disabled
+                          className="h-12 w-full gap-2 rounded-button bg-primary text-[15px] font-medium text-white disabled:opacity-50"
+                          aria-label="Call pharmacy; phone number unavailable"
+                        >
+                          <Phone className="h-5 w-5" aria-hidden="true" />
+                          Call pharmacy
+                        </Button>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <>
+                    <div className="flex gap-3">
+                      {selectedItemCanReserve && (
+                        <Button
+                          onClick={handleReserve}
+                          disabled={reserving}
+                          className="h-12 flex-1 rounded-button bg-primary text-[15px] font-medium text-white transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-60"
+                        >
+                          {reserving ? 'Creating hold...' : 'Hold for pickup'}
+                        </Button>
+                      )}
+                      {selectedItem.pharmacies.phone ? (
+                        <a
+                          href={`tel:${selectedItem.pharmacies.phone}`}
+                          className="flex h-12 flex-1 items-center justify-center gap-2 rounded-button border-[1.5px] border-primary px-3 text-[15px] font-medium text-primary transition-colors hover:bg-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          aria-label={`Call ${selectedItem.pharmacies.pharmacy_name}`}
+                        >
+                          <Phone className="h-5 w-5" aria-hidden="true" />
+                          Call pharmacy
+                        </a>
+                      ) : (
+                        <Button
+                          type="button"
+                          disabled
+                          className="h-12 flex-1 gap-2 rounded-button border-[1.5px] border-primary bg-white text-[15px] font-medium text-primary disabled:opacity-50"
+                          aria-label="Call pharmacy; phone number unavailable"
+                        >
+                          <Phone className="h-5 w-5" aria-hidden="true" />
+                          Call pharmacy
+                        </Button>
+                      )}
+                    </div>
+
+                    {selectedItemCanReserve && (
+                      <label className="flex items-center justify-between gap-3 text-sm text-ink-muted">
+                        Quantity to hold
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          min={1}
+                          max={Math.min(10, selectedItem.quantity_in_stock)}
+                          step={1}
+                          value={reservationQuantity}
+                          onChange={(event) => setReservationQuantity(Math.max(1, Math.min(Number(event.target.value) || 1, Math.min(10, selectedItem.quantity_in_stock))))}
+                          className="h-9 w-20 rounded-button border border-border px-2 text-right text-ink"
+                        />
+                      </label>
+                    )}
+
                     <a
-                      href={`tel:${selectedItem.pharmacies.phone}`}
-                      className="w-12 h-12 border-[1.5px] border-primary rounded-button flex items-center justify-center text-primary text-[17px] hover:bg-surface transition-colors flex-shrink-0"
+                      href={`https://chowdeck.com/search?q=${encodeURIComponent(selectedItem.brand_name || selectedItem.name)}&store=${encodeURIComponent(selectedItem.pharmacies.pharmacy_name)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex h-12 w-full items-center justify-center gap-2 rounded-button bg-[var(--legacy-success)] text-[15px] font-medium text-white transition-colors hover:bg-[var(--legacy-success-hover)]"
                     >
-                      <Phone className="h-5 w-5" />
+                      <Truck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                      <span className="font-bold">Deliver with Chowdeck</span>
                     </a>
-                  )}
-                </div>
-                
-                <a
-                  href={`https://chowdeck.com/search?q=${encodeURIComponent(selectedItem.brand_name || selectedItem.name)}&store=${encodeURIComponent(selectedItem.pharmacies.pharmacy_name)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full h-12 bg-[var(--legacy-success)] hover:bg-[var(--legacy-success-hover)] text-white text-[15px] font-medium rounded-button transition-colors flex items-center justify-center space-x-2"
-                >
-                  <Truck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                  <span className="font-bold">Deliver with Chowdeck</span>
-                </a>
+                  </>
+                )}
               </div>
             </div>
           )}

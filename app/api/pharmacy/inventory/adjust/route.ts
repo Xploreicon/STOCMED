@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { MOVEMENT_TYPE_MAP, type MovementUiType } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -36,6 +37,30 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const movementEntry = Object.entries(MOVEMENT_TYPE_MAP).find(([uiType, definition]) =>
+      uiType.toLowerCase() === String(type).toLowerCase() || definition.db === type
+    ) as [MovementUiType, (typeof MOVEMENT_TYPE_MAP)[MovementUiType]] | undefined
+    const movementDef = movementEntry?.[1]
+    if (!movementDef || movementDef.db === 'sale') {
+      return NextResponse.json(
+        { error: 'Movement type must be one of Restock, Adjustment, Return, Write-off, Expiry' },
+        { status: 400 }
+      )
+    }
+
+    const rawQuantity = Number(quantity)
+    if (!Number.isInteger(rawQuantity) || rawQuantity === 0) {
+      return NextResponse.json({ error: 'Quantity must be a non-zero whole number' }, { status: 400 })
+    }
+    const signedQuantity = movementDef.sign === 'positive'
+      ? Math.abs(rawQuantity)
+      : movementDef.sign === 'negative'
+        ? -Math.abs(rawQuantity)
+        : rawQuantity
+    const movementReason = typeof reason === 'string' && reason.trim()
+      ? reason.trim()
+      : `${movementEntry?.[0] ?? type} adjustment`
+
     // Verify inventory belongs to this pharmacy
     const { data: inventory, error: checkError } = await (supabase as any)
       .from('pharmacy_inventory')
@@ -67,7 +92,7 @@ export async function POST(request: NextRequest) {
           inventory_id,
           batch_number,
           expiry_date,
-          quantity_received: Math.max(0, Number(quantity)),
+          quantity_received: Math.max(0, signedQuantity),
           cost_price: null
         })
         .select()
@@ -90,26 +115,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Insert stock movement
-    const { data: movement, error: moveError } = await (supabase as any)
-      .from('stock_movements')
-      .insert({
-        inventory_id,
-        batch_id: finalBatchId,
-        type,
-        quantity: Number(quantity),
-        reason: reason || `${type.charAt(0).toUpperCase() + type.slice(1)} adjustment`,
-        created_by: user.id
-      })
-      .select()
-      .single()
+    const { data: movement, error: moveError } = await (supabase.rpc as any)(
+      'create_guarded_stock_adjustment',
+      {
+        p_pharmacy_id: pharmacy.id,
+        p_inventory_id: inventory_id,
+        p_batch_id: finalBatchId,
+        p_type: movementDef.db,
+        p_quantity: signedQuantity,
+        p_reason: movementReason,
+      }
+    )
 
     if (moveError) {
       console.error('Error inserting adjustment movement:', moveError)
-      return NextResponse.json(
-        { error: 'Failed to log stock adjustment' },
-        { status: 500 }
-      )
+      return NextResponse.json({ error: moveError.message || 'Failed to log stock adjustment' }, { status: 409 })
     }
 
     return NextResponse.json(movement, { status: 201 })

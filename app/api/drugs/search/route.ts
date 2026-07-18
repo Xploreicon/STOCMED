@@ -1,8 +1,48 @@
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { POM_MOLECULES_LIST } from '@/lib/triage/keyword-lists'
+import { getDeterministicSafetyRedirect } from '@/lib/triage/deterministic-safety-redirect'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
+
+function areDigitalRxReservationsEnabled() {
+  return process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
+    && process.env.RX_RESERVATIONS_ENABLED === 'true'
+}
+
+type ReservationAvailability = {
+  inventory_id: string
+  reserved_quantity: number
+  sellable_quantity: number
+}
+
+type ReservationCapability = {
+  inventory_id: string
+  reservations_enabled: boolean
+}
+
+function isMissingReservationRpc(error: { code?: string; message?: string } | null) {
+  if (!error) return false
+  return error.code === 'PGRST202' || error.code === '42883' || /function .* does not exist/i.test(error.message ?? '')
+}
+
+function isKnownPomProduct(product: { generic_name?: string | null; brand_name?: string | null; requires_prescription?: boolean } | null) {
+  if (product?.requires_prescription) return true
+  const name = `${product?.generic_name ?? ''} ${product?.brand_name ?? ''}`.toLowerCase()
+  return POM_MOLECULES_LIST.terms.some((term) => name.includes(term.toLowerCase()))
+}
+
+function isPharmacyFullyVerified(pharmacy: Record<string, any> | null) {
+  return pharmacy?.verification_status === 'full' && pharmacy?.is_verified === true
+}
+
+function isPharmacyVisible(pharmacy: Record<string, any> | null) {
+  if (isPharmacyFullyVerified(pharmacy)) return true
+  if (pharmacy?.verification_status !== 'provisional' || !pharmacy?.provisional_expires_at) return false
+  const deadline = new Date(pharmacy.provisional_expires_at)
+  return !Number.isNaN(deadline.getTime()) && deadline.getTime() > Date.now()
+}
 
 export async function GET(request: NextRequest) {
   const rateLimit = checkRateLimit(request, 'drug-search', 60, 60_000)
@@ -28,6 +68,18 @@ export async function GET(request: NextRequest) {
         { error: 'Search query is required' },
         { status: 400 }
       )
+    }
+
+    // Search is a public API and must enforce the same deterministic safety
+    // boundary as chat. Never query or return inventory for these outcomes.
+    const safetyRedirect = getDeterministicSafetyRedirect(query)
+    if (safetyRedirect) {
+      return NextResponse.json({
+        results: [],
+        count: 0,
+        query,
+        safety_redirect: safetyRedirect,
+      }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
     const supabase = await createClient()
@@ -62,6 +114,10 @@ export async function GET(request: NextRequest) {
           city,
           state,
           phone,
+          license_number,
+          is_verified,
+          verification_status,
+          provisional_expires_at,
           latitude,
           longitude,
           is_active,
@@ -72,6 +128,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('pharmacies.is_active', true)
+      .eq('products.is_verified', true)
       .eq('is_listed', true)
       .is('deleted_at', null)
       .or(`search_vector.plfts.${query},generic_name.ilike.%${query}%,brand_name.ilike.%${query}%`, { foreignTable: 'products' })
@@ -91,11 +148,13 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Search error:', error)
-      return NextResponse.json(
+          return NextResponse.json(
         { error: 'Failed to search drugs' },
         { status: 500 }
       )
     }
+
+    inventory = (inventory || []).filter((row: any) => isPharmacyVisible(row.pharmacies))
 
     // Fuzzy search fallback: if no results found, perform a pg_trgm similarity search
     if ((!inventory || inventory.length === 0) && query) {
@@ -138,6 +197,10 @@ export async function GET(request: NextRequest) {
                 city,
                 state,
                 phone,
+                license_number,
+                is_verified,
+                verification_status,
+                provisional_expires_at,
                 latitude,
                 longitude,
                 is_active,
@@ -148,6 +211,7 @@ export async function GET(request: NextRequest) {
               )
             `)
             .eq('pharmacies.is_active', true)
+            .eq('products.is_verified', true)
             .eq('is_listed', true)
             .is('deleted_at', null)
             .in('product_id', productIds)
@@ -162,11 +226,38 @@ export async function GET(request: NextRequest) {
 
           const { data: fallbackInventory, error: fallbackQueryError } = await fallbackBuilder
           if (!fallbackQueryError && fallbackInventory) {
-            inventory = fallbackInventory
+            inventory = fallbackInventory.filter((row: any) => isPharmacyVisible(row.pharmacies))
           }
         }
       }
     }
+
+    // Holds are soft locks. Public availability must never expose raw ledger stock.
+    const inventoryIds = (inventory || []).map((row: any) => row.id)
+    const { data: availability, error: availabilityError } = inventoryIds.length
+      ? await (supabase.rpc as any)('reservation_sellable_quantities', { p_inventory_ids: inventoryIds })
+      : { data: [], error: null }
+
+    if (availabilityError && !isMissingReservationRpc(availabilityError)) {
+      console.error('Reservation availability error:', availabilityError)
+      return NextResponse.json({ error: 'Failed to calculate medication availability' }, { status: 500 })
+    }
+
+    const { data: capabilities, error: capabilityError } = inventoryIds.length
+      ? await (supabase.rpc as any)('reservation_inventory_capabilities', { p_inventory_ids: inventoryIds })
+      : { data: [], error: null }
+
+    if (capabilityError && !isMissingReservationRpc(capabilityError)) {
+      console.error('Reservation capability error:', capabilityError)
+      return NextResponse.json({ error: 'Failed to calculate pharmacy reservation availability' }, { status: 500 })
+    }
+
+    const sellableByInventoryId = new Map<string, ReservationAvailability>(
+      ((availability || []) as ReservationAvailability[]).map((entry) => [entry.inventory_id, entry])
+    )
+    const reservationsEnabledByInventoryId = new Map<string, boolean>(
+      ((capabilities || []) as ReservationCapability[]).map((entry) => [entry.inventory_id, entry.reservations_enabled])
+    )
 
     // Map database results to the old flat 'drugs' schema structure
     let results = (inventory || []).map((row: any) => {
@@ -203,6 +294,14 @@ export async function GET(request: NextRequest) {
         ? row.batches.map((b: any) => b.expiry_date).sort()[0]
         : null
 
+      const reservationAvailability = sellableByInventoryId.get(row.id)
+      const sellableQuantity = reservationAvailability?.sellable_quantity ?? row.quantity_in_stock
+      const requiresPrescription = isKnownPomProduct(product)
+      const fullyVerifiedPharmacy = isPharmacyFullyVerified(pharmacy)
+      const reservationsEnabled = (reservationsEnabledByInventoryId.get(row.id) ?? false)
+        && (!requiresPrescription || fullyVerifiedPharmacy)
+      const digitalRxEnabled = areDigitalRxReservationsEnabled()
+
       return {
         id: row.id,
         product_id: product?.id || null,
@@ -215,15 +314,23 @@ export async function GET(request: NextRequest) {
         strength: product?.strength || null,
         description: product?.description || null,
         price: price,
-        quantity_in_stock: row.quantity_in_stock,
+        quantity_in_stock: sellableQuantity,
+        reserved_quantity: reservationAvailability?.reserved_quantity ?? 0,
         low_stock_threshold: row.low_stock_threshold,
-        requires_prescription: product?.requires_prescription || false,
+        requires_prescription: requiresPrescription,
         manufacturer: product?.manufacturer || null,
         expiry_date: expiryDate,
         created_at: row.created_at,
         updated_at: row.updated_at,
         image_url: row.image_url || product?.image_url || null,
-        pharmacies: pharmacy || null,
+        pharmacies: pharmacy ? {
+          ...pharmacy,
+          reservations_enabled: reservationsEnabled,
+          digital_prescription_reservations_enabled: requiresPrescription
+            && digitalRxEnabled
+            && reservationsEnabled
+            && fullyVerifiedPharmacy,
+        } : null,
         price_range_min: Number.isFinite(price) ? Math.max(Math.round((price - (priceDelta ?? 0)) / 10) * 10, 0) : null,
         price_range_max: Number.isFinite(price) ? Math.round((price + (priceDelta ?? 0)) / 10) * 10 : null,
         distance_km: distanceKm,
@@ -240,6 +347,10 @@ export async function GET(request: NextRequest) {
           pharmacy.address?.toLowerCase().includes(location.toLowerCase())
         )
       })
+    }
+
+    if (inStockOnly) {
+      results = results.filter((drug: any) => drug.quantity_in_stock > 0)
     }
 
     if (hasUserCoordinates) {

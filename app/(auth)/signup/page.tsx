@@ -3,11 +3,16 @@
 import { Button } from '@/components/ui/button'
 import { Building2, UserRound } from 'lucide-react'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/components/brand/Logo';
+import {
+  isPcnNumberFormatValid,
+  normalizePcnNumber,
+  PCN_NUMBER_FORMAT_HELP,
+} from '@/lib/validation/pcn';
 
 export const dynamic = 'force-dynamic'
 
@@ -32,6 +37,7 @@ export default function Signup() {
   const [isLoading, setIsLoading] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const submitInFlight = useRef(false);
 
   const [formData, setFormData] = useState({
     email: '',
@@ -78,7 +84,7 @@ export default function Signup() {
       newErrors.confirmPassword = 'Passwords do not match';
     }
     if (!acceptedTerms) {
-      newErrors.terms = 'You must accept the terms and conditions';
+      newErrors.terms = 'You must confirm before continuing';
     }
 
     if (selectedRole === 'patient' && !formData.location) {
@@ -87,7 +93,11 @@ export default function Signup() {
 
     if (selectedRole === 'pharmacy') {
       if (!formData.pharmacy_name.trim()) newErrors.pharmacy_name = 'Pharmacy name is required';
-      if (!formData.license_number.trim()) newErrors.license_number = 'License number is required';
+      if (!formData.license_number.trim()) {
+        newErrors.license_number = 'PCN premises number is required';
+      } else if (!isPcnNumberFormatValid(formData.license_number)) {
+        newErrors.license_number = 'Enter the PCN premises number exactly as shown on the record';
+      }
       if (!formData.address.trim()) newErrors.address = 'Address is required';
       if (!formData.city.trim()) newErrors.city = 'City is required';
       if (!formData.state) newErrors.state = 'State is required';
@@ -112,12 +122,14 @@ export default function Signup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) return;
+    if (submitInFlight.current || !validateForm()) return;
 
+    submitInFlight.current = true;
     setIsLoading(true);
 
     try {
       const supabase = createClient();
+      const normalizedPcnNumber = normalizePcnNumber(formData.license_number);
 
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
@@ -131,7 +143,7 @@ export default function Signup() {
               selectedRole === 'pharmacy'
                 ? {
                     pharmacy_name: formData.pharmacy_name,
-                    license_number: formData.license_number,
+                    license_number: normalizedPcnNumber,
                     address: formData.address,
                     city: formData.city,
                     state: formData.state,
@@ -169,21 +181,18 @@ export default function Signup() {
         const {
           data: pharmacyRecord,
           error: pharmacyError,
-        } = await supabase
-          .from('pharmacies')
-          .insert({
-            user_id: authData.user.id,
-            pharmacy_name: formData.pharmacy_name,
-            license_number: formData.license_number,
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            phone: formData.phone,
-          } as any)
-          .select('id')
-          .single();
+        } = await (supabase.rpc as any)('register_provisional_pharmacy', {
+          p_pharmacy_name: formData.pharmacy_name.trim(),
+          p_license_number: normalizedPcnNumber,
+          p_address: formData.address.trim(),
+          p_city: formData.city.trim(),
+          p_state: formData.state,
+          p_phone: formData.phone,
+        });
 
-        const insertedPharmacy = pharmacyRecord as { id: string } | null;
+        const insertedPharmacy = (Array.isArray(pharmacyRecord)
+          ? pharmacyRecord[0]
+          : pharmacyRecord) as { id: string } | null;
 
         if (pharmacyError || !insertedPharmacy) {
           console.error('Error inserting pharmacy:', pharmacyError);
@@ -218,6 +227,7 @@ export default function Signup() {
         general: error instanceof Error ? error.message : 'Registration failed. Please try again.',
       });
     } finally {
+      submitInFlight.current = false;
       setIsLoading(false);
     }
   };
@@ -313,11 +323,19 @@ export default function Signup() {
                   {errors.pharmacy_name && <p className="text-xs text-danger mt-1.5">{errors.pharmacy_name}</p>}
                 </div>
                 <div>
-                  <label htmlFor="license_number" className={labelCls}>PCN license number</label>
-                  <input id="license_number" placeholder="PCN/PREM/000000" value={formData.license_number}
-                    onChange={(e) => setFormData({ ...formData, license_number: e.target.value })}
+                  <label htmlFor="license_number" className={labelCls}>PCN premises number</label>
+                  <input id="license_number" placeholder="0023841" value={formData.license_number}
+                    maxLength={32}
+                    autoCapitalize="characters"
+                    onChange={(e) => setFormData({ ...formData, license_number: e.target.value.toUpperCase() })}
+                    onBlur={() => setFormData((current) => ({
+                      ...current,
+                      license_number: normalizePcnNumber(current.license_number),
+                    }))}
                     disabled={isLoading} className={`${inputCls} ${errCls('license_number')}`} />
-                  <p className="text-[13px] text-ink-light mt-1.5">We verify every pharmacy against the Pharmacists Council of Nigeria register</p>
+                  <p className="text-[13px] text-ink-light mt-1.5">
+                    {PCN_NUMBER_FORMAT_HELP} Passing this check does not mean the pharmacy is PCN-verified.
+                  </p>
                   {errors.license_number && <p className="text-xs text-danger mt-1.5">{errors.license_number}</p>}
                 </div>
                 <div>
@@ -401,10 +419,8 @@ export default function Signup() {
                 disabled={isLoading} className="mt-0.5 w-4 h-4 flex-shrink-0" style={{ accentColor: 'var(--primary)' }} />
               <span>
                 {selectedRole === 'pharmacy'
-                  ? "I confirm I'm authorized to register this pharmacy and agree to the "
-                  : "I agree to StocMed's "}
-                <Link href="/terms" className="text-primary font-medium">Terms of Service</Link>
-                {' '}and <Link href="/privacy" className="text-primary font-medium">Privacy Policy</Link>
+                  ? "I confirm I'm authorized to register this pharmacy and consent to the account data needed to provide the service."
+                  : 'I consent to the account data needed to provide the StocMed service.'}
               </span>
             </label>
             {errors.terms && <p className="text-xs text-danger -mt-2">{errors.terms}</p>}
@@ -416,7 +432,8 @@ export default function Signup() {
 
             {selectedRole === 'pharmacy' && (
               <p className="text-[13px] text-ink-light text-center">
-                Your account will be active once your PCN license is verified, usually within 1 business day.
+                After email confirmation, your pharmacy receives provisional search visibility for 30 days.
+                Upload the premises certificate and superintendent pharmacist licence in Settings before the deadline.
               </p>
             )}
           </form>

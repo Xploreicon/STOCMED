@@ -7,6 +7,7 @@ import {
   BarChart3,
   Boxes,
   Calculator,
+  ClipboardCheck,
   ClipboardList,
   Clock3,
   Home,
@@ -35,6 +36,7 @@ const patientNavItems: NavItem[] = [
   { label: 'Home', icon: Home, href: '/dashboard' },
   { label: 'Chat', icon: MessageCircle, href: '/chat' },
   { label: 'History', icon: Clock3, href: '/history' },
+  { label: 'My holds', icon: ClipboardCheck, href: '/reservations' },
   { label: 'Profile', icon: User, href: '/profile' },
   { label: 'Settings', icon: Settings, href: '/settings' },
 ];

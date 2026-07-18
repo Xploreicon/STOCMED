@@ -9,7 +9,7 @@ import { ClipboardList, Clock, AlertTriangle, CheckCircle, Eye, Loader2, ArrowRi
 import { toast } from 'sonner';
 
 export default function SymptomQueuePage() {
-  const { user } = useUser();
+  const { user, isLoading: userLoading } = useUser();
   const [intakes, setIntakes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIntake, setSelectedIntake] = useState<any | null>(null);
@@ -17,8 +17,57 @@ export default function SymptomQueuePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [signedPhotoUrl, setSignedPhotoUrl] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [isLicensedPharmacist, setIsLicensedPharmacist] = useState(false);
+  const [roleLoading, setRoleLoading] = useState(true);
 
   const supabase = createClient();
+  const canPerformClinicalActions = !roleLoading && isLicensedPharmacist;
+
+  useEffect(() => {
+    let active = true;
+
+    const loadClinicalRole = async () => {
+      if (userLoading) return;
+      if (!user?.id) {
+        if (active) {
+          setIsLicensedPharmacist(false);
+          setRoleLoading(false);
+        }
+        return;
+      }
+
+      setRoleLoading(true);
+      setIsLicensedPharmacist(false);
+      const { data, error } = await (supabase.from('users') as any)
+        .select(`
+          is_stocmed_sp,stocmed_sp_authorized_at,stocmed_sp_authorization_basis,
+          is_licensed_pharmacist,pharmacist_license_verified_at,pharmacist_license_verification_basis
+        `)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!active) return;
+      if (error) {
+        console.error('Failed to verify clinical responder role:', error);
+        setIsLicensedPharmacist(false);
+      } else {
+        setIsLicensedPharmacist(Boolean(
+          data?.is_stocmed_sp
+          && data?.stocmed_sp_authorized_at
+          && data?.stocmed_sp_authorization_basis?.trim()
+          && data?.is_licensed_pharmacist
+          && data?.pharmacist_license_verified_at
+          && data?.pharmacist_license_verification_basis?.trim()
+        ));
+      }
+      setRoleLoading(false);
+    };
+
+    void loadClinicalRole();
+    return () => {
+      active = false;
+    };
+  }, [supabase, user?.id, userLoading]);
 
   const fetchIntakes = React.useCallback(async () => {
     try {
@@ -86,6 +135,10 @@ export default function SymptomQueuePage() {
 
   const handleClaim = async (intakeId: string) => {
     if (!user) return;
+    if (!canPerformClinicalActions) {
+      toast.error('Only a verified licensed pharmacist can claim a symptom intake.');
+      return;
+    }
     try {
       const { error } = await (supabase.from('symptom_intakes') as any)
         .update({
@@ -114,6 +167,10 @@ export default function SymptomQueuePage() {
   const handleSubmitResponse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedIntake || !responseHtml.trim()) return;
+    if (!canPerformClinicalActions) {
+      toast.error('Only a verified licensed pharmacist can submit a clinical answer.');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -166,6 +223,18 @@ export default function SymptomQueuePage() {
           </select>
         </div>
       </div>
+
+      {!roleLoading && !canPerformClinicalActions && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="status">
+          <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-semibold">Read-only oversight</p>
+            <p className="mt-1 text-xs leading-relaxed">
+              You can review symptom intake records, but only a verified licensed pharmacist can claim a case or submit a clinical answer.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Intakes List Column */}
@@ -253,13 +322,18 @@ export default function SymptomQueuePage() {
                   </span>
                 </div>
                 
-                {selectedIntake.status === 'submitted' && (
+                {selectedIntake.status === 'submitted' && canPerformClinicalActions && (
                   <Button
                     onClick={() => handleClaim(selectedIntake.id)}
                     className="w-full mt-2 py-2 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white text-xs font-semibold rounded-lg shadow transition-all"
                   >
                     Claim Ticket & Review
                   </Button>
+                )}
+                {selectedIntake.status === 'submitted' && !roleLoading && !canPerformClinicalActions && (
+                  <p className="mt-2 text-[11px] font-medium leading-relaxed text-amber-800">
+                    Licensed pharmacist access is required to claim this intake.
+                  </p>
                 )}
               </div>
 
@@ -328,7 +402,7 @@ export default function SymptomQueuePage() {
               </div>
 
               {/* Responder console */}
-              {selectedIntake.status === 'under_review' && selectedIntake.assigned_pharmacist === user?.id && (
+              {canPerformClinicalActions && selectedIntake.status === 'under_review' && selectedIntake.assigned_pharmacist === user?.id && (
                 <form onSubmit={handleSubmitResponse} className="space-y-3.5">
                   <div>
                     <label className="block text-[10px] font-bold text-ink-light uppercase tracking-wider">

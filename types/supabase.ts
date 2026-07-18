@@ -12,6 +12,7 @@ export interface Database {
       users: {
         Row: {
           id: string
+          user_id: string
           email: string
           full_name: string
           phone: string
@@ -21,9 +22,18 @@ export interface Database {
           updated_at: string
           is_admin: boolean
           is_licensed_pharmacist: boolean
+          is_stocmed_sp: boolean
+          admin_authorized_at: string | null
+          admin_authorization_basis: string | null
+          pharmacist_license_number: string | null
+          pharmacist_license_verified_at: string | null
+          pharmacist_license_verification_basis: string | null
+          stocmed_sp_authorized_at: string | null
+          stocmed_sp_authorization_basis: string | null
         }
         Insert: {
           id?: string
+          user_id?: string
           email: string
           full_name: string
           phone: string
@@ -33,9 +43,18 @@ export interface Database {
           updated_at?: string
           is_admin?: boolean
           is_licensed_pharmacist?: boolean
+          is_stocmed_sp?: boolean
+          admin_authorized_at?: string | null
+          admin_authorization_basis?: string | null
+          pharmacist_license_number?: string | null
+          pharmacist_license_verified_at?: string | null
+          pharmacist_license_verification_basis?: string | null
+          stocmed_sp_authorized_at?: string | null
+          stocmed_sp_authorization_basis?: string | null
         }
         Update: {
           id?: string
+          user_id?: string
           email?: string
           full_name?: string
           phone?: string
@@ -45,6 +64,14 @@ export interface Database {
           updated_at?: string
           is_admin?: boolean
           is_licensed_pharmacist?: boolean
+          is_stocmed_sp?: boolean
+          admin_authorized_at?: string | null
+          admin_authorization_basis?: string | null
+          pharmacist_license_number?: string | null
+          pharmacist_license_verified_at?: string | null
+          pharmacist_license_verification_basis?: string | null
+          stocmed_sp_authorized_at?: string | null
+          stocmed_sp_authorization_basis?: string | null
         }
       }
       pharmacies: {
@@ -61,6 +88,19 @@ export interface Database {
           phone: string
           is_verified: boolean
           is_active: boolean
+          reservations_enabled: boolean
+          reservation_hold_minutes: number
+          verification_status: 'provisional' | 'full' | 'revoked'
+          pcn_confirmation_status: 'confirmed' | 'to_be_confirmed'
+          provisional_started_at: string | null
+          provisional_expires_at: string | null
+          verification_submitted_at: string | null
+          pcn_standards_accepted_at: string | null
+          verification_authorized_at: string | null
+          verification_authorization_basis: string | null
+          verification_documents_evidence_basis: string | null
+          verification_standards_evidence_basis: string | null
+          legacy_verification_bootstrap_eligible: boolean
           created_at: string
           updated_at: string
           logo_url: string | null
@@ -78,6 +118,19 @@ export interface Database {
           phone: string
           is_verified?: boolean
           is_active?: boolean
+          reservations_enabled?: boolean
+          reservation_hold_minutes?: number
+          verification_status?: 'provisional' | 'full' | 'revoked'
+          pcn_confirmation_status?: 'confirmed' | 'to_be_confirmed'
+          provisional_started_at?: string | null
+          provisional_expires_at?: string | null
+          verification_submitted_at?: string | null
+          pcn_standards_accepted_at?: string | null
+          verification_authorized_at?: string | null
+          verification_authorization_basis?: string | null
+          verification_documents_evidence_basis?: string | null
+          verification_standards_evidence_basis?: string | null
+          legacy_verification_bootstrap_eligible?: boolean
           created_at?: string
           updated_at?: string
           logo_url?: string | null
@@ -104,6 +157,19 @@ export interface Database {
           phone?: string
           is_verified?: boolean
           is_active?: boolean
+          reservations_enabled?: boolean
+          reservation_hold_minutes?: number
+          verification_status?: 'provisional' | 'full' | 'revoked'
+          pcn_confirmation_status?: 'confirmed' | 'to_be_confirmed'
+          provisional_started_at?: string | null
+          provisional_expires_at?: string | null
+          verification_submitted_at?: string | null
+          pcn_standards_accepted_at?: string | null
+          verification_authorized_at?: string | null
+          verification_authorization_basis?: string | null
+          verification_documents_evidence_basis?: string | null
+          verification_standards_evidence_basis?: string | null
+          legacy_verification_bootstrap_eligible?: boolean
           created_at?: string
           updated_at?: string
           logo_url?: string | null
@@ -583,6 +649,14 @@ export interface Database {
           review_notes: string | null
           created_at: string
           updated_at: string
+          flow_model: 'central_legacy' | 'destination_model_a'
+          destination_pharmacy_id: string | null
+          inventory_id: string | null
+          requested_quantity: number | null
+          reservation_id: string | null
+          destination_seen_at: string | null
+          reviewed_at: string | null
+          purge_after: string | null
         }
         Insert: {
           id?: string
@@ -595,6 +669,14 @@ export interface Database {
           review_notes?: string | null
           created_at?: string
           updated_at?: string
+          flow_model?: 'central_legacy' | 'destination_model_a'
+          destination_pharmacy_id?: string | null
+          inventory_id?: string | null
+          requested_quantity?: number | null
+          reservation_id?: string | null
+          destination_seen_at?: string | null
+          reviewed_at?: string | null
+          purge_after?: string | null
         }
         Update: {
           id?: string
@@ -607,6 +689,14 @@ export interface Database {
           review_notes?: string | null
           created_at?: string
           updated_at?: string
+          flow_model?: 'central_legacy' | 'destination_model_a'
+          destination_pharmacy_id?: string | null
+          inventory_id?: string | null
+          requested_quantity?: number | null
+          reservation_id?: string | null
+          destination_seen_at?: string | null
+          reviewed_at?: string | null
+          purge_after?: string | null
         }
       }
       symptom_intakes: {

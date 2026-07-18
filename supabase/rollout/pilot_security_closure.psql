@@ -1,0 +1,847 @@
+\set ON_ERROR_STOP on
+\set VERBOSITY verbose
+
+-- Production provisioning companion for migrations 20260716000001..00003.
+-- This file intentionally has no defaults. Supply every value through psql
+-- variables from a protected, uncommitted operator input file.
+
+\if :{?rollout_confirmation}
+\else
+  \echo 'ERROR: rollout_confirmation is required'
+  \quit 3
+\endif
+\if :{?sole_admin_email}
+\else
+  \echo 'ERROR: sole_admin_email is required'
+  \quit 3
+\endif
+\if :{?admin_authorization_basis}
+\else
+  \echo 'ERROR: admin_authorization_basis is required'
+  \quit 3
+\endif
+\if :{?central_sp_email}
+\else
+  \echo 'ERROR: central_sp_email is required'
+  \quit 3
+\endif
+\if :{?central_sp_licence_number}
+\else
+  \echo 'ERROR: central_sp_licence_number is required'
+  \quit 3
+\endif
+\if :{?central_sp_licence_basis}
+\else
+  \echo 'ERROR: central_sp_licence_basis is required'
+  \quit 3
+\endif
+\if :{?central_sp_authorization_basis}
+\else
+  \echo 'ERROR: central_sp_authorization_basis is required'
+  \quit 3
+\endif
+\if :{?standards_version}
+\else
+  \echo 'ERROR: standards_version is required'
+  \quit 3
+\endif
+\if :{?standards_document_hash}
+\else
+  \echo 'ERROR: standards_document_hash is required'
+  \quit 3
+\endif
+\if :{?standards_change_basis}
+\else
+  \echo 'ERROR: standards_change_basis is required'
+  \quit 3
+\endif
+\if :{?rx_retention_basis}
+\else
+  \echo 'ERROR: rx_retention_basis is required'
+  \quit 3
+\endif
+\if :{?pilot_pharmacies_json}
+\else
+  \echo 'ERROR: pilot_pharmacies_json is required'
+  \quit 3
+\endif
+
+BEGIN ISOLATION LEVEL SERIALIZABLE;
+SET LOCAL lock_timeout = '15s';
+SET LOCAL statement_timeout = '5min';
+SET LOCAL idle_in_transaction_session_timeout = '2min';
+SET LOCAL search_path = pg_temp, pg_catalog, public;
+
+-- Prevent two operators from provisioning the pilot concurrently.
+SELECT pg_advisory_xact_lock(hashtext('stocmed:pilot-security-closure:production'));
+
+CREATE TEMP TABLE _rollout_config (
+  rollout_confirmation TEXT NOT NULL,
+  sole_admin_email TEXT NOT NULL,
+  admin_authorization_basis TEXT NOT NULL,
+  central_sp_email TEXT NOT NULL,
+  central_sp_licence_number TEXT NOT NULL,
+  central_sp_licence_basis TEXT NOT NULL,
+  central_sp_authorization_basis TEXT NOT NULL,
+  standards_version TEXT NOT NULL,
+  standards_document_hash TEXT NOT NULL,
+  standards_change_basis TEXT NOT NULL,
+  rx_retention_basis TEXT NOT NULL,
+  pilot_pharmacies JSONB NOT NULL,
+  admin_user_id UUID,
+  central_sp_user_id UUID
+) ON COMMIT DROP;
+
+INSERT INTO _rollout_config (
+  rollout_confirmation,
+  sole_admin_email,
+  admin_authorization_basis,
+  central_sp_email,
+  central_sp_licence_number,
+  central_sp_licence_basis,
+  central_sp_authorization_basis,
+  standards_version,
+  standards_document_hash,
+  standards_change_basis,
+  rx_retention_basis,
+  pilot_pharmacies
+) VALUES (
+  btrim(:'rollout_confirmation'),
+  lower(btrim(:'sole_admin_email')),
+  btrim(:'admin_authorization_basis'),
+  lower(btrim(:'central_sp_email')),
+  btrim(:'central_sp_licence_number'),
+  btrim(:'central_sp_licence_basis'),
+  btrim(:'central_sp_authorization_basis'),
+  btrim(:'standards_version'),
+  lower(btrim(:'standards_document_hash')),
+  btrim(:'standards_change_basis'),
+  btrim(:'rx_retention_basis'),
+  :'pilot_pharmacies_json'::JSONB
+);
+
+CREATE OR REPLACE FUNCTION pg_temp.is_unresolved_rollout_value(p_value TEXT)
+RETURNS BOOLEAN
+LANGUAGE sql
+IMMUTABLE
+AS $fn$
+  SELECT NULLIF(btrim(p_value), '') IS NULL
+    OR btrim(p_value) ~* '^(todo|tbd|required|replace[-_ ]?me|placeholder|<[^>]+>|\{\{[^}]+\}\})$';
+$fn$;
+
+DO $preflight$
+DECLARE
+  c _rollout_config%ROWTYPE;
+  required_keys CONSTANT TEXT[] := ARRAY[
+    'pharmacy_id',
+    'pharmacy_name_confirmation',
+    'pcn_premises_number',
+    'premises_certificate_path',
+    'superintendent_annual_licence_path',
+    'standards_accepted_at',
+    'documents_evidence_basis',
+    'standards_evidence_basis',
+    'bootstrap_basis',
+    'reservations_enabled'
+  ];
+BEGIN
+  SELECT * INTO STRICT c FROM _rollout_config;
+
+  IF c.rollout_confirmation <> 'APPLY_STOCMED_PILOT_SECURITY_CLOSURE' THEN
+    RAISE EXCEPTION 'rollout_confirmation does not match the required production sentinel';
+  END IF;
+  IF c.sole_admin_email !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'
+     OR c.central_sp_email !~* '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' THEN
+    RAISE EXCEPTION 'Admin and central-SP emails must be complete email addresses';
+  END IF;
+  IF c.sole_admin_email <> 'iconfavour005@gmail.com' THEN
+    RAISE EXCEPTION 'sole_admin_email does not match the admin identity approved for this window';
+  END IF;
+  IF c.sole_admin_email = c.central_sp_email THEN
+    RAISE EXCEPTION 'The sole admin and clinical reviewer must be separate identities';
+  END IF;
+  IF pg_temp.is_unresolved_rollout_value(c.admin_authorization_basis)
+     OR pg_temp.is_unresolved_rollout_value(c.central_sp_licence_basis)
+     OR pg_temp.is_unresolved_rollout_value(c.central_sp_authorization_basis)
+     OR pg_temp.is_unresolved_rollout_value(c.standards_change_basis)
+     OR pg_temp.is_unresolved_rollout_value(c.rx_retention_basis) THEN
+    RAISE EXCEPTION 'Every authorization, verification, standards, and retention basis must be resolved';
+  END IF;
+  IF pg_temp.is_unresolved_rollout_value(c.central_sp_licence_number) THEN
+    RAISE EXCEPTION 'The pharmacist licence number is missing';
+  END IF;
+  IF pg_temp.is_unresolved_rollout_value(c.standards_version)
+     OR length(c.standards_version) > 100 THEN
+    RAISE EXCEPTION 'The standards version is missing or too long';
+  END IF;
+  IF c.standards_document_hash !~ '^[0-9a-f]{64}$' THEN
+    RAISE EXCEPTION 'standards_document_hash must be a 64-character SHA-256 hex digest';
+  END IF;
+  IF jsonb_typeof(c.pilot_pharmacies) <> 'array'
+     OR jsonb_array_length(c.pilot_pharmacies) = 0 THEN
+    RAISE EXCEPTION 'pilot_pharmacies_json must be a nonempty JSON array';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(c.pilot_pharmacies) item
+    WHERE jsonb_typeof(item) <> 'object'
+       OR NOT item ?& required_keys
+       OR EXISTS (
+         SELECT 1 FROM jsonb_object_keys(item) supplied_key
+         WHERE NOT supplied_key = ANY(required_keys)
+       )
+  ) THEN
+    RAISE EXCEPTION 'Every pilot pharmacy must contain exactly the documented keys';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(c.pilot_pharmacies) item
+    WHERE item ->> 'pharmacy_id' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+       OR jsonb_typeof(item -> 'reservations_enabled') <> 'boolean'
+       OR pg_temp.is_unresolved_rollout_value(item ->> 'pharmacy_name_confirmation')
+       OR pg_temp.is_unresolved_rollout_value(item ->> 'pcn_premises_number')
+       OR pg_temp.is_unresolved_rollout_value(item ->> 'premises_certificate_path')
+       OR pg_temp.is_unresolved_rollout_value(item ->> 'superintendent_annual_licence_path')
+       OR pg_temp.is_unresolved_rollout_value(item ->> 'standards_accepted_at')
+       OR pg_temp.is_unresolved_rollout_value(item ->> 'documents_evidence_basis')
+       OR pg_temp.is_unresolved_rollout_value(item ->> 'standards_evidence_basis')
+       OR pg_temp.is_unresolved_rollout_value(item ->> 'bootstrap_basis')
+  ) THEN
+    RAISE EXCEPTION 'A pilot pharmacy contains a missing, placeholder, or malformed value';
+  END IF;
+END;
+$preflight$;
+
+CREATE TEMP TABLE _pilot_pharmacy_input (
+  ordinal INTEGER NOT NULL UNIQUE,
+  pharmacy_id UUID PRIMARY KEY,
+  pharmacy_name_confirmation TEXT NOT NULL,
+  pcn_premises_number TEXT NOT NULL UNIQUE,
+  premises_certificate_path TEXT NOT NULL UNIQUE,
+  superintendent_annual_licence_path TEXT NOT NULL UNIQUE,
+  standards_accepted_at TIMESTAMPTZ NOT NULL,
+  documents_evidence_basis TEXT NOT NULL,
+  standards_evidence_basis TEXT NOT NULL,
+  bootstrap_basis TEXT NOT NULL,
+  reservations_enabled BOOLEAN NOT NULL
+) ON COMMIT DROP;
+
+INSERT INTO _pilot_pharmacy_input
+SELECT
+  ordinality::INTEGER,
+  (item ->> 'pharmacy_id')::UUID,
+  btrim(item ->> 'pharmacy_name_confirmation'),
+  public.normalize_pcn_registration_number(item ->> 'pcn_premises_number'),
+  btrim(item ->> 'premises_certificate_path'),
+  btrim(item ->> 'superintendent_annual_licence_path'),
+  (item ->> 'standards_accepted_at')::TIMESTAMPTZ,
+  btrim(item ->> 'documents_evidence_basis'),
+  btrim(item ->> 'standards_evidence_basis'),
+  btrim(item ->> 'bootstrap_basis'),
+  (item ->> 'reservations_enabled')::BOOLEAN
+FROM _rollout_config c
+CROSS JOIN LATERAL jsonb_array_elements(c.pilot_pharmacies)
+  WITH ORDINALITY supplied(item, ordinality);
+
+DO $schema_preflight$
+DECLARE
+  missing_versions TEXT;
+BEGIN
+  IF current_user NOT IN ('postgres', 'supabase_admin') THEN
+    RAISE EXCEPTION 'Run this artifact only through a direct owner/admin database connection';
+  END IF;
+
+  SELECT string_agg(required.version, ', ' ORDER BY required.version)
+  INTO missing_versions
+  FROM (VALUES
+    ('20260716000001'),
+    ('20260716000002'),
+    ('20260716000003')
+  ) required(version)
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM supabase_migrations.schema_migrations applied
+    WHERE applied.version = required.version
+  );
+  IF missing_versions IS NOT NULL THEN
+    RAISE EXCEPTION 'Required migrations are not applied: %', missing_versions;
+  END IF;
+
+  IF to_regprocedure(
+    'public.bootstrap_legacy_full_pharmacy_verification(uuid,text,text,text,text,timestamptz,text,text,text,uuid)'
+  ) IS NULL THEN
+    RAISE EXCEPTION 'Expected legacy pharmacy bootstrap RPC is missing or has a different signature';
+  END IF;
+  IF to_regprocedure('public.provision_licensed_pharmacist(uuid,text,boolean,text)') IS NULL
+     OR to_regprocedure('public.provision_pilot_role(uuid,text,boolean,text)') IS NULL
+     OR to_regprocedure('public.set_rx_retention_policy(integer,text)') IS NULL
+     OR to_regprocedure('public.set_pharmacy_reservations_enabled(boolean)') IS NULL THEN
+    RAISE EXCEPTION 'One or more required provisioning RPCs are missing';
+  END IF;
+  IF NOT public.is_plausible_pharmacist_license_number(
+    (SELECT central_sp_licence_number FROM _rollout_config)
+  ) THEN
+    RAISE EXCEPTION 'The central-SP PCN pharmacist licence number does not pass structural validation';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM storage.buckets
+    WHERE id = 'pharmacy-verification-documents'
+      AND public = FALSE
+      AND file_size_limit = 5242880
+      AND cardinality(allowed_mime_types) = 3
+      AND allowed_mime_types <@ ARRAY['image/jpeg', 'image/png', 'application/pdf']::TEXT[]
+      AND allowed_mime_types @> ARRAY['image/jpeg', 'image/png', 'application/pdf']::TEXT[]
+  ) THEN
+    RAISE EXCEPTION 'The private pharmacy-verification evidence bucket is not locked to 5 MB JPEG/PNG/PDF';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM storage.buckets
+    WHERE id = 'prescriptions'
+      AND public = FALSE
+      AND file_size_limit = 5242880
+      AND cardinality(allowed_mime_types) = 3
+      AND allowed_mime_types <@ ARRAY['image/jpeg', 'image/png', 'application/pdf']::TEXT[]
+      AND allowed_mime_types @> ARRAY['image/jpeg', 'image/png', 'application/pdf']::TEXT[]
+  ) THEN
+    RAISE EXCEPTION 'The prescriptions bucket is not private and exact-MIME/5 MB restricted';
+  END IF;
+END;
+$schema_preflight$;
+
+DO $identity_preflight$
+DECLARE
+  c _rollout_config%ROWTYPE;
+  admin_matches INTEGER;
+  sp_matches INTEGER;
+  admin_id UUID;
+  sp_id UUID;
+BEGIN
+  SELECT * INTO STRICT c FROM _rollout_config;
+
+  SELECT count(*)::INTEGER INTO admin_matches
+  FROM auth.users a
+  WHERE lower(btrim(a.email)) = c.sole_admin_email;
+  IF admin_matches <> 1 THEN
+    RAISE EXCEPTION 'Admin email must resolve to exactly one auth identity; found %', admin_matches;
+  END IF;
+  SELECT count(*)::INTEGER INTO admin_matches
+  FROM public.users u
+  WHERE lower(btrim(u.email)) = c.sole_admin_email;
+  IF admin_matches <> 1 THEN
+    RAISE EXCEPTION 'Admin email must resolve to exactly one public profile; found %', admin_matches;
+  END IF;
+  SELECT a.id INTO STRICT admin_id
+  FROM auth.users a
+  JOIN public.users u ON u.user_id = a.id
+  WHERE lower(btrim(a.email)) = c.sole_admin_email
+    AND lower(btrim(u.email)) = c.sole_admin_email;
+
+  SELECT count(*)::INTEGER INTO sp_matches
+  FROM auth.users a
+  WHERE lower(btrim(a.email)) = c.central_sp_email;
+  IF sp_matches <> 1 THEN
+    RAISE EXCEPTION 'Central-SP email must resolve to exactly one auth identity; found %', sp_matches;
+  END IF;
+  SELECT count(*)::INTEGER INTO sp_matches
+  FROM public.users u
+  WHERE lower(btrim(u.email)) = c.central_sp_email;
+  IF sp_matches <> 1 THEN
+    RAISE EXCEPTION 'Central-SP email must resolve to exactly one public profile; found %', sp_matches;
+  END IF;
+  SELECT a.id INTO STRICT sp_id
+  FROM auth.users a
+  JOIN public.users u ON u.user_id = a.id
+  WHERE lower(btrim(a.email)) = c.central_sp_email
+    AND lower(btrim(u.email)) = c.central_sp_email;
+  IF admin_id = sp_id THEN
+    RAISE EXCEPTION 'Admin and central SP resolved to the same user';
+  END IF;
+
+  PERFORM 1 FROM public.users
+  WHERE user_id IN (admin_id, sp_id)
+  ORDER BY user_id
+  FOR UPDATE;
+
+  IF EXISTS (
+    SELECT 1 FROM public.users
+    WHERE is_admin = TRUE AND user_id <> admin_id
+  ) THEN
+    RAISE EXCEPTION 'Another admin is already enabled; this rollout requires a sole admin';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.users
+    WHERE is_stocmed_sp = TRUE AND user_id <> sp_id
+  ) THEN
+    RAISE EXCEPTION 'Another central StocMed SP is already enabled';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE u.user_id = admin_id
+      AND (u.is_licensed_pharmacist OR u.is_stocmed_sp)
+  ) THEN
+    RAISE EXCEPTION 'The admin identity already has clinical privileges';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE u.user_id = sp_id AND u.is_admin
+  ) THEN
+    RAISE EXCEPTION 'The central SP identity is already an administrator';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE u.user_id <> sp_id
+      AND public.normalize_pharmacist_license_number(
+        u.pharmacist_license_number
+      ) = public.normalize_pharmacist_license_number(
+        c.central_sp_licence_number
+      )
+  ) THEN
+    RAISE EXCEPTION 'The supplied PCN pharmacist licence is already attached to another account';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.users u
+    WHERE u.is_licensed_pharmacist = TRUE
+      AND u.user_id <> sp_id
+      AND NOT EXISTS (
+        SELECT 1 FROM public.pharmacies ph
+        WHERE ph.user_id = u.user_id
+          AND ph.verification_status = 'full'
+          AND public.pharmacy_verification_is_current(
+            ph.verification_status,
+            ph.provisional_expires_at,
+            ph.is_verified,
+            ph.verification_authorized_at,
+            ph.verification_authorization_basis,
+            ph.verification_documents_evidence_basis,
+            ph.verification_standards_evidence_basis
+          )
+      )
+  ) THEN
+    RAISE EXCEPTION 'A licensed pharmacist exists outside the central-SP or current FULL-pharmacy model';
+  END IF;
+
+  UPDATE _rollout_config
+  SET admin_user_id = admin_id,
+      central_sp_user_id = sp_id;
+END;
+$identity_preflight$;
+
+DO $pharmacy_preflight$
+DECLARE
+  supplied_count INTEGER;
+  matched_count INTEGER;
+BEGIN
+  SELECT count(*)::INTEGER INTO supplied_count FROM _pilot_pharmacy_input;
+  SELECT count(*)::INTEGER INTO matched_count
+  FROM _pilot_pharmacy_input input
+  JOIN public.pharmacies ph ON ph.id = input.pharmacy_id;
+  IF matched_count <> supplied_count THEN
+    RAISE EXCEPTION 'One or more exact pilot pharmacy IDs do not exist';
+  END IF;
+
+  PERFORM 1
+  FROM public.pharmacies ph
+  JOIN _pilot_pharmacy_input input ON input.pharmacy_id = ph.id
+  ORDER BY ph.id
+  FOR UPDATE OF ph;
+
+  IF EXISTS (
+    SELECT 1
+    FROM _pilot_pharmacy_input input
+    JOIN public.pharmacies ph ON ph.id = input.pharmacy_id
+    WHERE btrim(ph.pharmacy_name) IS DISTINCT FROM input.pharmacy_name_confirmation
+       OR public.normalize_pcn_registration_number(ph.license_number)
+          IS DISTINCT FROM input.pcn_premises_number
+       OR NOT public.is_plausible_pcn_registration_number(input.pcn_premises_number)
+       OR ph.is_active IS DISTINCT FROM TRUE
+       OR ph.user_id IS NULL
+       OR NOT EXISTS (
+         SELECT 1 FROM public.users u
+         JOIN auth.users a ON a.id = u.user_id
+         WHERE u.user_id = ph.user_id
+       )
+  ) THEN
+    RAISE EXCEPTION 'A pilot pharmacy ID/name/PCN/owner does not match the approved input';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM _pilot_pharmacy_input input
+    JOIN public.pharmacies other
+      ON other.id <> input.pharmacy_id
+     AND public.normalize_pcn_registration_number(other.license_number) =
+       input.pcn_premises_number
+    WHERE other.verification_status = 'full'
+       OR (
+         other.verification_status = 'provisional'
+         AND other.provisional_expires_at > NOW()
+       )
+  ) THEN
+    RAISE EXCEPTION 'A supplied PCN premises number belongs to another current pharmacy row';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM _pilot_pharmacy_input input
+    WHERE input.premises_certificate_path = input.superintendent_annual_licence_path
+       OR input.premises_certificate_path !~ ('^' || input.pharmacy_id::TEXT || '/[^/]+$')
+       OR input.superintendent_annual_licence_path !~ ('^' || input.pharmacy_id::TEXT || '/[^/]+$')
+       OR input.premises_certificate_path ~ '(^|/)\.\.(/|$)'
+       OR input.superintendent_annual_licence_path ~ '(^|/)\.\.(/|$)'
+       OR input.standards_accepted_at > NOW()
+  ) THEN
+    RAISE EXCEPTION 'Evidence paths or standards acceptance time are invalid';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM _pilot_pharmacy_input input
+    JOIN public.pharmacies ph ON ph.id = input.pharmacy_id
+    WHERE ph.verification_status <> 'full'
+      AND (
+        ph.legacy_verification_bootstrap_eligible IS DISTINCT FROM TRUE
+        OR ph.verification_status NOT IN ('provisional', 'revoked')
+        OR ph.provisional_expires_at <= NOW()
+        OR input.standards_accepted_at < ph.provisional_started_at
+        OR input.standards_accepted_at > ph.provisional_expires_at
+      )
+  ) THEN
+    RAISE EXCEPTION 'A non-FULL pharmacy is outside its migration-stamped exact-row bootstrap window';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM _pilot_pharmacy_input input
+    WHERE (SELECT count(*) FROM storage.objects object
+           WHERE object.bucket_id = 'pharmacy-verification-documents'
+             AND object.name IN (
+               input.premises_certificate_path,
+               input.superintendent_annual_licence_path
+             )) <> 2
+  ) THEN
+    RAISE EXCEPTION 'Both exact private evidence objects must exist for every pilot pharmacy';
+  END IF;
+END;
+$pharmacy_preflight$;
+
+-- Configure the exact standards reviewed during this window before recording
+-- any pharmacy acceptance or evidence decision.
+INSERT INTO public.pharmacy_verification_config (
+  singleton,
+  current_standards_version,
+  standards_document_hash,
+  change_basis,
+  updated_by,
+  updated_at
+)
+SELECT
+  TRUE,
+  c.standards_version,
+  c.standards_document_hash,
+  c.standards_change_basis,
+  c.admin_user_id,
+  NOW()
+FROM _rollout_config c
+ON CONFLICT (singleton) DO UPDATE SET
+  current_standards_version = EXCLUDED.current_standards_version,
+  standards_document_hash = EXCLUDED.standards_document_hash,
+  change_basis = EXCLUDED.change_basis,
+  updated_by = EXCLUDED.updated_by,
+  updated_at = NOW()
+WHERE public.pharmacy_verification_config.current_standards_version
+        IS DISTINCT FROM EXCLUDED.current_standards_version
+   OR public.pharmacy_verification_config.standards_document_hash
+        IS DISTINCT FROM EXCLUDED.standards_document_hash
+   OR public.pharmacy_verification_config.change_basis
+        IS DISTINCT FROM EXCLUDED.change_basis
+   OR public.pharmacy_verification_config.updated_by
+        IS DISTINCT FROM EXCLUDED.updated_by;
+
+DO $provision_roles$
+DECLARE
+  c _rollout_config%ROWTYPE;
+  admin_user public.users;
+  sp_user public.users;
+BEGIN
+  SELECT * INTO STRICT c FROM _rollout_config;
+
+  PERFORM set_config('request.jwt.claim.role', 'service_role', TRUE);
+  PERFORM set_config('request.jwt.claim.sub', c.admin_user_id::TEXT, TRUE);
+
+  SELECT * INTO STRICT admin_user FROM public.users WHERE user_id = c.admin_user_id;
+  IF NOT admin_user.is_admin
+     OR admin_user.admin_authorization_basis IS DISTINCT FROM c.admin_authorization_basis THEN
+    PERFORM public.provision_pilot_role(
+      c.admin_user_id,
+      'admin',
+      TRUE,
+      c.admin_authorization_basis
+    );
+  END IF;
+
+  SELECT * INTO STRICT sp_user FROM public.users WHERE user_id = c.central_sp_user_id;
+  IF NOT sp_user.is_licensed_pharmacist
+     OR public.normalize_pharmacist_license_number(sp_user.pharmacist_license_number)
+        IS DISTINCT FROM public.normalize_pharmacist_license_number(c.central_sp_licence_number)
+     OR sp_user.pharmacist_license_verification_basis IS DISTINCT FROM c.central_sp_licence_basis THEN
+    PERFORM public.provision_licensed_pharmacist(
+      c.central_sp_user_id,
+      c.central_sp_licence_number,
+      TRUE,
+      c.central_sp_licence_basis
+    );
+  END IF;
+
+  SELECT * INTO STRICT sp_user FROM public.users WHERE user_id = c.central_sp_user_id;
+  IF NOT sp_user.is_stocmed_sp
+     OR sp_user.stocmed_sp_authorization_basis IS DISTINCT FROM c.central_sp_authorization_basis THEN
+    PERFORM public.provision_pilot_role(
+      c.central_sp_user_id,
+      'stocmed_sp',
+      TRUE,
+      c.central_sp_authorization_basis
+    );
+  END IF;
+END;
+$provision_roles$;
+
+DO $bootstrap_pharmacies$
+DECLARE
+  c _rollout_config%ROWTYPE;
+  input _pilot_pharmacy_input%ROWTYPE;
+  ph public.pharmacies;
+  already_exact BOOLEAN;
+BEGIN
+  SELECT * INTO STRICT c FROM _rollout_config;
+  PERFORM set_config('request.jwt.claim.role', 'service_role', TRUE);
+  PERFORM set_config('request.jwt.claim.sub', c.admin_user_id::TEXT, TRUE);
+
+  FOR input IN SELECT * FROM _pilot_pharmacy_input ORDER BY ordinal LOOP
+    SELECT * INTO STRICT ph FROM public.pharmacies WHERE id = input.pharmacy_id FOR UPDATE;
+
+    SELECT EXISTS (
+      SELECT 1
+      FROM public.pharmacy_verification_submissions submission
+      JOIN public.pharmacy_verification_decisions decision
+        ON decision.submission_id = submission.id
+      WHERE submission.pharmacy_id = input.pharmacy_id
+        AND submission.premises_certificate_path = input.premises_certificate_path
+        AND submission.superintendent_annual_licence_path = input.superintendent_annual_licence_path
+        AND submission.standards_version = c.standards_version
+        AND submission.standards_document_hash = c.standards_document_hash
+        AND submission.standards_accepted_at = input.standards_accepted_at
+        AND decision.decision = 'approved'
+        AND decision.documents_evidence_basis = input.documents_evidence_basis
+        AND decision.standards_evidence_basis = input.standards_evidence_basis
+        AND decision.review_basis =
+          'Legacy bootstrap: ' || input.bootstrap_basis ||
+          '; Documents: ' || input.documents_evidence_basis ||
+          '; PCN standards: ' || input.standards_evidence_basis
+        AND decision.reviewed_by = c.admin_user_id
+        AND (
+          SELECT count(DISTINCT access_log.document_kind)
+          FROM public.pharmacy_verification_document_access_logs access_log
+          WHERE access_log.submission_id = submission.id
+            AND access_log.viewer_user_id = c.admin_user_id
+            AND access_log.viewer_role = 'legacy_bootstrap_admin'
+            AND access_log.outcome = 'authorized'
+            AND access_log.document_kind IN (
+              'premises_certificate',
+              'superintendent_annual_licence'
+            )
+        ) = 2
+    ) INTO already_exact;
+
+    IF ph.verification_status = 'full' THEN
+      IF NOT public.pharmacy_verification_is_current(
+        ph.verification_status,
+        ph.provisional_expires_at,
+        ph.is_verified,
+        ph.verification_authorized_at,
+        ph.verification_authorization_basis,
+        ph.verification_documents_evidence_basis,
+        ph.verification_standards_evidence_basis
+      ) OR NOT already_exact THEN
+        RAISE EXCEPTION 'Pharmacy % is FULL but does not match this rollout evidence', input.pharmacy_id;
+      END IF;
+    ELSE
+      PERFORM public.bootstrap_legacy_full_pharmacy_verification(
+        input.pharmacy_id,
+        input.premises_certificate_path,
+        input.superintendent_annual_licence_path,
+        c.standards_version,
+        c.standards_document_hash,
+        input.standards_accepted_at,
+        input.documents_evidence_basis,
+        input.standards_evidence_basis,
+        input.bootstrap_basis,
+        c.admin_user_id
+      );
+    END IF;
+  END LOOP;
+END;
+$bootstrap_pharmacies$;
+
+DO $reservation_settings$
+DECLARE
+  input _pilot_pharmacy_input%ROWTYPE;
+  ph public.pharmacies;
+BEGIN
+  FOR input IN SELECT * FROM _pilot_pharmacy_input ORDER BY ordinal LOOP
+    SELECT * INTO STRICT ph FROM public.pharmacies WHERE id = input.pharmacy_id FOR UPDATE;
+    IF ph.reservations_enabled IS DISTINCT FROM input.reservations_enabled THEN
+      PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
+      PERFORM set_config('request.jwt.claim.sub', ph.user_id::TEXT, TRUE);
+      PERFORM public.set_pharmacy_reservations_enabled(input.reservations_enabled);
+    END IF;
+  END LOOP;
+END;
+$reservation_settings$;
+
+DO $retention$
+DECLARE
+  c _rollout_config%ROWTYPE;
+BEGIN
+  SELECT * INTO STRICT c FROM _rollout_config;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.rx_retention_policy policy
+    WHERE policy.singleton = TRUE
+      AND policy.retention_days = 365
+      AND policy.is_confirmed = TRUE
+      AND policy.confirmed_by = c.admin_user_id
+      AND policy.legal_basis = c.rx_retention_basis
+  ) THEN
+    PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
+    PERFORM set_config('request.jwt.claim.sub', c.admin_user_id::TEXT, TRUE);
+    PERFORM public.set_rx_retention_policy(365, c.rx_retention_basis);
+  END IF;
+END;
+$retention$;
+
+DO $final_assertions$
+DECLARE
+  c _rollout_config%ROWTYPE;
+  intended_count INTEGER;
+  full_count INTEGER;
+BEGIN
+  SELECT * INTO STRICT c FROM _rollout_config;
+
+  IF (SELECT count(*) FROM public.users WHERE is_admin = TRUE) <> 1
+     OR NOT EXISTS (
+       SELECT 1 FROM public.users
+       WHERE user_id = c.admin_user_id
+         AND is_admin = TRUE
+         AND admin_authorized_at IS NOT NULL
+         AND admin_authorization_basis = c.admin_authorization_basis
+         AND is_licensed_pharmacist = FALSE
+         AND is_stocmed_sp = FALSE
+     ) THEN
+    RAISE EXCEPTION 'Final sole-admin assertion failed';
+  END IF;
+  IF (SELECT count(*) FROM public.users WHERE is_stocmed_sp = TRUE) <> 1
+     OR NOT EXISTS (
+       SELECT 1 FROM public.users
+       WHERE user_id = c.central_sp_user_id
+         AND is_admin = FALSE
+         AND is_licensed_pharmacist = TRUE
+         AND public.normalize_pharmacist_license_number(pharmacist_license_number) =
+           public.normalize_pharmacist_license_number(c.central_sp_licence_number)
+         AND pharmacist_license_verified_at IS NOT NULL
+         AND pharmacist_license_verification_basis = c.central_sp_licence_basis
+         AND is_stocmed_sp = TRUE
+         AND stocmed_sp_authorized_at IS NOT NULL
+         AND stocmed_sp_authorization_basis = c.central_sp_authorization_basis
+     ) THEN
+    RAISE EXCEPTION 'Final central-SP provenance assertion failed';
+  END IF;
+
+  SELECT count(*)::INTEGER INTO intended_count FROM _pilot_pharmacy_input;
+  SELECT count(*)::INTEGER INTO full_count
+  FROM _pilot_pharmacy_input input
+  JOIN public.pharmacies ph ON ph.id = input.pharmacy_id
+  WHERE public.normalize_pcn_registration_number(ph.license_number) = input.pcn_premises_number
+    AND ph.reservations_enabled = input.reservations_enabled
+    AND ph.verification_status = 'full'
+    AND public.pharmacy_verification_is_current(
+      ph.verification_status,
+      ph.provisional_expires_at,
+      ph.is_verified,
+      ph.verification_authorized_at,
+      ph.verification_authorization_basis,
+      ph.verification_documents_evidence_basis,
+      ph.verification_standards_evidence_basis
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM public.pharmacy_verification_submissions submission
+      JOIN public.pharmacy_verification_decisions decision
+        ON decision.submission_id = submission.id
+      WHERE submission.pharmacy_id = input.pharmacy_id
+        AND submission.premises_certificate_path = input.premises_certificate_path
+        AND submission.superintendent_annual_licence_path = input.superintendent_annual_licence_path
+        AND submission.standards_version = c.standards_version
+        AND submission.standards_document_hash = c.standards_document_hash
+        AND submission.standards_accepted_at = input.standards_accepted_at
+        AND decision.decision = 'approved'
+        AND decision.documents_evidence_basis = input.documents_evidence_basis
+        AND decision.standards_evidence_basis = input.standards_evidence_basis
+        AND decision.review_basis =
+          'Legacy bootstrap: ' || input.bootstrap_basis ||
+          '; Documents: ' || input.documents_evidence_basis ||
+          '; PCN standards: ' || input.standards_evidence_basis
+        AND decision.reviewed_by = c.admin_user_id
+        AND (
+          SELECT count(DISTINCT access_log.document_kind)
+          FROM public.pharmacy_verification_document_access_logs access_log
+          WHERE access_log.submission_id = submission.id
+            AND access_log.viewer_user_id = c.admin_user_id
+            AND access_log.viewer_role = 'legacy_bootstrap_admin'
+            AND access_log.outcome = 'authorized'
+            AND access_log.document_kind IN (
+              'premises_certificate',
+              'superintendent_annual_licence'
+            )
+        ) = 2
+    );
+  IF full_count <> intended_count THEN
+    RAISE EXCEPTION 'Only % of % pilot pharmacies reached the exact FULL state', full_count, intended_count;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.pharmacy_verification_config config
+    WHERE config.singleton = TRUE
+      AND config.current_standards_version = c.standards_version
+      AND config.standards_document_hash = c.standards_document_hash
+      AND config.change_basis = c.standards_change_basis
+      AND config.updated_by = c.admin_user_id
+  ) THEN
+    RAISE EXCEPTION 'Final standards-configuration assertion failed';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.rx_retention_policy policy
+    WHERE policy.singleton = TRUE
+      AND policy.retention_days = 365
+      AND policy.is_confirmed = TRUE
+      AND policy.confirmed_by = c.admin_user_id
+      AND policy.legal_basis = c.rx_retention_basis
+  ) THEN
+    RAISE EXCEPTION 'Final 365-day retention assertion failed';
+  END IF;
+END;
+$final_assertions$;
+
+COMMIT;
+
+\pset pager off
+\echo 'Pilot security closure provisioning committed successfully.'
+SELECT
+  lower(btrim(:'sole_admin_email')) AS sole_admin_email,
+  lower(btrim(:'central_sp_email')) AS central_sp_email,
+  jsonb_array_length(:'pilot_pharmacies_json'::JSONB) AS verified_pilot_pharmacies,
+  (
+    SELECT count(*)
+    FROM jsonb_array_elements(:'pilot_pharmacies_json'::JSONB) input
+    WHERE (input ->> 'reservations_enabled')::BOOLEAN
+  ) AS reservation_opt_in_pharmacies,
+  (SELECT retention_days FROM public.rx_retention_policy WHERE singleton = TRUE) AS rx_retention_days;

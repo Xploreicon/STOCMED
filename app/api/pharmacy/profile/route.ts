@@ -60,21 +60,42 @@ export async function PATCH(request: NextRequest) {
 
     const body = await request.json()
 
+    if (typeof body.reservations_enabled === 'boolean') {
+      const { data: reservationProfile, error: reservationError } = await (supabase.rpc as any)(
+        'set_pharmacy_reservations_enabled',
+        { p_enabled: body.reservations_enabled }
+      )
+
+      if (reservationError) {
+        return NextResponse.json({ error: reservationError.message }, { status: 409 })
+      }
+
+      const hasOtherProfileFields = [
+        'pharmacy_name', 'address', 'city', 'state', 'phone',
+        'latitude', 'longitude', 'logo_url', 'is_active',
+      ].some((field) => Object.prototype.hasOwnProperty.call(body, field))
+
+      if (!hasOtherProfileFields) {
+        return NextResponse.json(reservationProfile)
+      }
+    }
+
     // Update pharmacy details
+    const updates = {
+      ...(typeof body.pharmacy_name === 'string' ? { pharmacy_name: body.pharmacy_name } : {}),
+      ...(typeof body.address === 'string' ? { address: body.address } : {}),
+      ...(typeof body.city === 'string' ? { city: body.city } : {}),
+      ...(typeof body.state === 'string' ? { state: body.state } : {}),
+      ...(typeof body.phone === 'string' ? { phone: body.phone } : {}),
+      ...(typeof body.latitude === 'number' || body.latitude === null ? { latitude: body.latitude } : {}),
+      ...(typeof body.longitude === 'number' || body.longitude === null ? { longitude: body.longitude } : {}),
+      ...(typeof body.logo_url === 'string' || body.logo_url === null ? { logo_url: body.logo_url } : {}),
+      ...(typeof body.is_active === 'boolean' ? { is_active: body.is_active } : {}),
+    }
+
     const { data: updatedPharmacy, error } = await (supabase
       .from('pharmacies') as any)
-      .update({
-        pharmacy_name: body.pharmacy_name,
-        address: body.address,
-        city: body.city,
-        state: body.state,
-        phone: body.phone,
-        license_number: body.license_number,
-        latitude: body.latitude,
-        longitude: body.longitude,
-        logo_url: body.logo_url,
-        is_active: typeof body.is_active === 'boolean' ? body.is_active : undefined,
-      })
+      .update(updates)
       .eq('id', pharmacyRecord.id)
       .select()
       .single()

@@ -31,6 +31,10 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   const pharmacy = drug.pharmacies;
+  const isFullyVerified = pharmacy?.verification_status === 'full' && pharmacy?.is_verified === true;
+  const isProvisional = pharmacy?.verification_status === 'provisional';
+  const canReservePrescription = drug.requires_prescription
+    && pharmacy?.digital_prescription_reservations_enabled === true;
   const priceMin = Number.isFinite(drug.price_range_min) ? drug.price_range_min : null;
   const priceMax = Number.isFinite(drug.price_range_max) ? drug.price_range_max : null;
   const distanceText =
@@ -171,10 +175,14 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                 </p>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Pharmacy</p>
               </div>
-              {(pharmacy.p2p_verified || pharmacy.license_number) && (
-                <span className="ml-auto inline-flex items-center gap-0.5 text-[10px] font-bold text-success bg-success/10 border border-success/20 px-1.5 py-0.5 rounded-full flex-shrink-0">
+              {(isFullyVerified || isProvisional) && (
+                <span className={`ml-auto inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-bold flex-shrink-0 ${
+                  isFullyVerified
+                    ? 'border-success/20 bg-success/10 text-success'
+                    : 'border-warning/20 bg-warning/10 text-warning'
+                }`}>
                   <ShieldCheck className="h-2.5 w-2.5" />
-                  PCN Checked
+                  {isFullyVerified ? 'PCN evidence reviewed' : 'Provisional'}
                 </span>
               )}
             </div>
@@ -235,9 +243,14 @@ export default function DrugResultCard({ drug }: DrugResultCardProps) {
                 </p>
               )}
               {drug.requires_prescription && (
-                <span className="inline-block text-[9px] font-bold uppercase tracking-wider text-danger bg-danger/10 border border-danger/20 px-1 rounded mt-1">
-                  Rx Required
-                </span>
+                <div className="mt-1 flex flex-col items-end gap-1">
+                  <span className="inline-block text-[9px] font-bold uppercase tracking-wider text-danger bg-danger/10 border border-danger/20 px-1 rounded">
+                    Rx Required
+                  </span>
+                  <span className={`text-[9px] font-bold ${canReservePrescription ? 'text-success' : 'text-ink-muted'}`}>
+                    {canReservePrescription ? 'Digital Rx available' : 'Call-only'}
+                  </span>
+                </div>
               )}
             </div>
           </div>

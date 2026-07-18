@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, User, Banknote, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { posLocalDb, LocalInventoryItem, LocalSale, LocalSaleItem, HeldSale, LocalShift } from '@/lib/db/pos-local-db'
@@ -15,9 +15,16 @@ import SyncPill from '@/components/pos/SyncPill'
 
 type CartItem = LocalSaleItem & { id: string }
 type PaymentMethod = 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'other'
+type LoadedReservation = {
+  id: string
+  inventory_id: string
+  batch_id: string
+  quantity: number
+}
 
 export default function PosPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isOnline, setIsOnline] = useState(true)
   const [syncStatus, setSyncStatus] = useState<'synced'|'pending'|'syncing'|'error'>('synced')
   const [pendingCount, setPendingCount] = useState(0)
@@ -33,8 +40,10 @@ export default function PosPage() {
   const [showHeldList, setShowHeldList] = useState(false)
   const [currentShift, setCurrentShift] = useState<LocalShift | null>(null)
   const [popularItems, setPopularItems] = useState<LocalInventoryItem[]>([])
+  const [loadedReservation, setLoadedReservation] = useState<LoadedReservation | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const syncIntervalRef = useRef<NodeJS.Timeout|null>(null)
+  const pickupParamAttemptedRef = useRef<string | null>(null)
 
   // Keep search focused
   useEffect(() => { searchRef.current?.focus() }, [cart.length, showReceipt])
@@ -114,7 +123,7 @@ export default function PosPage() {
         id: drug.id, product_id: drug.product_id, generic_name: drug.generic_name,
         brand_name: drug.brand_name, strength: drug.strength, dosage_form: drug.dosage_form,
         pack_size: drug.pack_size, price: Number(drug.price),
-        quantity_in_stock: Number(drug.quantity_in_stock), barcode: drug.barcode,
+        quantity_in_stock: Number(drug.sellable_quantity ?? drug.quantity_in_stock), barcode: drug.barcode,
         batches: (drug.batches || []).map((b: any) => ({
           id: b.id, batch_number: b.batch_number, expiry_date: b.expiry_date,
           quantity_received: b.quantity_received, remaining_qty: b.remaining_qty ?? b.quantity_received,
@@ -138,15 +147,18 @@ export default function PosPage() {
     } catch { /* use inventory fallback */ }
   }
 
-  const triggerSync = async () => {
+  const triggerSync = async (showSuccessToast = true) => {
     setSyncStatus('syncing')
     const result = await syncPendingSales()
     setSyncStatus(result.status)
     setPendingCount(result.pending)
     if (result.synced > 0 && pharmacy) {
-      toast.success(`Synced ${result.synced} sale${result.synced > 1 ? 's' : ''}`)
+      if (showSuccessToast) {
+        toast.success(`Synced ${result.synced} sale${result.synced > 1 ? 's' : ''}`)
+      }
       await syncInventoryCache(pharmacy.id)
     }
+    return result
   }
 
   const handleRetry = async () => {
@@ -156,13 +168,17 @@ export default function PosPage() {
 
   // FEFO-powered add to cart
   const addToCart = useCallback((item: LocalInventoryItem) => {
+    if (loadedReservation?.inventory_id === item.id) {
+      toast.error('The reserved item and quantity are locked for this pickup')
+      return false
+    }
     const existingIdx = cart.findIndex(c => c.inventory_id === item.id)
     const currentQty = existingIdx >= 0 ? cart[existingIdx].quantity : 0
     const newQty = currentQty + 1
     const result = allocateFEFO(item.batches, newQty)
     if (!result.success) {
       toast.error(result.error)
-      return
+      return false
     }
     // Build cart items from FEFO allocations (one per batch)
     const newCartItems: CartItem[] = result.allocations.map(a => ({
@@ -174,11 +190,16 @@ export default function PosPage() {
     }))
     // Replace all lines for this inventory_id
     setCart(prev => [...prev.filter(c => c.inventory_id !== item.id), ...newCartItems])
-  }, [cart])
+    return true
+  }, [cart, loadedReservation])
 
   const updateCartQty = (id: string, delta: number) => {
     const item = cart.find(c => c.id === id)
     if (!item) return
+    if (loadedReservation?.inventory_id === item.inventory_id) {
+      toast.error('The reserved item and quantity cannot be changed')
+      return
+    }
     const invItem = inventory.find(i => i.id === item.inventory_id)
     if (!invItem) return
     // Get total qty for this inventory item across all batch lines
@@ -202,6 +223,10 @@ export default function PosPage() {
   const setDirectQty = (id: string, qty: number) => {
     const item = cart.find(c => c.id === id)
     if (!item) return
+    if (loadedReservation?.inventory_id === item.inventory_id) {
+      toast.error('The reserved item and quantity cannot be changed')
+      return
+    }
     const invItem = inventory.find(i => i.id === item.inventory_id)
     if (!invItem) return
     const result = allocateFEFO(invItem.batches, qty)
@@ -218,40 +243,129 @@ export default function PosPage() {
   const removeFromCart = (id: string) => {
     const item = cart.find(c => c.id === id)
     if (!item) return
+    if (loadedReservation?.inventory_id === item.inventory_id) {
+      setLoadedReservation(null)
+    }
     setCart(prev => prev.filter(c => c.inventory_id !== item.inventory_id))
+  }
+
+  const clearCart = () => {
+    setCart([])
+    setLoadedReservation(null)
   }
 
   // Held sales
   const holdCurrentSale = async () => {
-    if (cart.length === 0) return
+    if (cart.length === 0) return false
+    if (loadedReservation) {
+      toast.error('Reserved pickups cannot be held. Complete or clear this pickup first.')
+      return false
+    }
     const held: HeldSale = {
       id: crypto.randomUUID(), label: `Hold #${heldSales.length + 1}`,
       cart: [...cart], discount, held_at: new Date().toISOString(),
     }
     if (posLocalDb) await posLocalDb.held_sales.add(held)
     setHeldSales(prev => [...prev, held])
-    setCart([]); setDiscount(0)
+    setCart([]); setDiscount(0); setLoadedReservation(null)
     toast.success('Sale held')
+    return true
   }
 
   const resumeHeldSale = async (held: HeldSale) => {
-    if (cart.length > 0) await holdCurrentSale()
+    if (cart.length > 0) {
+      const heldCurrentCart = await holdCurrentSale()
+      if (!heldCurrentCart) return
+    }
     setCart(held.cart); setDiscount(held.discount)
+    setLoadedReservation(null)
     if (posLocalDb) await posLocalDb.held_sales.delete(held.id)
     setHeldSales(prev => prev.filter(h => h.id !== held.id))
     setShowHeldList(false)
     toast.success('Sale resumed')
   }
 
+  const loadReservedPickup = useCallback(async (pickupCode: string) => {
+    if (!/^\d{6}$/.test(pickupCode)) {
+      toast.error('Pickup codes must contain six digits')
+      return false
+    }
+    if (cart.length > 0) {
+      toast.error('Complete, hold, or clear the current cart before loading a reserved pickup')
+      return false
+    }
+
+    try {
+      const response = await fetch(`/api/pharmacy/reservations/${pickupCode}`)
+      const payload = await response.json()
+      if (!response.ok) {
+        toast.error(payload.error || 'Reservation not found')
+        return false
+      }
+
+      const reservation = payload.reservation
+      const item = inventory.find((entry) => entry.id === reservation.inventory_id)
+      const batch = item?.batches.find((entry) => entry.id === reservation.batch_id)
+      if (!item || !batch) {
+        toast.error('Reservation item is not in this POS cache. Refresh and try again.')
+        return false
+      }
+
+      const quantity = Number(reservation.quantity)
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        toast.error('Reservation quantity is invalid')
+        return false
+      }
+
+      setCart([{
+        id: `${item.id}_${batch.id}`, inventory_id: item.id, batch_id: batch.id, quantity,
+        unit_price: Number(reservation.pharmacy_inventory.price), line_total: quantity * Number(reservation.pharmacy_inventory.price),
+        generic_name: reservation.pharmacy_inventory.products.generic_name, brand_name: reservation.pharmacy_inventory.products.brand_name,
+        strength: reservation.pharmacy_inventory.products.strength, batch_number: batch.batch_number, expiry_date: batch.expiry_date,
+      }])
+      setLoadedReservation({
+        id: reservation.id,
+        inventory_id: item.id,
+        batch_id: batch.id,
+        quantity,
+      })
+      setSearchQuery('')
+      toast.success('Reserved pickup loaded into cart')
+      return true
+    } catch (error) {
+      console.error('Reservation lookup failed:', error)
+      toast.error('Could not load the reserved pickup. Check your connection and try again.')
+      return false
+    }
+  }, [cart.length, inventory])
+
+  useEffect(() => {
+    const pickupCode = searchParams.get('pickup')?.trim() ?? ''
+    if (!/^\d{6}$/.test(pickupCode) || inventory.length === 0) return
+    if (pickupParamAttemptedRef.current === pickupCode) return
+    pickupParamAttemptedRef.current = pickupCode
+    void loadReservedPickup(pickupCode)
+  }, [inventory.length, loadReservedPickup, searchParams])
+
   // Barcode/search submit
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!searchQuery.trim()) return
+    if (/^\d{6}$/.test(searchQuery.trim())) {
+      await loadReservedPickup(searchQuery.trim())
+      return
+    }
     const match = inventory.find(i =>
       i.barcode === searchQuery.trim() ||
       i.generic_name.toLowerCase() === searchQuery.trim().toLowerCase()
     )
-    if (match) { addToCart(match); setSearchQuery(''); toast.success(`Added ${match.brand_name || match.generic_name}`) }
+    if (match) {
+      const added = addToCart(match)
+      if (added) {
+        setSearchQuery('')
+        toast.success(`Added ${match.brand_name || match.generic_name}`)
+      }
+    }
     else toast.error(`No match for "${searchQuery}"`)
   }
 
@@ -263,28 +377,77 @@ export default function PosPage() {
       router.push('/pharmacy/shifts')
       return
     }
+    const db = posLocalDb
+    if (!db) {
+      toast.error('POS storage is unavailable. Reload the page before completing this sale.')
+      return
+    }
+    if (loadedReservation) {
+      const reservedLine = cart.find((item) =>
+        item.inventory_id === loadedReservation.inventory_id &&
+        item.batch_id === loadedReservation.batch_id
+      )
+      if (!reservedLine || reservedLine.quantity !== loadedReservation.quantity) {
+        toast.error('The reserved item no longer matches the pickup. Clear it and load the pickup code again.')
+        return
+      }
+    }
     const subtotal = cart.reduce((s, i) => s + i.line_total, 0)
     const total = Math.max(0, subtotal - discount)
+    const reservationForSale = loadedReservation
     const sale: LocalSale = {
       id: crypto.randomUUID(), pharmacy_id: pharmacy.id, cashier_id: cashier.id, shift_id: currentShift.id,
       subtotal, discount, total, payment_method: method,
       amount_tendered: amountTendered, change_due: amountTendered ? Math.max(0, amountTendered - total) : null,
       status: 'completed', created_at: new Date().toISOString(), items: cart,
+      reservation_id: reservationForSale?.id,
       sync_status: 'pending', retry_count: 0,
     }
-    if (posLocalDb) {
-      await posLocalDb.local_sales.add(sale)
-      for (const ci of cart) {
-        const inv = await posLocalDb.local_inventory_cache.get(ci.inventory_id)
-        if (inv) await posLocalDb.local_inventory_cache.update(ci.inventory_id, { quantity_in_stock: Math.max(0, inv.quantity_in_stock - ci.quantity) })
-      }
-      const cached = await posLocalDb.local_inventory_cache.toArray()
+    try {
+      await db.transaction('rw', db.local_sales, db.local_inventory_cache, async () => {
+        await db.local_sales.add(sale)
+        for (const ci of cart) {
+          const isReservedLine = reservationForSale &&
+            ci.inventory_id === reservationForSale.inventory_id &&
+            ci.batch_id === reservationForSale.batch_id &&
+            ci.quantity === reservationForSale.quantity
+          // Sellable stock already excludes this hold. Collection deducts ledger stock
+          // and releases the hold, so its net sellable quantity does not change.
+          if (isReservedLine) continue
+          const inv = await db.local_inventory_cache.get(ci.inventory_id)
+          if (inv) await db.local_inventory_cache.update(ci.inventory_id, { quantity_in_stock: Math.max(0, inv.quantity_in_stock - ci.quantity) })
+        }
+      })
+      const cached = await db.local_inventory_cache.toArray()
       setInventory(cached)
+    } catch (error) {
+      console.error('Could not save POS sale locally:', error)
+      toast.error('The sale could not be saved. Nothing was marked as completed.')
+      return
     }
-    setLastSale(sale); setCart([]); setDiscount(0); setShowReceipt(true)
-    toast.success(isOnline ? 'Sale completed!' : 'Sale saved offline')
-    if (isOnline) triggerSync()
-    else { setSyncStatus('pending'); updatePendingCount() }
+
+    setCart([])
+    setDiscount(0)
+    setLoadedReservation(null)
+
+    if (isOnline) {
+      await triggerSync(false)
+      const storedSale = await db.local_sales.get(sale.id)
+      if (storedSale?.sync_status !== 'synced') {
+        toast.error(storedSale?.sync_error || 'Sale saved locally, but server confirmation failed. Retry sync before handing over stock.')
+        return
+      }
+      setLastSale(sale)
+      setShowReceipt(true)
+      toast.success(reservationForSale ? 'Reserved pickup collected!' : 'Sale completed!')
+      return
+    }
+
+    setLastSale(sale)
+    setShowReceipt(true)
+    setSyncStatus('pending')
+    await updatePendingCount()
+    toast.warning(reservationForSale ? 'Pickup saved offline. It will be confirmed when sync succeeds.' : 'Sale saved offline')
   }
 
   // Filter
@@ -400,7 +563,7 @@ export default function PosPage() {
           <div className="flex-1 overflow-hidden flex flex-col">
             <CartPanel cart={cart} discount={discount}
               onUpdateQty={updateCartQty} onDirectQty={setDirectQty}
-              onRemove={removeFromCart} onClearCart={() => setCart([])}
+              onRemove={removeFromCart} onClearCart={clearCart}
               onSetDiscount={setDiscount} onHoldSale={holdCurrentSale}
               heldCount={heldSales.length}
               onResumeHeld={() => setShowHeldList(true)} />

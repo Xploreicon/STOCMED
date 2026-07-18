@@ -7,7 +7,19 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
-import { BadgeCheck, Loader2 } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, Clock3, FileCheck2, Loader2, ShieldCheck } from 'lucide-react';
+
+type VerificationStatus = 'provisional' | 'full' | 'revoked';
+
+function formatDeadline(value: string | null | undefined) {
+  if (!value) return 'Deadline unavailable';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Deadline unavailable';
+  return new Intl.DateTimeFormat('en-NG', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
 
 export default function PharmacySettings() {
   const router = useRouter();
@@ -16,6 +28,9 @@ export default function PharmacySettings() {
   const [activeTab, setActiveTab] = useState<'profile' | 'account'>('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [premisesCertificate, setPremisesCertificate] = useState<File | null>(null);
+  const [superintendentLicence, setSuperintendentLicence] = useState<File | null>(null);
+  const [agreedToStandards, setAgreedToStandards] = useState(false);
 
   // Profile Form states
   const [pharmacyName, setPharmacyName] = useState('');
@@ -90,6 +105,63 @@ export default function PharmacySettings() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
       queryClient.invalidateQueries({ queryKey: ['pharmacy-profile'] });
+    },
+  });
+
+  const updateReservationsMutation = useMutation({
+    mutationFn: async (reservationsEnabled: boolean) => {
+      const response = await fetch('/api/pharmacy/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reservations_enabled: reservationsEnabled }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to update reservation settings');
+      }
+      return data;
+    },
+    onSuccess: (updatedPharmacy, reservationsEnabled) => {
+      queryClient.setQueryData(['pharmacy-profile'], (current: any) => ({
+        ...current,
+        ...updatedPharmacy,
+        reservations_enabled: updatedPharmacy?.reservations_enabled ?? reservationsEnabled,
+      }));
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-profile'] });
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-reservations-summary'] });
+    },
+  });
+
+  const submitVerificationMutation = useMutation({
+    mutationFn: async () => {
+      if (!premisesCertificate || !superintendentLicence || !agreedToStandards) {
+        throw new Error('Attach both required documents and agree to the current standards.');
+      }
+
+      const formData = new FormData();
+      formData.append('premises_certificate', premisesCertificate);
+      formData.append('superintendent_annual_licence', superintendentLicence);
+      formData.append('agree_to_standards', 'true');
+
+      const response = await fetch('/api/pharmacy/verification', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Could not submit verification requirements.');
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['pharmacy-profile'], (current: any) => ({
+        ...current,
+        ...(data?.pharmacy ?? {}),
+      }));
+      queryClient.invalidateQueries({ queryKey: ['pharmacy-profile'] });
+      setPremisesCertificate(null);
+      setSuperintendentLicence(null);
+      setAgreedToStandards(false);
     },
   });
 
@@ -172,6 +244,18 @@ export default function PharmacySettings() {
     );
   }
 
+  const verificationStatus = (pharmacy?.verification_status ?? (
+    pharmacy?.is_verified ? 'full' : 'revoked'
+  )) as VerificationStatus;
+  const isFullyVerified = verificationStatus === 'full' && pharmacy?.is_verified === true;
+  const provisionalDeadline = pharmacy?.provisional_expires_at
+    ? new Date(pharmacy.provisional_expires_at)
+    : null;
+  const isProvisionalActive = verificationStatus === 'provisional'
+    && provisionalDeadline !== null
+    && provisionalDeadline.getTime() > Date.now();
+  const requirementsSubmitted = Boolean(pharmacy?.verification_submitted_at);
+
   return (
     <div className="max-w-[680px] mx-auto py-4">
       <h1 className="text-[24px] font-medium text-ink mb-[28px]">Settings</h1>
@@ -203,6 +287,181 @@ export default function PharmacySettings() {
       {/* Profile Tab Content */}
       {activeTab === 'profile' && (
         <form onSubmit={handleSaveProfile} className="flex flex-col gap-6">
+          <section
+            className={`rounded-card border p-4 sm:p-5 ${
+              isFullyVerified
+                ? 'border-success/25 bg-success/5'
+                : isProvisionalActive
+                  ? 'border-warning/30 bg-warning/5'
+                  : 'border-danger/25 bg-danger/5'
+            }`}
+            aria-labelledby="verification-status-heading"
+          >
+            <div className="flex items-start gap-3">
+              {isFullyVerified ? (
+                <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-success" aria-hidden="true" />
+              ) : isProvisionalActive ? (
+                <Clock3 className="mt-0.5 h-6 w-6 shrink-0 text-warning" aria-hidden="true" />
+              ) : (
+                <AlertTriangle className="mt-0.5 h-6 w-6 shrink-0 text-danger" aria-hidden="true" />
+              )}
+              <div className="min-w-0 flex-1">
+                <h2 id="verification-status-heading" className="text-[15px] font-semibold text-ink">
+                  {isFullyVerified
+                    ? 'Full pharmacy verification'
+                    : isProvisionalActive
+                      ? 'Provisional visibility'
+                      : 'Pharmacy visibility revoked'}
+                </h2>
+                <p className="mt-1.5 text-[13px] leading-[1.6] text-ink-muted">
+                  {isFullyVerified
+                    ? 'Your evidence has been reviewed by StocMed. When reservations are on, OTC holds and digital prescription reservations are eligible.'
+                    : isProvisionalActive
+                      ? `Your pharmacy remains visible until ${formatDeadline(pharmacy?.provisional_expires_at)}. OTC holds can follow your reservation setting; prescription medicines remain call-only until full review.`
+                      : requirementsSubmitted
+                        ? 'Your provisional window has ended, so the pharmacy is hidden from patient search while the evidence submitted within the deadline awaits an authorized StocMed decision.'
+                        : 'Your provisional window ended before the required evidence was submitted. The pharmacy is hidden from patient search; contact StocMed verification support to resolve the registration.'}
+                </p>
+                {requirementsSubmitted && !isFullyVerified && (
+                  <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white px-3 py-1.5 text-xs font-semibold text-primary">
+                    <FileCheck2 className="h-4 w-4" aria-hidden="true" />
+                    Evidence submitted {formatDeadline(pharmacy.verification_submitted_at)} · awaiting review
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {!isFullyVerified && !requirementsSubmitted && isProvisionalActive && (
+            <section className="rounded-card border border-border bg-white p-4 sm:p-5" aria-labelledby="verification-requirements-heading">
+              <div className="mb-4">
+                <h2 id="verification-requirements-heading" className="text-[15px] font-semibold text-ink">
+                  Complete full-verification requirements
+                </h2>
+                <p className="mt-1.5 text-[13px] leading-[1.6] text-ink-muted">
+                  Both documents are stored privately and reviewed by authorized StocMed personnel. Submission does not self-verify the pharmacy.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
+                  PCN premises certificate
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    onChange={(event) => setPremisesCertificate(event.currentTarget.files?.[0] ?? null)}
+                    className="min-w-0 rounded-button border border-border bg-surface px-3 py-2 text-xs font-normal text-ink file:mr-2 file:rounded-button file:border-0 file:bg-white file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-primary"
+                  />
+                </label>
+                <label className="flex min-w-0 flex-col gap-2 text-[13px] font-semibold text-ink">
+                  Superintendent pharmacist annual licence
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,application/pdf"
+                    onChange={(event) => setSuperintendentLicence(event.currentTarget.files?.[0] ?? null)}
+                    className="min-w-0 rounded-button border border-border bg-surface px-3 py-2 text-xs font-normal text-ink file:mr-2 file:rounded-button file:border-0 file:bg-white file:px-2.5 file:py-1.5 file:text-xs file:font-semibold file:text-primary"
+                  />
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-ink-light">JPEG, PNG, or PDF · 5 MB maximum for each file</p>
+
+              <label className="mt-4 flex items-start gap-2.5 text-[13px] leading-[1.55] text-ink-muted">
+                <input
+                  type="checkbox"
+                  checked={agreedToStandards}
+                  onChange={(event) => setAgreedToStandards(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  style={{ accentColor: 'var(--primary)' }}
+                />
+                <span>
+                  I am authorized to act for this pharmacy, confirm these documents are current, and agree to the current StocMed PCN pilot standards.
+                </span>
+              </label>
+
+              <div className="mt-4 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+                <Button
+                  type="button"
+                  disabled={
+                    submitVerificationMutation.isPending
+                    || !premisesCertificate
+                    || !superintendentLicence
+                    || !agreedToStandards
+                  }
+                  onClick={() => submitVerificationMutation.mutate()}
+                  className="h-11 gap-2"
+                >
+                  {submitVerificationMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  )}
+                  Submit for full review
+                </Button>
+                {submitVerificationMutation.error && (
+                  <p className="text-[13px] font-medium text-danger" role="alert">
+                    {submitVerificationMutation.error instanceof Error
+                      ? submitVerificationMutation.error.message
+                      : 'Could not submit verification requirements.'}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
+
+          <section className="rounded-card border border-border bg-surface p-4 sm:p-5" aria-labelledby="reservations-toggle-label">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h2 id="reservations-toggle-label" className="text-[15px] font-semibold text-ink">
+                  Accept reservations (hold stock for patients)
+                </h2>
+                <p id="reservations-toggle-description" className="mt-2 text-[14px] leading-[1.55] text-ink-muted">
+                  When ON, patients can reserve eligible stock for pickup. Provisional pharmacies remain call-only for prescription medicines; OTC holds are unaffected. You must monitor the queue so holds don&apos;t expire.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={pharmacy?.reservations_enabled === true}
+                aria-labelledby="reservations-toggle-label"
+                aria-describedby="reservations-toggle-description"
+                disabled={updateReservationsMutation.isPending}
+                onClick={() => {
+                  updateReservationsMutation.reset();
+                  updateReservationsMutation.mutate(!(pharmacy?.reservations_enabled === true));
+                }}
+                className={`relative mt-0.5 inline-flex h-7 w-12 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
+                  pharmacy?.reservations_enabled === true ? 'bg-primary' : 'bg-ink-muted/30'
+                }`}
+              >
+                <span className="sr-only">
+                  {pharmacy?.reservations_enabled === true ? 'Turn reservations off' : 'Turn reservations on'}
+                </span>
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${
+                    pharmacy?.reservations_enabled === true ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-[13px] font-medium">
+              <span className={pharmacy?.reservations_enabled === true ? 'text-success' : 'text-ink-muted'}>
+                Reservations are {pharmacy?.reservations_enabled === true ? 'ON' : 'OFF'}
+              </span>
+              {updateReservationsMutation.isPending && (
+                <span className="inline-flex items-center gap-1.5 text-ink-muted" role="status">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  Saving…
+                </span>
+              )}
+            </div>
+            {updateReservationsMutation.error && (
+              <p className="mt-2 text-[13px] font-medium text-danger" role="alert">
+                {updateReservationsMutation.error instanceof Error
+                  ? updateReservationsMutation.error.message
+                  : 'Failed to update reservation settings'}
+              </p>
+            )}
+          </section>
+
           <div>
             <label className="block text-[14px] font-medium text-ink mb-2">Pharmacy name</label>
             <input
@@ -215,7 +474,7 @@ export default function PharmacySettings() {
           </div>
 
           <div>
-            <label className="block text-[14px] font-medium text-ink mb-2">PCN license number</label>
+            <label className="block text-[14px] font-medium text-ink mb-2">PCN premises number</label>
             <div className="flex items-center gap-2.5">
               <input
                 type="text"
@@ -223,9 +482,21 @@ export default function PharmacySettings() {
                 disabled
                 className="flex-1 h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-[var(--surface)] cursor-not-allowed focus:outline-none"
               />
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[var(--success)] bg-[var(--success-tint)] px-3.5 py-2 rounded-button whitespace-nowrap">
-                <BadgeCheck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                Verified
+              <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-button px-3.5 py-2 text-[13px] font-medium ${
+                isFullyVerified
+                  ? 'bg-[var(--success-tint)] text-[var(--success)]'
+                  : isProvisionalActive
+                    ? 'bg-warning/10 text-warning'
+                    : 'bg-danger/10 text-danger'
+              }`}>
+                {isFullyVerified ? (
+                  <BadgeCheck className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                ) : isProvisionalActive ? (
+                  <Clock3 className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                )}
+                {isFullyVerified ? 'Full' : isProvisionalActive ? 'Provisional' : 'Revoked'}
               </span>
             </div>
           </div>

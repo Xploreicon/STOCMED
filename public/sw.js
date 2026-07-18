@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stocmed-v4';
+const CACHE_NAME = 'stocmed-v5';
 const ASSETS_TO_CACHE = [
   '/',
   '/dashboard',
@@ -15,9 +15,8 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
-    })
+    }).then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -30,9 +29,8 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {

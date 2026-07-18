@@ -29,14 +29,12 @@ export default function PatientSettingsPage() {
   const [notifStock, setNotifStock] = useState(false);
   const [notifPrice, setNotifPrice] = useState(false);
   const [notifRefills, setNotifRefills] = useState(false);
-  const [notifReservation, setNotifReservation] = useState(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setNotifStock(localStorage.getItem('stocmed:notif_stock') === 'true');
       setNotifPrice(localStorage.getItem('stocmed:notif_price') === 'true');
       setNotifRefills(localStorage.getItem('stocmed:notif_refills') === 'true');
-      setNotifReservation(localStorage.getItem('stocmed:notif_reservation') === 'true');
     }
   }, []);
 
@@ -255,24 +253,6 @@ export default function PatientSettingsPage() {
               <Label htmlFor="notify-refills">Chronic med refill reminders</Label>
               <p className="text-sm text-ink-muted">
                 Get automated monthly reminders to refill your chronic prescriptions.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="notify-reservation"
-              checked={notifReservation}
-              onCheckedChange={(checked) => {
-                setNotifReservation(!!checked);
-                localStorage.setItem('stocmed:notif_reservation', String(!!checked));
-                toast.success('Reservation status alerts preference updated');
-              }}
-              className="mt-1"
-            />
-            <div>
-              <Label htmlFor="notify-reservation">Call-ahead reservation pings</Label>
-              <p className="text-sm text-ink-muted">
-                Receive instant status updates and verification tokens for reserved medications.
               </p>
             </div>
           </div>

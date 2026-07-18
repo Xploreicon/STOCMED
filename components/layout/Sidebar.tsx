@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   BarChart3,
-  Bell,
   Boxes,
   Calculator,
   ClipboardList,
+  ClipboardCheck,
   Clock3,
   Home,
   LayoutDashboard,
@@ -38,6 +38,7 @@ const patientNavItems: NavItem[] = [
   { label: 'Home', icon: Home, href: '/dashboard' },
   { label: 'Chat search', icon: MessageCircle, href: '/chat' },
   { label: 'History', icon: Clock3, href: '/history' },
+  { label: 'My holds', icon: ClipboardCheck, href: '/reservations' },
   { label: 'Profile', icon: User, href: '/profile' },
   { label: 'Settings', icon: Settings, href: '/settings' },
 ];
@@ -48,9 +49,9 @@ const pharmacyNavItems: NavItem[] = [
   { label: 'Import', icon: Upload, href: '/pharmacy/inventory/import' },
   { label: 'Procurement', icon: ClipboardList, href: '/pharmacy/procurement' },
   { label: 'POS', icon: Calculator, href: '/pharmacy/pos' },
+  { label: 'Reservations', icon: ClipboardCheck, href: '/pharmacy/reservations' },
   { label: 'Shifts', icon: Wallet, href: '/pharmacy/shifts' },
   { label: 'Reports', icon: BarChart3, href: '/pharmacy/reports' },
-  { label: 'Reservations', icon: Bell, href: '/pharmacy/reservations' },
   { label: 'Settings', icon: Settings, href: '/pharmacy/settings' },
 ];
 

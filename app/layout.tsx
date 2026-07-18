@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter, Source_Serif_4 } from 'next/font/google'
 import './globals.css'
 import ReactQueryProvider from '@/components/providers/ReactQueryProvider'
+import { FeatureFlagsProvider } from '@/components/providers/FeatureFlagsProvider'
 import { Toaster } from 'sonner'
 
 const inter = Inter({
@@ -85,13 +86,19 @@ export default function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  const staffedSafetyFlowsEnabled =
+    process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
+    && process.env.SYMPTOM_INTAKE_ENABLED === 'true'
+
   return (
     <html lang="en" className={`${inter.variable} ${sourceSerif.variable}`}>
       <body className="font-body antialiased">
-        <ReactQueryProvider>
-          {children}
-          <Toaster position="top-right" richColors />
-        </ReactQueryProvider>
+        <FeatureFlagsProvider staffedSafetyFlowsEnabled={staffedSafetyFlowsEnabled}>
+          <ReactQueryProvider>
+            {children}
+            <Toaster position="top-right" richColors />
+          </ReactQueryProvider>
+        </FeatureFlagsProvider>
       </body>
     </html>
   )

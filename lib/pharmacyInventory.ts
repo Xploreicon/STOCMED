@@ -54,6 +54,8 @@ export interface EnrichedInventoryRow {
   display_image_url: string | null
   price: number
   quantity_in_stock: number
+  reserved_quantity: number
+  sellable_quantity: number
   low_stock_threshold: number
   notes: string | null
   is_listed: boolean
@@ -109,6 +111,25 @@ export async function getEnrichedInventory(
   const batchIds = (inventoryRows ?? []).flatMap((r: any) => (r.batches ?? []).map((b: any) => b.id))
 
   let movementsByBatch = new Map<string, number>()
+  let reservationAvailability = new Map<string, { reserved_quantity: number; sellable_quantity: number }>()
+  let reservedByBatch = new Map<string, number>()
+  if (inventoryIds.length > 0) {
+    const { data, error } = await (supabase.rpc as any)('reservation_sellable_quantities', {
+      p_inventory_ids: inventoryIds,
+    })
+    // A deployment can run against a database before the additive migration is applied.
+    if (error && error.code !== 'PGRST202' && error.code !== '42883') throw error
+    for (const entry of data ?? []) {
+      reservationAvailability.set(entry.inventory_id, entry)
+    }
+    const { data: batchData, error: batchError } = await (supabase.rpc as any)('reservation_batch_quantities', {
+      p_inventory_ids: inventoryIds,
+    })
+    if (batchError && batchError.code !== 'PGRST202' && batchError.code !== '42883') throw batchError
+    for (const entry of batchData ?? []) {
+      reservedByBatch.set(entry.batch_id, Number(entry.reserved_quantity))
+    }
+  }
   if (inventoryIds.length > 0) {
     const { data: movements, error: movError } = await supabase
       .from('stock_movements')
@@ -129,7 +150,8 @@ export async function getEnrichedInventory(
     const product = inv.products
     const batches: EnrichedBatch[] = (inv.batches ?? [])
       .map((b: any) => {
-        const remaining = movementsByBatch.get(b.id) ?? b.quantity_received
+        const ledgerRemaining = movementsByBatch.get(b.id) ?? b.quantity_received
+        const remaining = Math.max(0, ledgerRemaining - (reservedByBatch.get(b.id) ?? 0))
         const days = daysFromNow(b.expiry_date)
         return {
           id: b.id,
@@ -147,8 +169,10 @@ export async function getEnrichedInventory(
     const earliestActiveBatch = batches.find((b) => b.remaining_qty > 0) ?? batches[0] ?? null
 
     const qty = inv.quantity_in_stock
+    const reservation = reservationAvailability.get(inv.id)
+    const sellableQty = reservation?.sellable_quantity ?? qty
     const threshold = inv.low_stock_threshold
-    const stockStatus: 'in' | 'low' | 'out' = qty <= 0 ? 'out' : qty <= threshold ? 'low' : 'in'
+    const stockStatus: 'in' | 'low' | 'out' = sellableQty <= 0 ? 'out' : sellableQty <= threshold ? 'low' : 'in'
 
     const catalogueImage = product?.image_url ?? null
     const pharmacyImage = inv.image_url ?? null
@@ -174,6 +198,8 @@ export async function getEnrichedInventory(
       display_image_url: displayImage,
       price: inv.price,
       quantity_in_stock: qty,
+      reserved_quantity: reservation?.reserved_quantity ?? 0,
+      sellable_quantity: sellableQty,
       low_stock_threshold: threshold,
       notes: inv.notes ?? null,
       is_listed: inv.is_listed,

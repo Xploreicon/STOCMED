@@ -18,12 +18,14 @@ import { createClient } from '@/lib/supabase/client';
 import EmergencyScreen from '@/components/chat/EmergencyScreen';
 import RestrictedScreen from '@/components/chat/RestrictedScreen';
 import CrisisScreen from '@/components/chat/CrisisScreen';
-import PrescriptionUpload from '@/components/chat/PrescriptionUpload';
 import SymptomIntakeForm from '@/components/chat/SymptomIntakeForm';
 import IntakeStatusTracker from '@/components/chat/IntakeStatusTracker';
 import ConsentPrompt from '@/components/chat/ConsentPrompt';
 import ChatMarkdown from '@/components/chat/ChatMarkdown';
 import { consumeAssistantResponse } from '@/lib/chat-stream';
+import { useFeatureFlags } from '@/components/providers/FeatureFlagsProvider';
+import { resolvePatientSafetyAction } from '@/lib/triage/patient-safety-action';
+import { SYMPTOM_INTAKE_UNAVAILABLE_MESSAGE } from '@/lib/triage/safe-responses';
 
 export const dynamic = 'force-dynamic';
 
@@ -246,7 +248,6 @@ const formatResultBullet = (item: any) => {
 
 const quickActionsIntro = [
   { label: 'Find a cheaper generic', token: 'Find a cheaper generic' },
-  { label: 'Reserve medication', token: 'Reserve medication' },
   { label: 'Dosage instructions', token: 'Dosage instructions' },
 ] as const;
 
@@ -260,10 +261,10 @@ export default function Chat() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
   const { user, isLoading: isUserLoading } = useUser();
+  const { staffedSafetyFlowsEnabled } = useFeatureFlags();
 
   const [threadId] = useState(() => generateMessageId());
-  const [activeSafetyScreen, setActiveSafetyScreen] = useState<'emergency' | 'restricted' | 'crisis' | 'symptom_intake' | 'prescription_upload' | 'intake_tracker' | null>(null);
-  const [selectedProductName, setSelectedProductName] = useState('');
+  const [activeSafetyScreen, setActiveSafetyScreen] = useState<'emergency' | 'restricted' | 'crisis' | 'symptom_intake' | 'intake_tracker' | null>(null);
   const [currentIntakeId, setCurrentIntakeId] = useState<string | null>(null);
   const [manualLocationInput, setManualLocationInput] = useState('');
 
@@ -339,6 +340,7 @@ export default function Chat() {
   );
 
   const welcomeShownRef = useRef(false);
+  const handledInitialQueryRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -467,6 +469,18 @@ export default function Chat() {
 
         const response = await fetch(`/api/drugs/search?${params.toString()}`);
         const data = await response.json();
+        const safetyRedirectAction = data?.safety_redirect?.action;
+        if (
+          safetyRedirectAction === 'crisis'
+          || safetyRedirectAction === 'emergency'
+          || safetyRedirectAction === 'restricted'
+        ) {
+          setActiveSafetyScreen(safetyRedirectAction);
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(data?.error || `Search failed with status ${response.status}`);
+        }
         const results = data.results || [];
 
         await fetch('/api/searches', {
@@ -662,47 +676,47 @@ export default function Chat() {
         });
         if (!triageRes.ok) throw new Error('Triage failed');
         const triageData = await triageRes.json();
+        const safetyAction = resolvePatientSafetyAction(
+          triageData,
+          staffedSafetyFlowsEnabled
+        );
 
-        // 1. Handle CRISIS
-        if (triageData.risk_tier === 'CRISIS') {
+        if (safetyAction === 'crisis_redirect') {
           setActiveSafetyScreen('crisis');
           setIsLoading(false);
           return;
         }
 
-        // Emergency UI is positive-signal-only: both classifier fields must agree.
-        if (triageData.risk_tier === 'REDIRECT' && triageData.intent === 'RED_FLAG') {
+        if (safetyAction === 'emergency_redirect') {
           setActiveSafetyScreen('emergency');
           setIsLoading(false);
           return;
         }
 
-        // 3. Handle BLOCK_SOURCING (Restricted drugs)
-        if (triageData.risk_tier === 'BLOCK_SOURCING') {
+        if (safetyAction === 'restricted_redirect') {
           setActiveSafetyScreen('restricted');
           setIsLoading(false);
           return;
         }
 
-        // Non-emergency redirects never display emergency numbers.
-        if (
-          triageData.risk_tier === 'CARE_REDIRECT' &&
-          triageData.intent === 'SYMPTOM_GENERIC'
-        ) {
+        if (safetyAction === 'symptom_intake') {
           setActiveSafetyScreen('symptom_intake');
           setIsLoading(false);
           return;
         }
 
-        // 5. Handle GATE (Prescription Only Medicine)
-        if (triageData.risk_tier === 'GATE') {
-          setSelectedProductName(triageData.matched_product_id || trimmed);
-          setActiveSafetyScreen('prescription_upload');
+        if (safetyAction === 'symptom_intake_unavailable') {
+          pushAssistantMessage(SYMPTOM_INTAKE_UNAVAILABLE_MESSAGE);
           setIsLoading(false);
           return;
         }
+
       } catch (err) {
-        console.error('Triage check error, falling back:', err);
+        console.error('Triage check error:', err);
+        pushAssistantMessage(
+          'I could not complete the required safety check, so I have not shown medication results. Please try again. If this is urgent, call 112 or go to the nearest emergency department.'
+        );
+        return;
       } finally {
         setIsLoading(false);
       }
@@ -728,15 +742,18 @@ export default function Chat() {
       pushUserMessage,
       pushAssistantMessage,
       greetingReply,
+      staffedSafetyFlowsEnabled,
     ]
   );
 
   useEffect(() => {
-    if (initialQuery && messages.length === 1) {
-      pushUserMessage(initialQuery);
-      handleMedicationInput(initialQuery);
-    }
-  }, [initialQuery, messages.length, handleMedicationInput, pushUserMessage]);
+    const query = initialQuery.trim();
+    if (!query || isUserLoading || isNameLoading || messages.length === 0) return;
+    if (handledInitialQueryRef.current === query) return;
+
+    handledInitialQueryRef.current = query;
+    void handleInput(query);
+  }, [initialQuery, isUserLoading, isNameLoading, messages.length, handleInput]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -889,7 +906,7 @@ export default function Chat() {
               onBack={() => setActiveSafetyScreen(null)}
             />
           )}
-          {activeSafetyScreen === 'symptom_intake' && (
+          {staffedSafetyFlowsEnabled && activeSafetyScreen === 'symptom_intake' && (
             <SymptomIntakeForm
               threadId={threadId}
               onSuccess={(intakeId) => {
@@ -899,17 +916,7 @@ export default function Chat() {
               onCancel={() => setActiveSafetyScreen(null)}
             />
           )}
-          {activeSafetyScreen === 'prescription_upload' && (
-            <PrescriptionUpload
-              productName={selectedProductName}
-              threadId={threadId}
-              onSuccess={() => {
-                setActiveSafetyScreen(null);
-                pushAssistantMessage(`Your prescription for ${selectedProductName} has been submitted to our duty pharmacist for verification. You will be notified once it is approved.`);
-              }}
-            />
-          )}
-          {activeSafetyScreen === 'intake_tracker' && currentIntakeId && (
+          {staffedSafetyFlowsEnabled && activeSafetyScreen === 'intake_tracker' && currentIntakeId && (
             <div className="space-y-4">
               <IntakeStatusTracker intakeId={currentIntakeId} />
               <Button

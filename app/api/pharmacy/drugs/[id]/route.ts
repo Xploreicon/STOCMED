@@ -78,13 +78,14 @@ export async function PATCH(
 
     // Update catalogue-level product image if provided
     if (body.image_url !== undefined) {
-      const { error: productUpdateError } = await (supabase as any)
-        .from('products')
-        .update({
-          image_url: body.image_url,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', (existingDrug as any).product_id)
+      const { error: productUpdateError } = await (supabase.rpc as any)(
+        'set_stocked_product_image',
+        {
+          p_pharmacy_id: pharmacy.id,
+          p_product_id: (existingDrug as any).product_id,
+          p_image_url: body.image_url ?? null,
+        }
+      )
 
       if (productUpdateError) {
         console.error('Error updating product image:', productUpdateError)
@@ -169,128 +170,30 @@ export async function DELETE(
       )
     }
 
-    // Check if this item has trade history (non-opening stock movements)
-    const { count: tradeMovements, error: countError } = await (supabase as any)
-      .from('stock_movements')
-      .select('id', { count: 'exact', head: true })
-      .eq('inventory_id', id)
-      .neq('type', 'opening')
+    // Inventory is append-only for audit and reservation integrity. Removing an
+    // item from the UI always delists it; ledger, batch, sale, and hold records stay.
+    const { error: delistError } = await (supabase as any)
+      .from('pharmacy_inventory')
+      .update({
+        deleted_at: new Date().toISOString(),
+        is_listed: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
 
-    if (countError) {
-      console.error('Error checking stock movements:', countError)
+    if (delistError) {
+      console.error('Error delisting drug:', delistError)
       return NextResponse.json(
-        { error: 'Failed to check item trade history' },
+        { error: 'Failed to remove drug from inventory. Please try again.' },
         { status: 500 }
       )
     }
 
-    const hasTradeHistory = (tradeMovements ?? 0) > 0
-
-    if (hasTradeHistory) {
-      // SOFT DELETE: Delist the item — preserve ledger, batches, and sales history
-      const { error: delistError } = await (supabase as any)
-        .from('pharmacy_inventory')
-        .update({
-          deleted_at: new Date().toISOString(),
-          is_listed: false,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-
-      if (delistError) {
-        console.error('Error delisting drug:', delistError)
-        return NextResponse.json(
-          { error: 'Failed to remove drug from inventory. Please try again.' },
-          { status: 500 }
-        )
-      }
-
-      return NextResponse.json({
-        message: 'Drug removed from active inventory. Sales history and ledger records have been preserved.',
-        action: 'delisted',
-        id,
-      })
-    } else {
-      // HARD DELETE: No trade history — safe to permanently remove
-      // Must delete in order: stock_movements → batches → inventory (respecting FK constraints)
-      try {
-        // Delete opening stock movements first
-        const { error: movError } = await (supabase as any)
-          .from('stock_movements')
-          .delete()
-          .eq('inventory_id', id)
-
-        if (movError) {
-          console.error('Error deleting stock movements:', movError)
-          throw new Error('Failed to clean up stock records')
-        }
-
-        // Delete batches
-        const { error: batchError } = await (supabase as any)
-          .from('batches')
-          .delete()
-          .eq('inventory_id', id)
-
-        if (batchError) {
-          console.error('Error deleting batches:', batchError)
-          throw new Error('Failed to clean up batch records')
-        }
-
-        // Delete the inventory row itself
-        const { error: deleteError } = await (supabase as any)
-          .from('pharmacy_inventory')
-          .delete()
-          .eq('id', id)
-
-        if (deleteError) {
-          console.error('Error deleting inventory row:', deleteError)
-          throw new Error('Failed to delete inventory item')
-        }
-
-        return NextResponse.json({
-          message: 'Drug permanently deleted. No trade history existed for this item.',
-          action: 'hard_deleted',
-          id,
-        })
-      } catch (error: any) {
-        // Catch any FK constraint violations and return a friendly message
-        const errorMessage = error?.message || 'Unknown error'
-        const isConstraintError = errorMessage.includes('violates foreign key') ||
-          errorMessage.includes('RESTRICT') ||
-          errorMessage.includes('referenced from')
-
-        if (isConstraintError) {
-          // Fallback to soft delete if hard delete fails unexpectedly
-          console.warn('Hard delete failed due to FK constraint, falling back to soft delete:', errorMessage)
-          const { error: fallbackError } = await (supabase as any)
-            .from('pharmacy_inventory')
-            .update({
-              deleted_at: new Date().toISOString(),
-              is_listed: false,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', id)
-
-          if (fallbackError) {
-            return NextResponse.json(
-              { error: 'Failed to remove drug from inventory. Please try again.' },
-              { status: 500 }
-            )
-          }
-
-          return NextResponse.json({
-            message: 'Drug removed from active inventory. Sales history and ledger records have been preserved.',
-            action: 'delisted',
-            id,
-          })
-        }
-
-        return NextResponse.json(
-          { error: 'Failed to delete drug. Please try again or contact support.' },
-          { status: 500 }
-        )
-      }
-    }
+    return NextResponse.json({
+      message: 'Drug removed from active inventory. Sales history and ledger records have been preserved.',
+      action: 'delisted',
+      id,
+    })
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(

@@ -112,7 +112,6 @@ export async function POST(request: NextRequest) {
         product_id: body.product_id,
         price: body.price,
         low_stock_threshold: body.low_stock_threshold !== undefined && body.low_stock_threshold !== null ? Number(body.low_stock_threshold) : 10,
-        quantity_in_stock: 0, // will be updated via trigger
         is_listed: true,
         image_url: body.pharmacy_image_url || null,
       })
@@ -142,31 +141,35 @@ export async function POST(request: NextRequest) {
 
     if (batchError || !batch) {
       console.error('Error inserting batch:', batchError)
-      // Rollback (delete inventory item)
-      await (supabase as any).from('pharmacy_inventory').delete().eq('id', inventory.id)
+      await (supabase as any)
+        .from('pharmacy_inventory')
+        .update({ is_listed: false, deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', inventory.id)
       return NextResponse.json(
         { error: 'Failed to create batch record' },
         { status: 500 }
       )
     }
 
-    // 3. Create opening stock movement
-    const { error: movementError } = await (supabase as any)
-      .from('stock_movements')
-      .insert({
-        inventory_id: inventory.id,
-        batch_id: batch.id,
-        type: 'opening',
-        quantity: Number(body.quantity_in_stock),
-        reason: 'Opening stock',
-        created_by: user.id
-      })
+    // 3. Create opening stock through the server-side guarded ledger path.
+    const { error: movementError } = await (supabase.rpc as any)(
+      'create_guarded_stock_adjustment',
+      {
+        p_pharmacy_id: pharmacy.id,
+        p_inventory_id: inventory.id,
+        p_batch_id: batch.id,
+        p_type: 'opening',
+        p_quantity: Number(body.quantity_in_stock),
+        p_reason: 'Opening stock',
+      }
+    )
 
     if (movementError) {
       console.error('Error inserting stock movement:', movementError)
-      // Rollback
-      await (supabase as any).from('batches').delete().eq('id', batch.id)
-      await (supabase as any).from('pharmacy_inventory').delete().eq('id', inventory.id)
+      await (supabase as any)
+        .from('pharmacy_inventory')
+        .update({ is_listed: false, deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', inventory.id)
       return NextResponse.json(
         { error: 'Failed to log stock movement' },
         { status: 500 }

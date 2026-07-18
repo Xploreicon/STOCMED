@@ -97,12 +97,6 @@ export default function PharmacyDashboard() {
 
   const activity = [
     {
-      title: 'New reservation — Coartem 80/480mg',
-      sub: 'Ada N. will pick up before 6pm today',
-      time: '12 min ago',
-      color: 'var(--primary)',
-    },
-    {
       title: 'Low stock alert — Amoxicillin 500mg',
       sub: '8 packs left, searched 22 times this week nearby',
       time: '1 hour ago',

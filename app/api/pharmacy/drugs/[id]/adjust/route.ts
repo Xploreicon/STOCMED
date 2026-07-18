@@ -89,23 +89,21 @@ export async function POST(
       }
     }
 
-    const { data: movement, error: movementError } = await (supabase
-      .from('stock_movements') as any)
-      .insert({
-        inventory_id: id,
-        batch_id: batch_id || null,
-        type: movementDef.db,
-        quantity: signedQuantity,
-        reason: reason.trim(),
-        reference: 'ADJUST_STOCK',
-        created_by: user.id,
-      })
-      .select()
-      .single()
+    const { data: movement, error: movementError } = await (supabase.rpc as any)(
+      'create_guarded_stock_adjustment',
+      {
+        p_pharmacy_id: pharmacy.id,
+        p_inventory_id: id,
+        p_batch_id: batch_id || null,
+        p_type: movementDef.db,
+        p_quantity: signedQuantity,
+        p_reason: reason.trim(),
+      }
+    )
 
     if (movementError) {
       console.error('Error recording stock movement:', movementError)
-      return NextResponse.json({ error: 'Failed to record stock movement' }, { status: 500 })
+      return NextResponse.json({ error: movementError.message || 'Failed to record stock movement' }, { status: 409 })
     }
 
     const { data: updatedInventory, error: refetchError } = await supabase

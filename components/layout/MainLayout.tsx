@@ -5,6 +5,7 @@ import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { MobileNav } from './MobileNav';
 import IosInstallPrompt from '@/components/patient/IosInstallPrompt';
+import { PharmacyReservationsBar } from '@/components/pharmacy/PharmacyReservationsBar';
 import { useQuery } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -37,6 +38,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
         pharmacyName={role === 'pharmacy' ? pharmacyProfile?.pharmacy_name : undefined}
       />
 
+      {role === 'pharmacy' && <PharmacyReservationsBar />}
+
       <div className="flex-1 flex w-full min-h-0">
         {/* Desktop sidebar — hidden on mobile (bottom nav takes over) */}
         <div className="hidden lg:flex flex-shrink-0">
@@ -61,4 +64,3 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
     </div>
   );
 };
-

@@ -72,6 +72,7 @@ export const Navbar: React.FC<NavbarProps> = ({ pharmacyName, userRole }) => {
                   </>
                 ) : (
                   <>
+                    <DropdownMenuItem onClick={() => router.push('/reservations')}>My reservations</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/profile')}>Profile</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => router.push('/settings')}>Settings</DropdownMenuItem>
                   </>
