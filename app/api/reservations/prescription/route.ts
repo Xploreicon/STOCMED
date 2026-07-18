@@ -66,13 +66,8 @@ export async function POST(request: NextRequest) {
   const rateLimit = checkRateLimit(request, 'prescription-reservation', 5, 60_000)
   if (!rateLimit.success && rateLimit.response) return rateLimit.response
 
-  const digitalRxEnabled = process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
+  const globallyEnabled = process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
     && process.env.RX_RESERVATIONS_ENABLED === 'true'
-  if (!digitalRxEnabled) {
-    return NextResponse.json({
-      error: 'Digital prescription reservations are not currently staffed',
-    }, { status: 503 })
-  }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -140,7 +135,7 @@ export async function POST(request: NextRequest) {
     (admin as any)
       .from('pharmacies')
       .select(`
-        id,user_id,reservations_enabled,is_active,is_verified,
+        id,user_id,reservations_enabled,is_active,is_verified,is_test_account,
         verification_status,
         verification_authorized_at,verification_authorization_basis
       `)
@@ -168,6 +163,12 @@ export async function POST(request: NextRequest) {
     .eq('is_licensed_pharmacist', true)
     .limit(1)
   const centralReviewer = Array.isArray(centralReviewerRows) ? centralReviewerRows[0] : null
+  const digitalRxEnabled = globallyEnabled || pharmacy?.is_test_account === true
+  if (!digitalRxEnabled) {
+    return NextResponse.json({
+      error: 'Digital prescription reservations are not currently staffed',
+    }, { status: 503 })
+  }
   const pharmacyHasTrustedVerification = Boolean(
     pharmacy?.verification_status === 'full'
     && pharmacy?.is_verified

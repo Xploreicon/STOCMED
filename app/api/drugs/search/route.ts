@@ -6,9 +6,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-function areDigitalRxReservationsEnabled() {
-  return process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
+function areDigitalRxReservationsEnabled(pharmacy: Record<string, any> | null) {
+  const globallyEnabled = process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
     && process.env.RX_RESERVATIONS_ENABLED === 'true'
+  return globallyEnabled || pharmacy?.is_test_account === true
 }
 
 type ReservationAvailability = {
@@ -121,6 +122,7 @@ export async function GET(request: NextRequest) {
           latitude,
           longitude,
           is_active,
+          is_test_account,
           logo_url
         ),
         batches (
@@ -207,6 +209,7 @@ export async function GET(request: NextRequest) {
                 latitude,
                 longitude,
                 is_active,
+                is_test_account,
                 logo_url
               ),
               batches (
@@ -302,7 +305,8 @@ export async function GET(request: NextRequest) {
       const fullyVerifiedPharmacy = isPharmacyFullyVerified(pharmacy)
       const reservationsEnabled = (reservationsEnabledByInventoryId.get(row.id) ?? false)
         && (!requiresPrescription || fullyVerifiedPharmacy)
-      const digitalRxEnabled = areDigitalRxReservationsEnabled()
+      const digitalRxEnabled = areDigitalRxReservationsEnabled(pharmacy)
+      const { is_test_account: _internalTestAccount, ...publicPharmacy } = pharmacy ?? {}
 
       return {
         id: row.id,
@@ -326,7 +330,7 @@ export async function GET(request: NextRequest) {
         updated_at: row.updated_at,
         image_url: row.image_url || product?.image_url || null,
         pharmacies: pharmacy ? {
-          ...pharmacy,
+          ...publicPharmacy,
           reservations_enabled: reservationsEnabled,
           digital_prescription_reservations_enabled: requiresPrescription
             && digitalRxEnabled
