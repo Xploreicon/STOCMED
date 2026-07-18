@@ -21,8 +21,10 @@ export default async function AdminLayout({
     redirect('/login?redirectTo=/admin');
   }
 
-  // Admin access is nonclinical. A separately provenance-verified StocMed SP
-  // may use this console for pilot clinical pre-review and hold authorization.
+  // The oversight landing page is available to administrators and
+  // provenance-verified licensed pharmacists. Individual admin APIs retain
+  // their narrower capability checks (admin-only configuration/verification,
+  // and admin or StocMed-SP prescription oversight).
   const { data: userData, error } = await (supabase.from('users') as any)
     .select('is_admin, is_stocmed_sp, is_licensed_pharmacist')
     .eq('user_id', user.id)
@@ -31,14 +33,17 @@ export default async function AdminLayout({
   const isStocmedSp = Boolean(
     userData?.is_stocmed_sp && userData?.is_licensed_pharmacist
   );
+  const isLicensedPharmacist = Boolean(userData?.is_licensed_pharmacist);
 
-  if (error || (!userData?.is_admin && !isStocmedSp)) {
+  if (error || (!userData?.is_admin && !isLicensedPharmacist)) {
     redirect('/dashboard');
   }
 
   const navItems = [
     { href: '/admin', label: 'Symptom intakes', icon: ClipboardList },
-    { href: '/admin/rx-queue', label: isStocmedSp ? 'Rx pre-review' : 'Rx oversight', icon: FileText },
+    ...(userData.is_admin || isStocmedSp
+      ? [{ href: '/admin/rx-queue', label: isStocmedSp ? 'Rx pre-review' : 'Rx oversight', icon: FileText }]
+      : []),
     ...(userData.is_admin
       ? [
           { href: '/admin/audit', label: 'Triage logs', icon: Database },
@@ -81,7 +86,7 @@ export default async function AdminLayout({
                 {user.email}
               </div>
               <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-400">
-                {userData.is_admin ? 'StocMed admin' : 'StocMed SP'}
+                {userData.is_admin ? 'StocMed admin' : isStocmedSp ? 'StocMed SP' : 'Licensed pharmacist'}
               </div>
             </div>
             <Link
@@ -107,7 +112,11 @@ export default async function AdminLayout({
                 </span>
               </div>
               <p className="mt-0.5 truncate text-xs text-ink-light lg:hidden">
-                {userData.is_admin ? 'StocMed admin' : 'StocMed superintendent pharmacist'}
+                {userData.is_admin
+                  ? 'StocMed admin'
+                  : isStocmedSp
+                    ? 'StocMed superintendent pharmacist'
+                    : 'Licensed pharmacist'}
               </p>
             </div>
             <Link

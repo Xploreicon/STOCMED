@@ -89,6 +89,8 @@ export interface Database {
           is_verified: boolean
           is_active: boolean
           reservations_enabled: boolean
+          is_test_account: boolean
+          test_account_label: string | null
           reservation_hold_minutes: number
           verification_status: 'provisional' | 'full' | 'revoked'
           pcn_confirmation_status: 'confirmed' | 'to_be_confirmed'
@@ -119,6 +121,8 @@ export interface Database {
           is_verified?: boolean
           is_active?: boolean
           reservations_enabled?: boolean
+          is_test_account?: boolean
+          test_account_label?: string | null
           reservation_hold_minutes?: number
           verification_status?: 'provisional' | 'full' | 'revoked'
           pcn_confirmation_status?: 'confirmed' | 'to_be_confirmed'
@@ -158,6 +162,8 @@ export interface Database {
           is_verified?: boolean
           is_active?: boolean
           reservations_enabled?: boolean
+          is_test_account?: boolean
+          test_account_label?: string | null
           reservation_hold_minutes?: number
           verification_status?: 'provisional' | 'full' | 'revoked'
           pcn_confirmation_status?: 'confirmed' | 'to_be_confirmed'
