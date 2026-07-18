@@ -10,8 +10,10 @@ function shiftRpc(
   name: string,
   args: Record<string, unknown>
 ) {
-  const call = client.rpc as unknown as (fn: string, parameters: Record<string, unknown>) => RpcResult
-  return call(name, args)
+  // Supabase's rpc method reads internal client state through `this`. Calling a
+  // detached reference works in some mocked/local paths but crashes in the
+  // production SDK with "Cannot read properties of undefined (reading 'rest')".
+  return client.rpc(name as never, args as never) as unknown as RpcResult
 }
 
 export async function POST(request: NextRequest) {
