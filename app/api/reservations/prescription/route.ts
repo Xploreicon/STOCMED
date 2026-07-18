@@ -107,12 +107,6 @@ export async function POST(request: NextRequest) {
     .select('retention_days,is_confirmed')
     .eq('singleton', true)
     .maybeSingle()
-  if (!retention?.is_confirmed || !retention?.retention_days) {
-    return NextResponse.json({
-      error: 'Digital prescription reservations are paused until the approved retention period is configured. Please call the pharmacy.',
-    }, { status: 503 })
-  }
-
   const { data: inventory, error: inventoryError } = await (admin as any)
     .from('pharmacy_inventory')
     .select(`
@@ -167,6 +161,11 @@ export async function POST(request: NextRequest) {
   if (!digitalRxEnabled) {
     return NextResponse.json({
       error: 'Digital prescription reservations are not currently staffed',
+    }, { status: 503 })
+  }
+  if (!pharmacy?.is_test_account && (!retention?.is_confirmed || !retention?.retention_days)) {
+    return NextResponse.json({
+      error: 'Digital prescription reservations are paused until the approved retention period is configured. Please call the pharmacy.',
     }, { status: 503 })
   }
   const pharmacyHasTrustedVerification = Boolean(
