@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { isSafeAutoMatch, parseImportBoolean, parseImportDate } from '@/lib/inventory-import'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
         ? String(rawRow[mapping.item_type]).trim().toLowerCase()
         : ''
       const suppliedTracksExpiry = mapping.tracks_expiry && rawRow[mapping.tracks_expiry] !== undefined
-        ? /^(true|yes|y|1)$/i.test(String(rawRow[mapping.tracks_expiry]).trim())
+        ? parseImportBoolean(rawRow[mapping.tracks_expiry])
         : false
       
       // Parse numbers
@@ -66,39 +67,37 @@ export async function POST(request: NextRequest) {
       const expiryDateRaw = mapping.expiry_date && rawRow[mapping.expiry_date] ? rawRow[mapping.expiry_date] : ''
 
       // Parse date robustly
-      let expiryDate = ''
-      if (expiryDateRaw) {
-        if (typeof expiryDateRaw === 'number') {
-          // SheetJS date serial number
-          const date = new Date((expiryDateRaw - 25569) * 86400 * 1000)
-          expiryDate = date.toISOString().split('T')[0]
-        } else {
-          // Try parsing standard formats
-          const str = String(expiryDateRaw).trim()
-          const parsed = Date.parse(str)
-          if (!isNaN(parsed)) {
-            expiryDate = new Date(parsed).toISOString().split('T')[0]
-          } else {
-            expiryDate = str // Keep raw if not parseable for Step 3 validation
-          }
-        }
-      }
+      const expiryDate = parseImportDate(expiryDateRaw)
 
       // Query RPC match
       let matches: any[] = []
       if (genericName || brandName) {
-        const searchQuery = brandName ? `${brandName} ${genericName}` : genericName
-        const { data, error } = await supabase.rpc('match_catalogue_product', {
-          search_query: searchQuery
+        const { data, error } = await supabase.rpc('match_catalogue_product_for_import', {
+          p_generic_name: genericName,
+          p_brand_name: brandName || null,
+          p_strength: strength || null,
+          p_dosage_form: dosageForm || null,
         })
         if (!error && data) {
           matches = data
+        } else if (error?.code === 'PGRST202' || error?.code === '42883') {
+          const searchQuery = brandName ? `${brandName} ${genericName}` : genericName
+          const fallback = await supabase.rpc('match_catalogue_product', { search_query: searchQuery })
+          matches = (fallback.data || []).map((match: any) => ({
+            ...match,
+            confidence: Math.min(Number(match.confidence), 0.49),
+            strength_match: null,
+            form_match: null,
+            mismatch_reasons: ['strength/form compatibility not verified'],
+          }))
+        } else if (error) {
+          throw new Error(`Catalogue matching failed: ${error.message}`)
         }
       }
-      const bestConfidence = Number(matches[0]?.confidence ?? 0)
-      const itemType = suppliedType === 'medicine' || suppliedType === 'store'
-        ? suppliedType
-        : bestConfidence >= 0.7 ? 'medicine' : 'store'
+      const normalizedType = ['medicine', 'drug', 'rx'].includes(suppliedType)
+        ? 'medicine'
+        : ['store', 'grocery', 'frontstore'].includes(suppliedType) ? 'store' : ''
+      const itemType = normalizedType || (isSafeAutoMatch(matches[0]) ? 'medicine' : 'store')
       const tracksExpiry = itemType === 'medicine' ? true : suppliedTracksExpiry
 
       matchedRows.push({

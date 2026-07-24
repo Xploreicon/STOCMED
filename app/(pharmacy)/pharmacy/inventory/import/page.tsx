@@ -18,6 +18,12 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
+import {
+  autoMapImportHeaders,
+  isSafeAutoMatch,
+  matchConflictLabels,
+  parseImportDate,
+} from '@/lib/inventory-import';
 
 type Step = 'upload' | 'mapping' | 'matching' | 'progress' | 'summary';
 type ImportSource = 'stocmed' | 'quickbooks';
@@ -50,14 +56,17 @@ function previewValidation(row: any, source: ImportSource) {
     errors.push('Stock quantity must be a non-negative whole number')
   }
   if (isMedicine && !row.selected_product_id) errors.push('Select a catalogue match for medicine')
+  if (isMedicine && !row.mapped.strength) errors.push('Strength is missing or not mapped')
+  if (isMedicine && !row.mapped.dosage_form) errors.push('Dosage form is missing or not mapped')
   if (!isMedicine && row.selected_product_id) errors.push('Store rows cannot use a catalogue product')
   if (tracksExpiry) {
-    if (!row.mapped.batch_number) errors.push('Batch number is required')
+    if (!row.mapped.batch_number) errors.push('Batch number is missing or not mapped')
     if (!row.mapped.expiry_date) {
-      errors.push('Expiry date is required')
+      errors.push('Expiry date is missing, invalid, or not mapped')
     } else {
-      const expiry = new Date(row.mapped.expiry_date)
-      if (Number.isNaN(expiry.getTime()) || expiry.getTime() <= Date.now()) errors.push('Expiry date must be in the future')
+      const parsedExpiry = parseImportDate(row.mapped.expiry_date)
+      const expiry = parsedExpiry ? new Date(`${parsedExpiry}T23:59:59.999Z`) : null
+      if (!expiry || expiry.getTime() <= Date.now()) errors.push(`Expiry date must be in the future (received "${row.mapped.expiry_date}")`)
       else if (expiry.getTime() < Date.now() + 90 * 24 * 60 * 60 * 1000) warnings.push('Expiry date is within 90 days')
     }
   }
@@ -120,19 +129,7 @@ export default function BulkImportWizard() {
       setRawRows(rows);
       
       // Run smart auto-mapping
-      const initialMapping: Record<string, string> = {};
-      CANONICAL_FIELDS.forEach((field) => {
-        const match = headers.find((header: string) => {
-          const cleanHeader = header.toLowerCase().replace(/[^a-z0-9]/g, '');
-          return field.synonyms.some((syn) => {
-            const cleanSyn = syn.toLowerCase().replace(/[^a-z0-9]/g, '');
-            return cleanHeader.includes(cleanSyn) || cleanSyn.includes(cleanHeader);
-          });
-        });
-        if (match) {
-          initialMapping[field.key] = match;
-        }
-      });
+      const initialMapping = autoMapImportHeaders(headers, CANONICAL_FIELDS);
       setMapping(initialMapping);
       setStep('mapping');
     } catch (err) {
@@ -180,7 +177,7 @@ export default function BulkImportWizard() {
       const initializedResults = results.map((row: any) => {
         const bestMatch = row.matches && row.matches[0];
         const itemType = source === 'quickbooks' ? 'medicine' : row.mapped.item_type;
-        const selectedId = itemType === 'medicine' && bestMatch ? bestMatch.id : '';
+        const selectedId = itemType === 'medicine' && isSafeAutoMatch(bestMatch) ? bestMatch.id : '';
         const initialized = {
           ...row,
           mapped: { ...row.mapped, item_type: itemType, tracks_expiry: itemType === 'medicine' || row.mapped.tracks_expiry },
@@ -204,7 +201,7 @@ export default function BulkImportWizard() {
     setMatchedRows((rows) => rows.map((row, index) => {
       if (!indexes.includes(index)) return row
       const selectedProductId = itemType === 'medicine'
-        ? row.selected_product_id || row.matches?.[0]?.id || ''
+        ? row.selected_product_id || (isSafeAutoMatch(row.matches?.[0]) ? row.matches[0].id : '')
         : ''
       const updated = {
         ...row,
@@ -446,7 +443,7 @@ export default function BulkImportWizard() {
                     variant="outline"
                     size="sm"
                     onClick={() => updateDepartment(
-                      matchedRows.map((row, index) => Number(row.matches?.[0]?.confidence ?? 0) < 0.7 ? index : -1).filter((index) => index >= 0),
+                      matchedRows.map((row, index) => !isSafeAutoMatch(row.matches?.[0]) ? index : -1).filter((index) => index >= 0),
                       'store'
                     )}
                   >
@@ -533,6 +530,11 @@ export default function BulkImportWizard() {
                             <td className="p-3">
                               <div className="font-semibold">₦{row.mapped.price?.toLocaleString()}</div>
                               <div className="text-xs text-ink-muted">{row.mapped.quantity} in stock</div>
+                              {(row.mapped.item_type === 'medicine' || row.mapped.tracks_expiry) && (
+                                <div className="mt-1 text-[11px] text-ink-light">
+                                  Batch: {row.mapped.batch_number || 'not mapped'} · Expiry: {row.mapped.expiry_date || 'not mapped'}
+                                </div>
+                              )}
                             </td>
                             <td className="p-3">
                               <select
@@ -546,6 +548,11 @@ export default function BulkImportWizard() {
                               <div className="mt-1 text-[11px] text-ink-light">
                                 Best match: {Math.round(Number(row.matches?.[0]?.confidence ?? 0) * 100)}%
                               </div>
+                              {matchConflictLabels(row.matches?.[0]).map((reason) => (
+                                <span key={reason} className="mr-1 mt-1 inline-flex rounded bg-danger/10 px-1.5 py-0.5 text-[10px] font-semibold text-danger">
+                                  {reason}
+                                </span>
+                              ))}
                               {row.mapped.item_type === 'store' && (
                                 <label className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-muted">
                                   <input
@@ -580,17 +587,22 @@ export default function BulkImportWizard() {
                               >
                                 <option value="">{row.mapped.item_type === 'store' ? 'Not added to catalogue' : 'Select a catalogue match'}</option>
                                 {row.matches && row.matches.map((m: any) => (
-                                  <option key={m.id} value={m.id}>
-                                    {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}) - {Math.round(m.confidence * 100)}% match
+                                  <option key={m.id} value={m.id} disabled={m.strength_match === false || m.form_match === false}>
+                                    {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}, {m.dosage_form}) - {Math.round(m.confidence * 100)}%{matchConflictLabels(m).length ? ` - ${matchConflictLabels(m).join(', ')}` : ''}
                                   </option>
                                 ))}
                               </select>
                             </td>
                             <td className="p-3 text-center">
                               {hasErrors ? (
-                                <div className="inline-flex items-center gap-1 text-danger bg-danger/10 px-2 py-0.5 rounded text-xs font-semibold" title={row.validation.errors.join(', ')}>
-                                  <AlertCircle className="w-3.5 h-3.5" />
-                                  Error
+                                <div className="min-w-[220px] rounded-md border border-danger/20 bg-danger/5 p-2 text-left text-xs text-danger">
+                                  <div className="mb-1 flex items-center gap-1 font-semibold">
+                                    <AlertCircle className="h-3.5 w-3.5" />
+                                    Fix this row
+                                  </div>
+                                  <ul className="space-y-0.5">
+                                    {row.validation.errors.map((message: string) => <li key={message}>• {message}</li>)}
+                                  </ul>
                                 </div>
                               ) : hasWarnings ? (
                                 <div className="inline-flex items-center gap-1 text-warning bg-warning/10 px-2 py-0.5 rounded text-xs font-semibold" title={row.validation.warnings.join(', ')}>

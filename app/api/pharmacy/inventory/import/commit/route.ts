@@ -3,6 +3,7 @@ import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { createClient } from '@/lib/supabase/server'
 import { validateRows, type ImportRow } from '@/lib/validation/import-rows'
 import { quickBooksImportSchema } from '@/lib/validation/reporting'
+import { normalizeImportDosageForm, normalizeImportStrength } from '@/lib/inventory-import'
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,19 +47,38 @@ export async function POST(request: NextRequest) {
     if (selectedProductIds.length) {
       const { data: products, error: productError } = await supabase
         .from('products')
-        .select('id')
+        .select('id,strength,dosage_form')
         .in('id', selectedProductIds)
 
       if (productError) {
         return NextResponse.json({ error: 'Could not validate catalogue selections' }, { status: 500 })
       }
 
-      const existingIds = new Set((products || []).map((product: { id: string }) => product.id))
+      type CatalogueSelection = {
+        id: string
+        strength: string | null
+        dosage_form: string | null
+      }
+      const productsById = new Map<string, CatalogueSelection>(
+        (products || []).map((product: CatalogueSelection) => [product.id, product])
+      )
       body.matchedRows.forEach((row: ImportRow, index: number) => {
-        if (row.selected_product_id && !existingIds.has(row.selected_product_id)) {
+        const selected = row.selected_product_id ? productsById.get(row.selected_product_id) : null
+        const errors: string[] = []
+        if (row.selected_product_id && !selected) {
+          errors.push('Selected catalogue product does not exist')
+        } else if (selected && row.mapped?.item_type !== 'store') {
+          if (normalizeImportStrength(selected.strength) !== normalizeImportStrength(row.mapped?.strength)) {
+            errors.push(`Selected catalogue strength differs (${selected.strength || 'missing'} vs ${String(row.mapped?.strength || 'missing')})`)
+          }
+          if (normalizeImportDosageForm(selected.dosage_form) !== normalizeImportDosageForm(row.mapped?.dosage_form)) {
+            errors.push(`Selected catalogue form differs (${selected.dosage_form || 'missing'} vs ${String(row.mapped?.dosage_form || 'missing')})`)
+          }
+        }
+        if (errors.length) {
           const existingError = rowErrors.find((entry) => entry.row === index + 1)
-          if (existingError) existingError.errors.push('Selected catalogue product does not exist')
-          else rowErrors.push({ row: index + 1, errors: ['Selected catalogue product does not exist'] })
+          if (existingError) existingError.errors.push(...errors)
+          else rowErrors.push({ row: index + 1, errors })
         }
       })
     }

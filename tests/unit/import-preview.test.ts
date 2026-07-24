@@ -37,8 +37,8 @@ describe('bulk import preview validation', () => {
     }])
     expect(errors[0].errors).toEqual(expect.arrayContaining([
       'Catalogue selection is required for medicine',
-      'Batch number is required',
-      'Expiry date is invalid',
+      'Batch number is missing or not mapped',
+      'Expiry date is missing, invalid, or not mapped',
     ]))
   })
 
@@ -54,8 +54,8 @@ describe('bulk import preview validation', () => {
       selected_product_id: '',
     }])
     expect(errors[0].errors).toEqual(expect.arrayContaining([
-      'Batch number is required',
-      'Expiry date is invalid',
+      'Batch number is missing or not mapped',
+      'Expiry date is missing, invalid, or not mapped',
     ]))
   })
 })

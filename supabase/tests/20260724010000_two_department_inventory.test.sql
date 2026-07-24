@@ -211,6 +211,7 @@ SELECT lives_ok(
         'selected_product_id', '81000000-0000-4000-8000-000000000001',
         'mapped', jsonb_build_object(
           'item_type', 'medicine', 'generic_name', 'Two Department Paracetamol',
+          'strength', '500mg', 'dosage_form', 'tablet',
           'price', 100, 'unit_cost', 60, 'quantity', 2,
           'batch_number', 'MED-IMPORT', 'expiry_date', CURRENT_DATE + 500
         )
