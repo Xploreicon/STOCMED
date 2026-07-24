@@ -87,9 +87,11 @@ export default function CartPanel({
                     {item.brand_name || item.generic_name}
                   </h4>
                   <p className="text-[10px] text-white/40">{item.strength}</p>
-                  <p className="text-[10px] text-[var(--pos-success)]/70 mt-0.5">
-                    Exp: {formatExpShort(item.expiry_date)}
-                  </p>
+                  {item.expiry_date && (
+                    <p className="text-[10px] text-[var(--pos-success)]/70 mt-0.5">
+                      Exp: {formatExpShort(item.expiry_date)}
+                    </p>
+                  )}
                 </div>
                 <Button onClick={() => onRemove(item.id)} className="text-white/20 hover:text-[var(--pos-danger)] p-0.5 transition">
                   <X className="h-3 w-3" />

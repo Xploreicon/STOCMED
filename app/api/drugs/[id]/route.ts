@@ -46,6 +46,7 @@ export async function GET(
         )
       `)
       .eq('id', id)
+      .eq('item_type', 'medicine')
       .returns<InventoryDetails[]>()
       .single()
 

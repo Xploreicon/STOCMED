@@ -5,12 +5,12 @@
  * across batches if the requested quantity exceeds a single batch.
  */
 
-import type { LocalBatch } from '@/lib/db/pos-local-db'
+import type { LocalBatch, LocalInventoryItem } from '@/lib/db/pos-local-db'
 
 export interface FEFOAllocation {
-  batch_id: string
-  batch_number: string
-  expiry_date: string
+  batch_id: string | null
+  batch_number: string | null
+  expiry_date: string | null
   quantity: number
 }
 
@@ -21,6 +21,29 @@ export type FEFOResult = {
   success: false
   error: string
   errorType: 'EXPIRED' | 'NO_STOCK' | 'INSUFFICIENT'
+}
+
+export function allocateInventory(
+  item: Pick<LocalInventoryItem, 'tracks_expiry' | 'quantity_in_stock' | 'batches'>,
+  requestedQty: number
+): FEFOResult {
+  if (item.tracks_expiry) return allocateFEFO(item.batches, requestedQty)
+  if (item.quantity_in_stock < requestedQty) {
+    return {
+      success: false,
+      error: `Only ${item.quantity_in_stock} units available (requested ${requestedQty}).`,
+      errorType: 'INSUFFICIENT',
+    }
+  }
+  return {
+    success: true,
+    allocations: [{
+      batch_id: null,
+      batch_number: null,
+      expiry_date: null,
+      quantity: requestedQty,
+    }],
+  }
 }
 
 /**
@@ -84,7 +107,8 @@ export function allocateFEFO(
 }
 
 /** Short month+year format for expiry display */
-export function formatExpShort(dateStr: string): string {
+export function formatExpShort(dateStr: string | null): string {
+  if (!dateStr) return 'Not tracked'
   try {
     const d = new Date(dateStr)
     return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })

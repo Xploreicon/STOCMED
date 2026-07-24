@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
       const { data: fallbackItems, error: fbError } = await supabase
         .from('pharmacy_inventory')
-        .select('id, product_id, price, quantity_in_stock, products(generic_name, brand_name, strength, dosage_form, barcode)')
+        .select('id, product_id, item_type, tracks_expiry, item_name, brand, barcode, unit_description, price, quantity_in_stock, products(generic_name, brand_name, strength, dosage_form, barcode)')
         .eq('pharmacy_id', pharmacy.id)
         .gt('quantity_in_stock', 0)
         .order('quantity_in_stock', { ascending: false })
@@ -49,11 +49,13 @@ export async function GET(request: NextRequest) {
       const mapped = (fallbackItems || []).map((item: any) => ({
         inventory_id: item.id,
         product_id: item.product_id,
-        generic_name: item.products?.generic_name || '',
-        brand_name: item.products?.brand_name || null,
-        strength: item.products?.strength || '',
+        item_type: item.item_type,
+        tracks_expiry: item.tracks_expiry,
+        generic_name: item.products?.generic_name || item.item_name || '',
+        brand_name: item.products?.brand_name || item.brand || null,
+        strength: item.products?.strength || item.unit_description || '',
         dosage_form: item.products?.dosage_form || null,
-        barcode: item.products?.barcode || null,
+        barcode: item.products?.barcode || item.barcode || null,
         price: item.price,
         quantity_in_stock: item.quantity_in_stock,
         total_sold: 0,

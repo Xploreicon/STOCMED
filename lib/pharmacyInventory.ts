@@ -34,7 +34,13 @@ export interface EnrichedBatch {
 export interface EnrichedInventoryRow {
   id: string
   pharmacy_id: string
-  product_id: string
+  product_id: string | null
+  item_type: 'medicine' | 'store'
+  tracks_expiry: boolean
+  item_name: string | null
+  unit_description: string | null
+  store_category: string | null
+  unit_cost: number | null
   name: string
   generic_name: string
   brand_name: string | null
@@ -182,16 +188,22 @@ export async function getEnrichedInventory(
       id: inv.id,
       pharmacy_id: inv.pharmacy_id,
       product_id: inv.product_id,
-      name: product?.brand_name || product?.generic_name || 'Unknown product',
-      generic_name: product?.generic_name ?? '',
-      brand_name: product?.brand_name ?? null,
+      item_type: inv.item_type ?? 'medicine',
+      tracks_expiry: inv.tracks_expiry ?? true,
+      item_name: inv.item_name ?? null,
+      unit_description: inv.unit_description ?? null,
+      store_category: inv.store_category ?? null,
+      unit_cost: inv.unit_cost ?? null,
+      name: product?.brand_name || product?.generic_name || inv.item_name || 'Unknown item',
+      generic_name: product?.generic_name ?? inv.item_name ?? '',
+      brand_name: product?.brand_name ?? inv.brand ?? null,
       manufacturer: product?.manufacturer ?? null,
       nafdac_number: product?.nafdac_number ?? null,
-      barcode: product?.barcode ?? null,
-      category: product?.category ?? null,
+      barcode: product?.barcode ?? inv.barcode ?? null,
+      category: product?.category ?? inv.store_category ?? null,
       dosage_form: product?.dosage_form ?? null,
-      strength: product?.strength ?? '',
-      pack_size: product?.pack_size ?? null,
+      strength: product?.strength ?? inv.unit_description ?? '',
+      pack_size: product?.pack_size ?? inv.unit_description ?? null,
       requires_prescription: product?.requires_prescription ?? false,
       image_url: catalogueImage,
       pharmacy_image_url: pharmacyImage,

@@ -19,7 +19,7 @@ export const localShiftSchema = z.object({
 
 const localSaleItemSchema = z.object({
   inventory_id: uuid,
-  batch_id: uuid,
+  batch_id: uuid.nullable(),
   quantity: z.coerce.number().int().positive(),
   unit_price: money,
   line_total: money,

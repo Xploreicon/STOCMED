@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { getEnrichedInventory } from '@/lib/pharmacyInventory'
+import { inventoryItemSchema } from '@/lib/validation/inventory-item'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -74,105 +75,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Parse request body
-    const body = await request.json()
-
-    // Validate required fields
-    const requiredFields = ['product_id', 'price', 'quantity_in_stock', 'batch_number', 'expiry_date']
-    const missingFields = requiredFields.filter(field => body[field] === undefined || body[field] === null || body[field] === '')
-
-    if (missingFields.length > 0) {
+    const parsed = inventoryItemSchema.safeParse(await request.json())
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: `Missing required fields: ${missingFields.join(', ')}` },
+        { error: parsed.error.issues[0]?.message || 'Invalid inventory item' },
         { status: 400 }
       )
     }
-
-    // Check if this product is already in the pharmacy's inventory
-    const { data: existingInventory, error: checkError } = await (supabase as any)
-      .from('pharmacy_inventory')
-      .select('id')
-      .eq('pharmacy_id', pharmacy.id)
-      .eq('product_id', body.product_id)
-      .maybeSingle()
-
-    if (existingInventory) {
-      return NextResponse.json(
-        { error: 'This product is already in your inventory. Update its stock or details instead.' },
-        { status: 409 }
-      )
+    const item = {
+      ...parsed.data,
+      tracks_expiry: parsed.data.item_type === 'medicine' ? true : parsed.data.tracks_expiry,
     }
-
-    // Create transaction manually
-    // 1. Create pharmacy_inventory record
-    const { data: inventory, error: invError } = await (supabase as any)
-      .from('pharmacy_inventory')
-      .insert({
-        pharmacy_id: pharmacy.id,
-        product_id: body.product_id,
-        price: body.price,
-        low_stock_threshold: body.low_stock_threshold !== undefined && body.low_stock_threshold !== null ? Number(body.low_stock_threshold) : 10,
-        is_listed: true,
-        image_url: body.pharmacy_image_url || null,
-      })
-      .select()
-      .single()
-
-    if (invError || !inventory) {
-      console.error('Error inserting pharmacy inventory:', invError)
-      return NextResponse.json(
-        { error: 'Failed to create inventory record' },
-        { status: 500 }
-      )
-    }
-
-    // 2. Create batch record
-    const { data: batch, error: batchError } = await (supabase as any)
-      .from('batches')
-      .insert({
-        inventory_id: inventory.id,
-        batch_number: body.batch_number,
-        expiry_date: body.expiry_date,
-        quantity_received: Number(body.quantity_in_stock),
-        cost_price: null
-      })
-      .select()
-      .single()
-
-    if (batchError || !batch) {
-      console.error('Error inserting batch:', batchError)
-      await (supabase as any)
-        .from('pharmacy_inventory')
-        .update({ is_listed: false, deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-        .eq('id', inventory.id)
-      return NextResponse.json(
-        { error: 'Failed to create batch record' },
-        { status: 500 }
-      )
-    }
-
-    // 3. Create opening stock through the server-side guarded ledger path.
-    const { error: movementError } = await (supabase.rpc as any)(
-      'create_guarded_stock_adjustment',
-      {
-        p_pharmacy_id: pharmacy.id,
-        p_inventory_id: inventory.id,
-        p_batch_id: batch.id,
-        p_type: 'opening',
-        p_quantity: Number(body.quantity_in_stock),
-        p_reason: 'Opening stock',
-      }
+    const { data: inventoryId, error: createError } = await (supabase.rpc as any)(
+      'create_inventory_item',
+      { p_pharmacy_id: pharmacy.id, p_item: item }
     )
-
-    if (movementError) {
-      console.error('Error inserting stock movement:', movementError)
-      await (supabase as any)
-        .from('pharmacy_inventory')
-        .update({ is_listed: false, deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-        .eq('id', inventory.id)
+    if (createError || !inventoryId) {
+      console.error('Error creating inventory item:', createError)
       return NextResponse.json(
-        { error: 'Failed to log stock movement' },
-        { status: 500 }
+        { error: createError?.message || 'Failed to create inventory item' },
+        { status: createError?.message?.includes('already') ? 409 : 400 }
       )
     }
 
@@ -187,7 +109,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const drug = createdInventory.rows.find((row) => row.id === inventory.id)
+    const drug = createdInventory.rows.find((row) => row.id === inventoryId)
     if (!drug) {
       return NextResponse.json(
         { error: 'Created inventory item could not be retrieved' },

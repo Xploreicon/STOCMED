@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
       products!inner(generic_name,brand_name,requires_prescription,is_verified)
     `)
     .eq('id', parsed.data.inventory_id)
+    .eq('item_type', 'medicine')
     .maybeSingle()
   if (inventoryError || !inventory || !inventory.is_listed || inventory.deleted_at) {
     return NextResponse.json({ error: 'Medication is not available for prescription reservation' }, { status: 404 })

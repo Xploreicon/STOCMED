@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, User, Banknote, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { posLocalDb, LocalInventoryItem, LocalSale, LocalSaleItem, HeldSale, LocalShift } from '@/lib/db/pos-local-db'
-import { allocateFEFO, formatExpShort } from '@/lib/pos/fefo'
+import { allocateInventory } from '@/lib/pos/fefo'
 import { syncPendingSales, forceRetryAll } from '@/lib/pos/sync-engine'
 import CartPanel from '@/components/pos/CartPanel'
 import CheckoutPanel from '@/components/pos/CheckoutPanel'
@@ -121,6 +121,7 @@ export default function PosPage() {
       if (!data.drugs) return
       const items: LocalInventoryItem[] = data.drugs.map((drug: any) => ({
         id: drug.id, product_id: drug.product_id, generic_name: drug.generic_name,
+        item_type: drug.item_type, tracks_expiry: drug.tracks_expiry,
         brand_name: drug.brand_name, strength: drug.strength, dosage_form: drug.dosage_form,
         pack_size: drug.pack_size, price: Number(drug.price),
         quantity_in_stock: Number(drug.sellable_quantity ?? drug.quantity_in_stock), barcode: drug.barcode,
@@ -175,7 +176,7 @@ export default function PosPage() {
     const existingIdx = cart.findIndex(c => c.inventory_id === item.id)
     const currentQty = existingIdx >= 0 ? cart[existingIdx].quantity : 0
     const newQty = currentQty + 1
-    const result = allocateFEFO(item.batches, newQty)
+    const result = allocateInventory(item, newQty)
     if (!result.success) {
       toast.error(result.error)
       return false
@@ -209,7 +210,7 @@ export default function PosPage() {
       setCart(prev => prev.filter(c => c.inventory_id !== item.inventory_id))
       return
     }
-    const result = allocateFEFO(invItem.batches, newTotal)
+    const result = allocateInventory(invItem, newTotal)
     if (!result.success) { toast.error(result.error); return }
     const newItems: CartItem[] = result.allocations.map(a => ({
       id: `${invItem.id}_${a.batch_id}`, inventory_id: invItem.id, batch_id: a.batch_id,
@@ -229,7 +230,7 @@ export default function PosPage() {
     }
     const invItem = inventory.find(i => i.id === item.inventory_id)
     if (!invItem) return
-    const result = allocateFEFO(invItem.batches, qty)
+    const result = allocateInventory(invItem, qty)
     if (!result.success) { toast.error(result.error); return }
     const newItems: CartItem[] = result.allocations.map(a => ({
       id: `${invItem.id}_${a.batch_id}`, inventory_id: invItem.id, batch_id: a.batch_id,
@@ -493,7 +494,7 @@ export default function PosPage() {
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 h-4 w-4" />
               <input ref={searchRef} type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Scan barcode or type medication name..."
+                placeholder="Scan barcode or type an item name..."
                 className="w-full bg-[var(--pos-panel)] border border-white/10 text-white pl-10 pr-4 py-3 rounded-xl text-sm focus:outline-none focus:border-[var(--primary)] transition placeholder:text-white/25"
                 autoFocus />
             </div>

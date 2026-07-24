@@ -31,14 +31,38 @@ export async function GET(request: NextRequest) {
       .select('id,generic_name,brand_name,strength,dosage_form,pack_size,barcode')
       .order('generic_name').limit(100)
     if (query) builder = builder.or(`generic_name.ilike.%${query}%,brand_name.ilike.%${query}%,barcode.eq.${query}`)
-    const { data, error } = await builder
-    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ products: data || [] })
+    let storeBuilder = supabase.from('pharmacy_inventory')
+      .select('id,item_name,brand,barcode,unit_description,store_category,tracks_expiry')
+      .eq('pharmacy_id', pharmacy.id).eq('item_type', 'store').is('deleted_at', null).limit(100)
+    if (query) storeBuilder = storeBuilder.or(`item_name.ilike.%${query}%,brand.ilike.%${query}%,barcode.eq.${query}`)
+    const [catalogueResult, storeResult] = await Promise.all([builder, storeBuilder])
+    if (catalogueResult.error || storeResult.error) {
+      return NextResponse.json({ error: catalogueResult.error?.message || storeResult.error?.message }, { status: 500 })
+    }
+    const products = [
+      ...(catalogueResult.data || []).map((product: any) => ({
+        ...product, target_type: 'medicine', product_id: product.id,
+        inventory_id: null, tracks_expiry: true,
+      })),
+      ...(storeResult.data || []).map((item: any) => ({
+        id: item.id, target_type: 'store', product_id: null, inventory_id: item.id,
+        generic_name: item.item_name, brand_name: item.brand,
+        strength: item.unit_description || '', dosage_form: item.store_category,
+        pack_size: item.unit_description, barcode: item.barcode,
+        tracks_expiry: item.tracks_expiry,
+      })),
+    ]
+    return NextResponse.json({ products })
   }
 
   if (view === 'orders') {
     const { data, error } = await supabase.from('purchase_orders').select(`
       *, suppliers(id,name,phone,email),
-      purchase_order_items(*,products(id,generic_name,brand_name,strength,dosage_form,pack_size,barcode))
+      purchase_order_items(
+        *,
+        products(id,generic_name,brand_name,strength,dosage_form,pack_size,barcode),
+        pharmacy_inventory:inventory_id(id,item_name,brand,barcode,unit_description,store_category,tracks_expiry)
+      )
     `).eq('pharmacy_id', pharmacy.id).order('created_at', { ascending: false })
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ orders: data || [] })
   }
@@ -46,7 +70,12 @@ export async function GET(request: NextRequest) {
   if (view === 'receipts') {
     const { data, error } = await supabase.from('goods_receipts').select(`
       *, suppliers(id,name), purchase_orders(id,po_number),
-      goods_receipt_items(*,products(id,generic_name,brand_name,strength),batches(id,batch_number,expiry_date))
+      goods_receipt_items(
+        *,
+        products(id,generic_name,brand_name,strength),
+        pharmacy_inventory:inventory_id(id,item_name,brand,unit_description,store_category,tracks_expiry),
+        batches(id,batch_number,expiry_date)
+      )
     `).eq('pharmacy_id', pharmacy.id).order('received_at', { ascending: false }).limit(50)
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ receipts: data || [] })
   }
@@ -57,7 +86,10 @@ export async function GET(request: NextRequest) {
       id,batch_number,expiry_date,quantity_received,cost_price,received_at,
       suppliers(id,name,phone,email),
       purchase_orders(id,po_number),
-      pharmacy_inventory!inner(pharmacy_id,products(id,generic_name,brand_name,strength,nafdac_number,barcode)),
+      pharmacy_inventory!inner(
+        pharmacy_id,item_type,item_name,brand,barcode,unit_description,store_category,
+        products(id,generic_name,brand_name,strength,nafdac_number,barcode)
+      ),
       sale_items(id,sale_id,quantity,sales(created_at,status))
     `).eq('pharmacy_inventory.pharmacy_id', pharmacy.id).order('created_at', { ascending: false }).limit(100)
     if (query) builder = builder.ilike('batch_number', `%${query}%`)

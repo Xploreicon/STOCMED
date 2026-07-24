@@ -405,7 +405,15 @@ export interface Database {
         Row: {
           id: string
           pharmacy_id: string
-          product_id: string
+          product_id: string | null
+          item_type: 'medicine' | 'store'
+          tracks_expiry: boolean
+          item_name: string | null
+          brand: string | null
+          barcode: string | null
+          unit_description: string | null
+          store_category: string | null
+          unit_cost: number | null
           price: number
           quantity_in_stock: number
           low_stock_threshold: number
@@ -417,7 +425,15 @@ export interface Database {
         Insert: {
           id?: string
           pharmacy_id: string
-          product_id: string
+          product_id?: string | null
+          item_type?: 'medicine' | 'store'
+          tracks_expiry?: boolean
+          item_name?: string | null
+          brand?: string | null
+          barcode?: string | null
+          unit_description?: string | null
+          store_category?: string | null
+          unit_cost?: number | null
           price: number
           quantity_in_stock?: number
           low_stock_threshold?: number
@@ -429,7 +445,15 @@ export interface Database {
         Update: {
           id?: string
           pharmacy_id?: string
-          product_id?: string
+          product_id?: string | null
+          item_type?: 'medicine' | 'store'
+          tracks_expiry?: boolean
+          item_name?: string | null
+          brand?: string | null
+          barcode?: string | null
+          unit_description?: string | null
+          store_category?: string | null
+          unit_cost?: number | null
           price?: number
           quantity_in_stock?: number
           low_stock_threshold?: number
@@ -832,6 +856,7 @@ export interface Database {
     Enums: {
       user_role: 'patient' | 'pharmacy'
       message_role: 'user' | 'assistant'
+      inventory_item_type: 'medicine' | 'store'
       stock_movement_type:
         | 'opening'
         | 'sale'

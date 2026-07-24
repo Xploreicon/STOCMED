@@ -35,6 +35,7 @@ export async function GET(request: NextRequest) {
       .from('pharmacy_inventory')
       .select('products(generic_name, brand_name)')
       .eq('pharmacy_id', pharmacy.id)
+      .eq('item_type', 'medicine')
 
     const stockedTerms = new Set(
       (inventoryRows ?? []).flatMap((row: any) => {

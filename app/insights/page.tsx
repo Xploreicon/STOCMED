@@ -31,7 +31,8 @@ export default async function InsightsPage() {
 
   const { count: medicationsListed = 0 } = await supabase
     .from('pharmacy_inventory')
-    .select('id', { count: 'exact', head: true });
+    .select('id', { count: 'exact', head: true })
+    .eq('item_type', 'medicine');
 
   const { data: pharmacyRowsRaw } = await supabase
     .from('pharmacies')
@@ -53,6 +54,7 @@ export default async function InsightsPage() {
   const { data: drugsRowsRaw } = await supabase
     .from('pharmacy_inventory')
     .select('pharmacy_id, quantity_in_stock')
+    .eq('item_type', 'medicine')
     .gt('quantity_in_stock', 0);
 
   const drugsRows =

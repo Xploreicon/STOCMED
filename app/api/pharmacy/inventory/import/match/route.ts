@@ -46,6 +46,12 @@ export async function POST(request: NextRequest) {
       const category = mapping.category && rawRow[mapping.category] ? String(rawRow[mapping.category]).trim() : ''
       const packSize = mapping.pack_size && rawRow[mapping.pack_size] ? String(rawRow[mapping.pack_size]).trim() : ''
       const sku = mapping.sku && rawRow[mapping.sku] ? String(rawRow[mapping.sku]).trim() : ''
+      const suppliedType = mapping.item_type && rawRow[mapping.item_type]
+        ? String(rawRow[mapping.item_type]).trim().toLowerCase()
+        : ''
+      const suppliedTracksExpiry = mapping.tracks_expiry && rawRow[mapping.tracks_expiry] !== undefined
+        ? /^(true|yes|y|1)$/i.test(String(rawRow[mapping.tracks_expiry]).trim())
+        : false
       
       // Parse numbers
       const priceRaw = rawRow[mapping.price]
@@ -89,6 +95,11 @@ export async function POST(request: NextRequest) {
           matches = data
         }
       }
+      const bestConfidence = Number(matches[0]?.confidence ?? 0)
+      const itemType = suppliedType === 'medicine' || suppliedType === 'store'
+        ? suppliedType
+        : bestConfidence >= 0.7 ? 'medicine' : 'store'
+      const tracksExpiry = itemType === 'medicine' ? true : suppliedTracksExpiry
 
       matchedRows.push({
         mapped: {
@@ -99,6 +110,8 @@ export async function POST(request: NextRequest) {
           category,
           pack_size: packSize,
           sku,
+          item_type: itemType,
+          tracks_expiry: tracksExpiry,
           price,
           quantity,
           unit_cost: unitCost,

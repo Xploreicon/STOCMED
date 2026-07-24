@@ -16,7 +16,12 @@ type ExportSale = {
     unit_price: number
     line_total: number
     batches: { batch_number: string; cost_price: number | null } | null
-    pharmacy_inventory: { products: { generic_name: string; brand_name: string | null; strength: string; dosage_form: string | null; barcode: string | null } | null } | null
+    pharmacy_inventory: {
+      item_type: 'medicine' | 'store'; item_name: string | null; brand: string | null
+      barcode: string | null; unit_description: string | null; store_category: string | null
+      unit_cost: number | null
+      products: { generic_name: string; brand_name: string | null; strength: string; dosage_form: string | null; barcode: string | null } | null
+    } | null
   }>
 }
 
@@ -36,7 +41,8 @@ export async function GET(request: NextRequest) {
     supabase.from('sales').select(`
       id,created_at,payment_method,total,
       sale_items(quantity,unit_price,line_total,batches(batch_number,cost_price),
-        pharmacy_inventory(products(generic_name,brand_name,strength,dosage_form,barcode)))
+        pharmacy_inventory(item_type,item_name,brand,barcode,unit_description,store_category,unit_cost,
+          products(generic_name,brand_name,strength,dosage_form,barcode)))
     `).eq('pharmacy_id', pharmacy.id).eq('status', 'completed')
       .gte('created_at', `${from}T00:00:00.000Z`).lt('created_at', `${to}T23:59:59.999Z`)
       .order('created_at'),
@@ -48,13 +54,15 @@ export async function GET(request: NextRequest) {
 
   const salesRows = ((salesResult.data ?? []) as ExportSale[]).flatMap(sale => sale.sale_items.map(item => {
     const product = item.pharmacy_inventory?.products
-    const cogs = Number(item.quantity) * Number(item.batches?.cost_price ?? 0)
+    const inventory = item.pharmacy_inventory
+    const cogs = Number(item.quantity) * Number(item.batches?.cost_price ?? inventory?.unit_cost ?? 0)
     return {
       Date: sale.created_at,
       'Receipt No': sale.id,
-      Product: product?.brand_name || product?.generic_name || 'Unknown product',
-      Description: [product?.generic_name, product?.strength, product?.dosage_form].filter(Boolean).join(' '),
-      SKU: product?.barcode || '',
+      Department: inventory?.item_type || 'medicine',
+      Product: product?.brand_name || product?.generic_name || inventory?.brand || inventory?.item_name || 'Unknown item',
+      Description: [product?.generic_name || inventory?.item_name, product?.strength || inventory?.unit_description, product?.dosage_form || inventory?.store_category].filter(Boolean).join(' '),
+      SKU: product?.barcode || inventory?.barcode || '',
       'Batch No': item.batches?.batch_number || '',
       Quantity: Number(item.quantity),
       'Unit Price': Number(item.unit_price),

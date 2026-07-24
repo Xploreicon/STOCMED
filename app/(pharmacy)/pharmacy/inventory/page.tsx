@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import InventoryTable from '@/components/pharmacy/InventoryTable';
 import AddDrugModal from '@/components/pharmacy/AddDrugModal';
+import AddStoreItemModal from '@/components/pharmacy/AddStoreItemModal';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,8 +31,10 @@ export default function PharmacyInventory() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [department, setDepartment] = useState<'all' | 'medicine' | 'store'>('all');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const showDelisted = filterStatus === 'delisted';
 
   const addProductId = searchParams.get('add_product_id');
@@ -95,31 +98,34 @@ export default function PharmacyInventory() {
   }
 
   const drugs = drugsData?.drugs || [];
-  const totalProducts = drugs.length;
+  const departmentItems = department === 'all'
+    ? drugs
+    : drugs.filter((item: any) => item.item_type === department);
+  const totalProducts = departmentItems.length;
 
   // Compute stat counts dynamically
   const today = new Date();
   const ninetyDaysFromNow = new Date();
   ninetyDaysFromNow.setDate(today.getDate() + 90);
 
-  const inStock = drugs.filter((d: any) => d.quantity_in_stock > (d.low_stock_threshold || 10)).length;
-  const lowStock = drugs.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= (d.low_stock_threshold || 10)).length;
-  const outOfStock = drugs.filter((d: any) => d.quantity_in_stock === 0).length;
+  const inStock = departmentItems.filter((d: any) => d.quantity_in_stock > (d.low_stock_threshold || 10)).length;
+  const lowStock = departmentItems.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= (d.low_stock_threshold || 10)).length;
+  const outOfStock = departmentItems.filter((d: any) => d.quantity_in_stock === 0).length;
 
-  const expiringSoon = drugs.filter((d: any) => {
+  const expiringSoon = departmentItems.filter((d: any) => {
     if (!d.expiry_date) return false;
     const exp = new Date(d.expiry_date);
     return exp >= today && exp <= ninetyDaysFromNow;
   }).length;
 
-  const expired = drugs.filter((d: any) => {
+  const expired = departmentItems.filter((d: any) => {
     if (!d.expiry_date) return false;
     const exp = new Date(d.expiry_date);
     return exp < today;
   }).length;
 
   // Filter logic
-  const filteredDrugs = drugs.filter((drug: any) => {
+  const filteredDrugs = departmentItems.filter((drug: any) => {
     const matchesSearch = searchQuery
       ? drug.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         drug.generic_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -169,7 +175,7 @@ export default function PharmacyInventory() {
     { label: 'Expiring soon', value: expiringSoon, icon: CalendarClock, color: 'var(--warning)' },
   ];
 
-  const delistedCount = drugs.filter((d: any) => !!d.deleted_at).length;
+  const delistedCount = departmentItems.filter((d: any) => !!d.deleted_at).length;
 
   const filterOptions = [
     { value: 'all', label: 'All' },
@@ -193,12 +199,12 @@ export default function PharmacyInventory() {
             </span>
           </div>
           <p className="text-[14px] text-ink-muted mt-1.5">
-            Manage what&apos;s on your shelves and how patients find it
+            Manage medicines and front-store stock from one ledger
           </p>
         </div>
         <div className="flex min-w-0 items-center gap-2.5 flex-wrap">
           <Button
-            onClick={() => alert('POS Interface coming soon!')}
+            onClick={() => router.push('/pharmacy/pos')}
             className="h-11 flex items-center px-4 bg-white text-primary border-[1.5px] border-primary font-medium text-[14px] rounded-button hover:bg-surface transition-colors"
           >
             Open POS
@@ -214,7 +220,14 @@ export default function PharmacyInventory() {
             className="h-11 flex items-center px-4 bg-primary text-white font-medium text-[14px] rounded-button hover:bg-[var(--primary-hover)] transition-colors"
           >
             <Plus className="mr-2 h-4 w-4" strokeWidth={2} aria-hidden="true" />
-            Add drug
+            Add medicine
+          </Button>
+          <Button
+            onClick={() => setIsStoreModalOpen(true)}
+            className="h-11 flex items-center px-4 bg-ink text-white font-medium text-[14px] rounded-button hover:bg-ink/90 transition-colors"
+          >
+            <Plus className="mr-2 h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            Add store item
           </Button>
         </div>
       </div>
@@ -239,13 +252,31 @@ export default function PharmacyInventory() {
         ))}
       </div>
 
+      <div className="mb-5 inline-flex rounded-md border border-border bg-white p-1 shadow-sm">
+        {([
+          ['all', `All (${drugs.length})`],
+          ['medicine', `Medicines (${drugs.filter((item: any) => item.item_type === 'medicine').length})`],
+          ['store', `Store (${drugs.filter((item: any) => item.item_type === 'store').length})`],
+        ] as const).map(([value, label]) => (
+          <Button
+            key={value}
+            onClick={() => setDepartment(value)}
+            className={`h-9 rounded px-4 text-sm font-semibold transition-colors ${
+              department === value ? 'bg-primary text-white shadow-sm' : 'bg-transparent text-ink-muted hover:bg-surface'
+            }`}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col md:flex-row gap-3 mb-5">
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search medications…"
+          placeholder="Search inventory..."
           className="flex-1 h-11 border border-border rounded-button px-4 text-[14px] text-ink bg-white focus:outline-none focus:border-primary min-w-[200px]"
         />
         <div className="flex gap-2 flex-wrap">
@@ -275,14 +306,14 @@ export default function PharmacyInventory() {
             <Package className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
           </div>
           <h3 className="text-[18px] font-medium text-ink">
-            {drugs.length === 0 ? 'Your inventory is empty' : 'No matching medications'}
+            {departmentItems.length === 0 ? `No ${department === 'all' ? 'inventory' : department} items yet` : 'No matching items'}
           </h3>
           <p className="text-[14px] text-ink-muted max-w-[380px] leading-relaxed">
-            {drugs.length === 0
-              ? 'Import your NAFDAC-registered catalogue to get started. Patients near your pharmacy are already searching.'
+            {departmentItems.length === 0
+              ? 'Add items individually or import an existing inventory file.'
               : 'Try adjusting your search query or filter selections above.'}
           </p>
-          {drugs.length === 0 && (
+          {departmentItems.length === 0 && (
             <div className="flex gap-3 mt-5 flex-wrap justify-center">
               <Button
                 onClick={() => router.push('/pharmacy/inventory/import')}
@@ -295,7 +326,14 @@ export default function PharmacyInventory() {
                 className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[var(--primary-hover)] transition-colors"
               >
                 <Plus className="mr-2 h-4 w-4" strokeWidth={2} aria-hidden="true" />
-                Add your first drug
+                Add medicine
+              </Button>
+              <Button
+                onClick={() => setIsStoreModalOpen(true)}
+                className="h-12 flex items-center px-6 bg-ink text-white font-medium text-[15px] rounded-button hover:bg-ink/90 transition-colors"
+              >
+                <Plus className="mr-2 h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                Add store item
               </Button>
             </div>
           )}
@@ -321,6 +359,15 @@ export default function PharmacyInventory() {
           if (addProductId) router.replace('/pharmacy/inventory');
         }}
         preselectedProduct={preselectedProduct}
+      />
+      <AddStoreItemModal
+        isOpen={isStoreModalOpen}
+        onClose={() => setIsStoreModalOpen(false)}
+        onSuccess={() => {
+          refetch();
+          setIsStoreModalOpen(false);
+          setDepartment('store');
+        }}
       />
     </div>
   );

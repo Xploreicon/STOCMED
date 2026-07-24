@@ -23,19 +23,46 @@ type Step = 'upload' | 'mapping' | 'matching' | 'progress' | 'summary';
 type ImportSource = 'stocmed' | 'quickbooks';
 
 const CANONICAL_FIELDS = [
-  { key: 'name', label: 'Drug / Generic Name', required: true, synonyms: ['name', 'generic name', 'drug name', 'medication', 'product'] },
+  { key: 'name', label: 'Item / Generic Name', required: true, synonyms: ['name', 'generic name', 'drug name', 'medication', 'product'] },
+  { key: 'item_type', label: 'Type', required: false, synonyms: ['type', 'department', 'item type', 'product type'] },
+  { key: 'tracks_expiry', label: 'Tracks Expiry', required: false, synonyms: ['tracks expiry', 'expiry tracked', 'perishable'] },
   { key: 'brand_name', label: 'Brand Name', required: false, synonyms: ['brand', 'brand name', 'trade name'] },
-  { key: 'strength', label: 'Strength', required: true, synonyms: ['strength', 'dosage strength', 'mg', 'g', 'ml'] },
-  { key: 'dosage_form', label: 'Dosage Form', required: true, synonyms: ['form', 'dosage form', 'type'] },
-  { key: 'category', label: 'Category', required: true, synonyms: ['category', 'class', 'group'] },
+  { key: 'strength', label: 'Strength', required: false, synonyms: ['strength', 'dosage strength', 'mg', 'g', 'ml'] },
+  { key: 'dosage_form', label: 'Dosage Form', required: false, synonyms: ['form', 'dosage form'] },
+  { key: 'category', label: 'Category', required: false, synonyms: ['category', 'class', 'group'] },
   { key: 'pack_size', label: 'Pack Size', required: false, synonyms: ['pack', 'pack size', 'packaging'] },
   { key: 'sku', label: 'SKU / Barcode', required: false, synonyms: ['sku', 'barcode', 'product sku'] },
   { key: 'unit_cost', label: 'Unit Cost (₦)', required: false, synonyms: ['cost', 'unit cost', 'purchase cost'] },
   { key: 'price', label: 'Selling Price (₦)', required: true, synonyms: ['price', 'selling price', 'rate', 'unit price'] },
   { key: 'quantity', label: 'Opening Qty', required: true, synonyms: ['quantity', 'qty', 'stock', 'opening qty', 'count'] },
-  { key: 'batch_number', label: 'Batch Number', required: true, synonyms: ['batch', 'batch no', 'batch number', 'lot'] },
-  { key: 'expiry_date', label: 'Expiry Date', required: true, synonyms: ['expiry', 'exp', 'expiry date', 'exp date'] },
+  { key: 'batch_number', label: 'Batch Number', required: false, synonyms: ['batch', 'batch no', 'batch number', 'lot'] },
+  { key: 'expiry_date', label: 'Expiry Date', required: false, synonyms: ['expiry', 'exp', 'expiry date', 'exp date'] },
 ];
+
+function previewValidation(row: any, source: ImportSource) {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const isMedicine = source === 'quickbooks' || row.mapped.item_type === 'medicine'
+  const tracksExpiry = isMedicine || row.mapped.tracks_expiry === true
+  if (!row.mapped.generic_name) errors.push('Item name is required')
+  if (!row.mapped.price || Number(row.mapped.price) <= 0) errors.push('Price must be greater than ₦0')
+  if (!Number.isInteger(Number(row.mapped.quantity)) || Number(row.mapped.quantity) < 0) {
+    errors.push('Stock quantity must be a non-negative whole number')
+  }
+  if (isMedicine && !row.selected_product_id) errors.push('Select a catalogue match for medicine')
+  if (!isMedicine && row.selected_product_id) errors.push('Store rows cannot use a catalogue product')
+  if (tracksExpiry) {
+    if (!row.mapped.batch_number) errors.push('Batch number is required')
+    if (!row.mapped.expiry_date) {
+      errors.push('Expiry date is required')
+    } else {
+      const expiry = new Date(row.mapped.expiry_date)
+      if (Number.isNaN(expiry.getTime()) || expiry.getTime() <= Date.now()) errors.push('Expiry date must be in the future')
+      else if (expiry.getTime() < Date.now() + 90 * 24 * 60 * 60 * 1000) warnings.push('Expiry date is within 90 days')
+    }
+  }
+  return { errors, warnings }
+}
 
 export default function BulkImportWizard() {
   const router = useRouter();
@@ -49,6 +76,8 @@ export default function BulkImportWizard() {
   
   // Matching and Validation state
   const [matchedRows, setMatchedRows] = useState<any[]>([]);
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [bulkCategory, setBulkCategory] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   
@@ -119,8 +148,9 @@ export default function BulkImportWizard() {
   const handleMappingSubmit = async () => {
     // Validate that required fields are mapped
     const quickBooksRequired = new Set(['name', 'price', 'quantity']);
+    const standardRequired = new Set(['name', 'price', 'quantity']);
     const missingRequired = CANONICAL_FIELDS.filter(f =>
-      (source === 'quickbooks' ? quickBooksRequired.has(f.key) : f.required) && !mapping[f.key]
+      (source === 'quickbooks' ? quickBooksRequired.has(f.key) : standardRequired.has(f.key)) && !mapping[f.key]
     );
     if (missingRequired.length > 0) {
       alert(`Please map all required fields: ${missingRequired.map(f => f.label).join(', ')}`);
@@ -145,43 +175,22 @@ export default function BulkImportWizard() {
       }
 
       const { matchedRows: results } = await res.json();
-      // Initialize each row's selection to the highest confidence match if confidence > 0.4
+      // High-confidence catalogue matches are medicines; everything else is
+      // tenant-owned Store stock unless the spreadsheet supplied a type.
       const initializedResults = results.map((row: any) => {
         const bestMatch = row.matches && row.matches[0];
-        const selectedId = bestMatch && bestMatch.confidence > 0.4 ? bestMatch.id : source === 'quickbooks' ? '' : 'create_new';
-        
-        // Basic pre-commit validation checks
-        const warnings: string[] = [];
-        const errors: string[] = [];
-        
-        if (!row.mapped.price || isNaN(row.mapped.price) || row.mapped.price <= 0) {
-          errors.push('Price must be greater than ₦0');
-        }
-        if (row.mapped.quantity === null || isNaN(row.mapped.quantity) || row.mapped.quantity < 0) {
-          errors.push('Stock quantity cannot be negative');
-        }
-        if (source !== 'quickbooks' && !row.mapped.batch_number) {
-          errors.push('Batch number is required');
-        }
-        if (source !== 'quickbooks' && !row.mapped.expiry_date) {
-          errors.push('Expiry date is required');
-        } else {
-          const exp = new Date(row.mapped.expiry_date);
-          if (exp.getTime() < Date.now()) {
-            errors.push('Product has expired');
-          } else if (exp.getTime() < Date.now() + 90 * 24 * 60 * 60 * 1000) {
-            warnings.push('Expiry date is within 90 days');
-          }
-        }
-
-        return {
+        const itemType = source === 'quickbooks' ? 'medicine' : row.mapped.item_type;
+        const selectedId = itemType === 'medicine' && bestMatch ? bestMatch.id : '';
+        const initialized = {
           ...row,
+          mapped: { ...row.mapped, item_type: itemType, tracks_expiry: itemType === 'medicine' || row.mapped.tracks_expiry },
           selected_product_id: selectedId,
-          validation: { errors, warnings }
         };
+        return { ...initialized, validation: previewValidation(initialized, source) };
       });
 
       setMatchedRows(initializedResults);
+      setSelectedRows(new Set());
     } catch (err) {
       console.error(err);
       alert('Error during matching stage.');
@@ -190,6 +199,25 @@ export default function BulkImportWizard() {
       setIsValidating(false);
     }
   };
+
+  const updateDepartment = (indexes: number[], itemType: 'medicine' | 'store') => {
+    setMatchedRows((rows) => rows.map((row, index) => {
+      if (!indexes.includes(index)) return row
+      const selectedProductId = itemType === 'medicine'
+        ? row.selected_product_id || row.matches?.[0]?.id || ''
+        : ''
+      const updated = {
+        ...row,
+        selected_product_id: selectedProductId,
+        mapped: {
+          ...row.mapped,
+          item_type: itemType,
+          tracks_expiry: itemType === 'medicine' ? true : row.mapped.tracks_expiry,
+        },
+      }
+      return { ...updated, validation: previewValidation(updated, source) }
+    }))
+  }
 
   // Commit Import
   const handleCommitImport = async () => {
@@ -392,9 +420,9 @@ export default function BulkImportWizard() {
           <Card className="p-8 space-y-6 border-border shadow-xl bg-white rounded-xl">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-display font-bold text-ink">Review & Catalogue Match</h2>
+                <h2 className="text-xl font-display font-bold text-ink">Review Departments & Matches</h2>
                 <p className="text-ink-muted text-sm mt-1">
-                  We found matches for your drugs in the catalogue. Verify or create new catalogue entries.
+                  Strong catalogue matches route to Medicines. Unmatched rows stay private in Store.
                 </p>
               </div>
               <Button
@@ -402,7 +430,7 @@ export default function BulkImportWizard() {
                 disabled={isValidating || matchedRows.some(row => row.validation.errors.length > 0) || (source === 'quickbooks' && matchedRows.some(row => !row.selected_product_id))}
                 className="shadow-lg"
               >
-                Import {matchedRows.length} Drugs
+                Import {matchedRows.length} Items
               </Button>
             </div>
 
@@ -413,13 +441,60 @@ export default function BulkImportWizard() {
               </div>
             ) : (
               <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => updateDepartment(
+                      matchedRows.map((row, index) => Number(row.matches?.[0]?.confidence ?? 0) < 0.7 ? index : -1).filter((index) => index >= 0),
+                      'store'
+                    )}
+                  >
+                    Set all unmatched to Store
+                  </Button>
+                  <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)} className="h-9 rounded-md border border-border bg-white px-3 text-sm">
+                    <option value="">Choose category</option>
+                    {Array.from(new Set(matchedRows.map((row) => row.mapped.category).filter(Boolean))).map((category: any) => (
+                      <option key={category} value={category}>{category}</option>
+                    ))}
+                  </select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!bulkCategory}
+                    onClick={() => updateDepartment(
+                      matchedRows.map((row, index) => row.mapped.category === bulkCategory ? index : -1).filter((index) => index >= 0),
+                      'store'
+                    )}
+                  >
+                    Set category to Store
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={selectedRows.size === 0}
+                    onClick={() => updateDepartment(Array.from(selectedRows), 'medicine')}
+                  >
+                    Set selected to Medicine
+                  </Button>
+                </div>
                 <div className="overflow-x-auto border border-border rounded-lg bg-white shadow-inner">
                   <table className="w-full text-left text-sm divide-y divide-border">
                     <thead className="bg-surface text-ink-muted font-semibold text-xs uppercase">
                       <tr>
-                        <th className="p-3">Generic (Spreadsheet)</th>
+                        <th className="p-3">
+                          <input
+                            type="checkbox"
+                            aria-label="Select all rows"
+                            checked={matchedRows.length > 0 && selectedRows.size === matchedRows.length}
+                            onChange={(e) => setSelectedRows(e.target.checked ? new Set(matchedRows.map((_, index) => index)) : new Set())}
+                            className="h-4 w-4 accent-primary"
+                          />
+                        </th>
+                        <th className="p-3">Item (Spreadsheet)</th>
                         <th className="p-3">Strength & Form</th>
                         <th className="p-3">Price & Stock</th>
+                        <th className="p-3">Department</th>
                         <th className="p-3">Catalogue Match</th>
                         <th className="p-3">Status</th>
                       </tr>
@@ -431,6 +506,20 @@ export default function BulkImportWizard() {
 
                         return (
                           <tr key={index} className={`hover:bg-surface/50 transition-colors ${hasErrors ? 'bg-danger/5' : ''}`}>
+                            <td className="p-3">
+                              <input
+                                type="checkbox"
+                                aria-label={`Select row ${index + 1}`}
+                                checked={selectedRows.has(index)}
+                                onChange={(e) => setSelectedRows((current) => {
+                                  const next = new Set(current)
+                                  if (e.target.checked) next.add(index)
+                                  else next.delete(index)
+                                  return next
+                                })}
+                                className="h-4 w-4 accent-primary"
+                              />
+                            </td>
                             <td className="p-3">
                               <div className="font-semibold text-ink">{row.mapped.generic_name}</div>
                               {row.mapped.brand_name && (
@@ -447,14 +536,49 @@ export default function BulkImportWizard() {
                             </td>
                             <td className="p-3">
                               <select
+                                value={row.mapped.item_type}
+                                onChange={(e) => updateDepartment([index], e.target.value as 'medicine' | 'store')}
+                                className="w-[120px] rounded-md border border-border bg-white px-2 py-1.5 text-xs font-semibold"
+                              >
+                                <option value="medicine">Medicine</option>
+                                <option value="store">Store</option>
+                              </select>
+                              <div className="mt-1 text-[11px] text-ink-light">
+                                Best match: {Math.round(Number(row.matches?.[0]?.confidence ?? 0) * 100)}%
+                              </div>
+                              {row.mapped.item_type === 'store' && (
+                                <label className="mt-2 flex items-center gap-1.5 text-[11px] text-ink-muted">
+                                  <input
+                                    type="checkbox"
+                                    checked={row.mapped.tracks_expiry === true}
+                                    onChange={(e) => {
+                                      setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
+                                        if (candidateIndex !== index) return candidate
+                                        const updated = { ...candidate, mapped: { ...candidate.mapped, tracks_expiry: e.target.checked } }
+                                        return { ...updated, validation: previewValidation(updated, source) }
+                                      }))
+                                    }}
+                                    className="h-3.5 w-3.5 accent-primary"
+                                  />
+                                  Tracks expiry
+                                </label>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              <select
                                 value={row.selected_product_id || ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
-                                  setMatchedRows(prev => prev.map((r, i) => i === index ? { ...r, selected_product_id: val } : r));
+                                  setMatchedRows(prev => prev.map((r, i) => {
+                                    if (i !== index) return r
+                                    const updated = { ...r, selected_product_id: val }
+                                    return { ...updated, validation: previewValidation(updated, source) }
+                                  }));
                                 }}
+                                disabled={row.mapped.item_type === 'store'}
                                 className="w-[220px] px-2 py-1.5 border border-border rounded-md focus:ring-1 focus:ring-primary text-xs bg-white"
                               >
-                                {source === 'quickbooks' ? <option value="">Select a catalogue match</option> : <option value="create_new">Add as unverified catalogue item</option>}
+                                <option value="">{row.mapped.item_type === 'store' ? 'Not added to catalogue' : 'Select a catalogue match'}</option>
                                 {row.matches && row.matches.map((m: any) => (
                                   <option key={m.id} value={m.id}>
                                     {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}) - {Math.round(m.confidence * 100)}% match

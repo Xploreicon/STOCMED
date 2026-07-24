@@ -130,6 +130,7 @@ export async function GET(request: NextRequest) {
         )
       `)
       .eq('pharmacies.is_active', true)
+      .eq('item_type', 'medicine')
       // Product verification describes the quality/review state of the shared
       // catalogue record. It must not hide a verified pharmacy's real stock.
       // Patient visibility is governed by the pharmacy lifecycle plus the
@@ -217,6 +218,7 @@ export async function GET(request: NextRequest) {
               )
             `)
             .eq('pharmacies.is_active', true)
+            .eq('item_type', 'medicine')
             .eq('is_listed', true)
             .is('deleted_at', null)
             .in('product_id', productIds)

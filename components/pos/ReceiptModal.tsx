@@ -68,7 +68,9 @@ export default function ReceiptModal({ sale, pharmacyName, cashierName, isOnline
                     <td className="py-0.5">
                       {item.brand_name || item.generic_name}
                       <div className="text-[7px] text-ink-light">
-                        {item.strength} · B:{item.batch_number} · Exp:{formatExpShort(item.expiry_date)}
+                        {item.strength}
+                        {item.batch_number && ` · B:${item.batch_number}`}
+                        {item.expiry_date && ` · Exp:${formatExpShort(item.expiry_date)}`}
                       </div>
                     </td>
                     <td className="py-0.5 text-center">{item.quantity}</td>

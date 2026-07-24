@@ -12,7 +12,9 @@ export interface LocalBatch {
 
 export interface LocalInventoryItem {
   id: string; // inventory_id
-  product_id: string;
+  product_id: string | null;
+  item_type: 'medicine' | 'store';
+  tracks_expiry: boolean;
   generic_name: string;
   brand_name: string | null;
   strength: string;
@@ -26,7 +28,7 @@ export interface LocalInventoryItem {
 
 export interface LocalSaleItem {
   inventory_id: string;
-  batch_id: string;
+  batch_id: string | null;
   quantity: number;
   unit_price: number;
   line_total: number;
@@ -34,8 +36,8 @@ export interface LocalSaleItem {
   generic_name: string;
   brand_name: string | null;
   strength: string;
-  batch_number: string;
-  expiry_date: string;
+  batch_number: string | null;
+  expiry_date: string | null;
 }
 
 export interface LocalSale {

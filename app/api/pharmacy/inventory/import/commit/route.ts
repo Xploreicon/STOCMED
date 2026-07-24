@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     const selectedProductIds = Array.from(new Set(
       body.matchedRows
         .map((row: ImportRow) => row.selected_product_id)
-        .filter((id: unknown): id is string => typeof id === 'string' && id !== 'create_new')
+        .filter((id: unknown): id is string => typeof id === 'string')
     ))
 
     if (selectedProductIds.length) {
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
       const existingIds = new Set((products || []).map((product: { id: string }) => product.id))
       body.matchedRows.forEach((row: ImportRow, index: number) => {
-        if (row.selected_product_id && row.selected_product_id !== 'create_new' && !existingIds.has(row.selected_product_id)) {
+        if (row.selected_product_id && !existingIds.has(row.selected_product_id)) {
           const existingError = rowErrors.find((entry) => entry.row === index + 1)
           if (existingError) existingError.errors.push('Selected catalogue product does not exist')
           else rowErrors.push({ row: index + 1, errors: ['Selected catalogue product does not exist'] })
