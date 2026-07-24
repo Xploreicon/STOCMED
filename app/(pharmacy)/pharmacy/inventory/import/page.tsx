@@ -46,7 +46,7 @@ const CANONICAL_FIELDS = [
   { key: 'expiry_date', label: 'Expiry Date', required: false, synonyms: ['expiry', 'exp', 'expiry date', 'exp date'] },
 ];
 
-function previewValidation(row: any, source: ImportSource) {
+function previewValidation(row: any, source: ImportSource, dosageForms: string[] = [], categories: string[] = []) {
   const errors: string[] = []
   const warnings: string[] = []
   const isMedicine = source === 'quickbooks' || row.mapped.item_type === 'medicine'
@@ -60,6 +60,12 @@ function previewValidation(row: any, source: ImportSource) {
   if (isMedicine && !row.selected_product_id) errors.push('Select a catalogue match for medicine')
   if (isMedicine && !row.mapped.strength) errors.push('Strength is missing or not mapped')
   if (isMedicine && !row.mapped.dosage_form) errors.push('Dosage form is missing or not mapped')
+  else if (isMedicine && dosageForms.length && !dosageForms.includes(row.mapped.dosage_form)) {
+    errors.push(`Dosage form "${row.mapped.dosage_form}" is not recognised. Select a valid form.`)
+  }
+  if (isMedicine && row.selected_product_id === 'create_new' && categories.length && !categories.includes(row.mapped.category)) {
+    errors.push(`Category "${row.mapped.category || ''}" is not recognised. Select a valid category.`)
+  }
   if (!isMedicine && row.selected_product_id && row.selected_product_id !== 'create_new') errors.push('Store rows cannot use a catalogue product')
   // Warn when a medicine-looking item is routed to Store
   if (!isMedicine && hasMedicineSignals(row.mapped)) {
@@ -91,6 +97,8 @@ export default function BulkImportWizard() {
   
   // Matching and Validation state
   const [matchedRows, setMatchedRows] = useState<any[]>([]);
+  const [dosageForms, setDosageForms] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [bulkCategory, setBulkCategory] = useState('');
   const [isValidating, setIsValidating] = useState(false);
@@ -177,7 +185,9 @@ export default function BulkImportWizard() {
         return;
       }
 
-      const { matchedRows: results } = await res.json();
+      const { matchedRows: results, dosageForms: validDosageForms, categories: validCategories } = await res.json();
+      setDosageForms(validDosageForms || []);
+      setCategories(validCategories || []);
       // High-confidence catalogue matches are medicines; everything else is
       // tenant-owned Store stock unless the spreadsheet supplied a type.
       const initializedResults = results.map((row: any) => {
@@ -192,7 +202,7 @@ export default function BulkImportWizard() {
           mapped: { ...row.mapped, item_type: itemType, tracks_expiry: itemType === 'medicine' || row.mapped.tracks_expiry },
           selected_product_id: selectedId,
         };
-        return { ...initialized, validation: previewValidation(initialized, source) };
+        return { ...initialized, validation: previewValidation(initialized, source, validDosageForms, validCategories) };
       });
 
       setMatchedRows(initializedResults);
@@ -221,7 +231,7 @@ export default function BulkImportWizard() {
           tracks_expiry: itemType === 'medicine' ? true : row.mapped.tracks_expiry,
         },
       }
-      return { ...updated, validation: previewValidation(updated, source) }
+      return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
     }))
   }
 
@@ -530,14 +540,47 @@ export default function BulkImportWizard() {
                               />
                             </td>
                             <td className="p-3">
-                              <div className="font-semibold text-ink">{row.mapped.generic_name}</div>
+                              <div className="font-semibold text-ink">Row {index + 1}: {row.mapped.generic_name}</div>
                               {row.mapped.brand_name && (
                                 <div className="text-xs text-ink-light">Brand: {row.mapped.brand_name}</div>
                               )}
                             </td>
                             <td className="p-3">
                               <div>{row.mapped.strength || 'N/A'}</div>
-                              <div className="text-xs text-ink-muted capitalize">{row.mapped.dosage_form}</div>
+                              {row.mapped.item_type === 'medicine' ? (
+                                <div className="mt-1 space-y-1">
+                                  <select
+                                    aria-label={`Dosage form for row ${index + 1}`}
+                                    value={dosageForms.includes(row.mapped.dosage_form) ? row.mapped.dosage_form : ''}
+                                    onChange={(e) => setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
+                                      if (candidateIndex !== index) return candidate
+                                      const updated = { ...candidate, mapped: { ...candidate.mapped, dosage_form: e.target.value } }
+                                      return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
+                                    }))}
+                                    className="w-[180px] rounded-md border border-border bg-white px-2 py-1.5 text-xs capitalize"
+                                  >
+                                    <option value="">Select valid form</option>
+                                    {dosageForms.map((form) => <option key={form} value={form}>{form}</option>)}
+                                  </select>
+                                  {row.selected_product_id === 'create_new' && (
+                                    <select
+                                      aria-label={`Category for row ${index + 1}`}
+                                      value={categories.includes(row.mapped.category) ? row.mapped.category : ''}
+                                      onChange={(e) => setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
+                                        if (candidateIndex !== index) return candidate
+                                        const updated = { ...candidate, mapped: { ...candidate.mapped, category: e.target.value } }
+                                        return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
+                                      }))}
+                                      className="w-[180px] rounded-md border border-border bg-white px-2 py-1.5 text-xs"
+                                    >
+                                      <option value="">Select valid category</option>
+                                      {categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                                    </select>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-ink-muted capitalize">{row.mapped.dosage_form}</div>
+                              )}
                             </td>
                             <td className="p-3">
                               <div className="font-semibold">₦{row.mapped.price?.toLocaleString()}</div>
@@ -574,7 +617,7 @@ export default function BulkImportWizard() {
                                       setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
                                         if (candidateIndex !== index) return candidate
                                         const updated = { ...candidate, mapped: { ...candidate.mapped, tracks_expiry: e.target.checked } }
-                                        return { ...updated, validation: previewValidation(updated, source) }
+                                        return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
                                       }))
                                     }}
                                     className="h-3.5 w-3.5 accent-primary"
@@ -591,7 +634,7 @@ export default function BulkImportWizard() {
                                   setMatchedRows(prev => prev.map((r, i) => {
                                     if (i !== index) return r
                                     const updated = { ...r, selected_product_id: val }
-                                    return { ...updated, validation: previewValidation(updated, source) }
+                                    return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
                                   }));
                                 }}
                                 disabled={row.mapped.item_type === 'store'}

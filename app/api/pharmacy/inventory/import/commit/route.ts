@@ -37,7 +37,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'matchedRows must be a non-empty array' }, { status: 400 })
     }
 
-    const rowErrors = validateRows(body.matchedRows)
+    const [{ data: dosageFormRows, error: dosageFormsError }, { data: categoryRows, error: categoriesError }] = await Promise.all([
+      supabase.from('dosage_forms').select('name'),
+      supabase.from('product_categories').select('name'),
+    ])
+    if (dosageFormsError || categoriesError) {
+      return NextResponse.json({ error: 'Could not validate controlled product values' }, { status: 500 })
+    }
+    const lookups = {
+      dosageForms: (dosageFormRows || []).map((entry: { name: string }) => entry.name),
+      categories: (categoryRows || []).map((entry: { name: string }) => entry.name),
+    }
+    const rowErrors = validateRows(body.matchedRows, lookups)
     // Filter out 'create_new' and empty strings — only real UUIDs should be queried against products
     const selectedProductIds = Array.from(new Set(
       body.matchedRows
@@ -104,40 +115,6 @@ export async function POST(request: NextRequest) {
 
     if (body.validate_only === true) {
       return NextResponse.json({ valid: true, rowErrors: [] })
-    }
-
-    // Resolve 'create_new' rows: create unverified catalogue products and
-    // replace 'create_new' with the real product UUID before import.
-    for (const row of body.matchedRows) {
-      if (row.selected_product_id !== 'create_new') continue
-      const mapped = row.mapped ?? {}
-      const genericName = String(mapped.generic_name || '').trim()
-      const strength = String(mapped.strength || '').trim()
-      const dosageForm = String(mapped.dosage_form || '').trim()
-      const category = String(mapped.category || 'Uncategorised').trim() || 'Uncategorised'
-
-      const { data: newProduct, error: createError } = await supabase.rpc(
-        'create_unverified_catalog_product',
-        {
-          p_pharmacy_id: pharmacy.id,
-          p_generic_name: genericName,
-          p_brand_name: String(mapped.brand_name || '').trim() || null,
-          p_manufacturer: null,
-          p_strength: strength,
-          p_dosage_form: dosageForm,
-          p_category: category,
-          p_pack_size: String(mapped.pack_size || '').trim() || null,
-          p_image_url: null,
-        }
-      )
-      if (createError || !newProduct || !newProduct.id) {
-        console.error(`Failed to create catalogue product for "${genericName}":`, createError)
-        return NextResponse.json(
-          { error: `Failed to create catalogue product for "${genericName}": ${createError?.message || 'unknown error'}` },
-          { status: 409 }
-        )
-      }
-      row.selected_product_id = newProduct.id
     }
 
     const { data, error } = await supabase.rpc('import_inventory_file', {

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { determineImportRouting, parseImportBoolean, parseImportDate } from '@/lib/inventory-import'
+import { mapControlledValue, mapDosageForm } from '@/lib/controlled-lookups'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -37,14 +38,27 @@ export async function POST(request: NextRequest) {
     }
 
     const matchedRows: any[] = []
+    const [{ data: dosageFormRows, error: dosageFormsError }, { data: categoryRows, error: categoriesError }] = await Promise.all([
+      supabase.from('dosage_forms').select('name').order('name'),
+      supabase.from('product_categories').select('name').order('name'),
+    ])
+    if (dosageFormsError || categoriesError) {
+      throw new Error(`Could not load controlled product values: ${dosageFormsError?.message || categoriesError?.message}`)
+    }
+    const dosageForms = (dosageFormRows || []).map((entry: { name: string }) => entry.name)
+    const categories = (categoryRows || []).map((entry: { name: string }) => entry.name)
     
     // Process matching for all rows
     for (const rawRow of rows) {
       const genericName = rawRow[mapping.name] ? String(rawRow[mapping.name]).trim() : ''
       const brandName = mapping.brand_name && rawRow[mapping.brand_name] ? String(rawRow[mapping.brand_name]).trim() : ''
       const strength = mapping.strength && rawRow[mapping.strength] ? String(rawRow[mapping.strength]).trim() : ''
-      const dosageForm = mapping.dosage_form && rawRow[mapping.dosage_form] ? String(rawRow[mapping.dosage_form]).trim() : ''
-      const category = mapping.category && rawRow[mapping.category] ? String(rawRow[mapping.category]).trim() : ''
+      const suppliedDosageForm = mapping.dosage_form && rawRow[mapping.dosage_form] ? String(rawRow[mapping.dosage_form]).trim() : ''
+      const dosageMapping = mapDosageForm(suppliedDosageForm, dosageForms)
+      const dosageForm = dosageMapping.value
+      const suppliedCategory = mapping.category && rawRow[mapping.category] ? String(rawRow[mapping.category]).trim() : ''
+      const categoryMapping = mapControlledValue(suppliedCategory || 'Others', categories)
+      const category = categoryMapping.value
       const packSize = mapping.pack_size && rawRow[mapping.pack_size] ? String(rawRow[mapping.pack_size]).trim() : ''
       const sku = mapping.sku && rawRow[mapping.sku] ? String(rawRow[mapping.sku]).trim() : ''
       const suppliedType = mapping.item_type && rawRow[mapping.item_type]
@@ -133,7 +147,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ matchedRows })
+    return NextResponse.json({ matchedRows, dosageForms, categories })
   } catch (error: any) {
     console.error('Match matching error:', error)
     return NextResponse.json(

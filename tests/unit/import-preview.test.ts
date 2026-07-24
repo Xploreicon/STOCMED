@@ -100,6 +100,36 @@ describe('bulk import preview validation', () => {
       'Dosage form is required for medicine matching',
     ]))
   })
+
+  it('reports controlled dosage form and category failures on their row', () => {
+    const futureDate = new Date()
+    futureDate.setFullYear(futureDate.getFullYear() + 1)
+    const errors = validateRows([{
+      mapped: {
+        item_type: 'medicine',
+        generic_name: 'Flemming 457',
+        strength: '457mg',
+        dosage_form: 'Sachet',
+        category: 'Unknown category',
+        price: 1000,
+        quantity: 10,
+        batch_number: 'DEXTA-1',
+        expiry_date: futureDate.toISOString().slice(0, 10),
+      },
+      selected_product_id: 'create_new',
+    }], {
+      dosageForms: ['tablet', 'capsule', 'powder for oral suspension'],
+      categories: ['Antibiotics', 'Others'],
+    })
+
+    expect(errors).toEqual([{
+      row: 1,
+      errors: expect.arrayContaining([
+        'Dosage form "Sachet" is not in the controlled list',
+        'Category "Unknown category" is not in the controlled list',
+      ]),
+    }])
+  })
 })
 
 describe('40-row fixture — 15 medicines / 25 store items', () => {
