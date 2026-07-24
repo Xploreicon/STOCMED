@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { Logo, LogoMark } from '@/components/brand/Logo';
+import { LogoMark } from '@/components/brand/Logo';
+import { FaqSection } from '@/components/landing/FaqSection';
 import { ArrowRight, Banknote, MapPin, MessageCircle, PackageCheck, Search, type LucideIcon } from 'lucide-react';
 
 const VALUE_PROPS = [
@@ -43,6 +44,8 @@ export default async function Landing() {
             <a href="#find" className="text-[15px] text-ink-muted hover:text-ink">Find medication</a>
             <a href="#pharmacy" className="text-[15px] text-ink-muted hover:text-ink">For pharmacies</a>
             <a href="#how" className="text-[15px] text-ink-muted hover:text-ink">How it works</a>
+            <a href="#faq" className="text-[15px] text-ink-muted hover:text-ink">FAQ</a>
+            <Link href="/about" className="text-[15px] text-ink-muted hover:text-ink">About</Link>
           </nav>
           <div className="flex items-center gap-3">
             <Link href="/login" className="text-[15px] font-medium text-primary px-4 py-2.5">Sign in</Link>
@@ -226,6 +229,9 @@ export default async function Landing() {
         </div>
       </section>
 
+      {/* FAQ SECTION */}
+      <FaqSection />
+
       {/* FOOTER */}
       <footer className="bg-white px-6 pt-16 pb-8 border-t border-border">
         <div className="mx-auto max-w-[1200px]">
@@ -238,23 +244,51 @@ export default async function Landing() {
               <p className="text-[14px] text-ink-light leading-[1.6] max-w-[260px]">AI-powered medication search and pharmacy inventory for Nigeria.</p>
             </div>
             {[
-              { h: 'Patients', links: [['Find medication', '/signup?role=patient'], ['How it works', '#how'], ['Safety & sourcing', '#']] },
-              { h: 'Pharmacies', links: [['Register your pharmacy', '/signup?role=pharmacy'], ['Inventory dashboard', '/login'], ['Pricing', '#']] },
-              { h: 'Company', links: [['About', '#'], ['Contact', '#'], ['Privacy policy', '#']] },
+              {
+                h: 'Patients',
+                links: [
+                  ['Find medication', '/signup?role=patient'],
+                  ['How it works', '#how'],
+                  ['Patient FAQ', '#faq-patients'],
+                  ['Safety & credentials', '/about#credentials'],
+                ],
+              },
+              {
+                h: 'Pharmacies',
+                links: [
+                  ['Register pharmacy', '/signup?role=pharmacy'],
+                  ['Pharmacy Till / Login', '/login'],
+                  ['Pharmacy FAQ', '#faq-pharmacies'],
+                  ['Features & pricing', '#pharmacy'],
+                ],
+              },
+              {
+                h: 'Company',
+                links: [
+                  ['About StocMed', '/about'],
+                  ['Contact us', '/about#contact'],
+                  ['Privacy policy', '/privacy'],
+                  ['Terms of service', '/terms'],
+                ],
+              },
             ].map((col) => (
               <div key={col.h}>
                 <div className="text-[13px] font-medium text-ink mb-4">{col.h}</div>
                 <div className="flex flex-col gap-3">
                   {col.links.map(([label, href]) => (
-                    <Link key={label} href={href} className="text-[14px] text-ink-muted hover:text-ink">{label}</Link>
+                    <Link key={label} href={href} className="text-[14px] text-ink-muted hover:text-ink font-normal">{label}</Link>
                   ))}
                 </div>
               </div>
             ))}
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 pt-6 border-t border-border">
-            <span className="text-[13px] text-ink-light">© 2026 StocMed. All rights reserved.</span>
-            <span className="text-[13px] text-ink-light">Lagos, Nigeria</span>
+            <span className="text-[13px] text-ink-light">© 2026 StocMed Health Ltd. All rights reserved.</span>
+            <div className="flex items-center gap-6 text-[13px] text-ink-light">
+              <Link href="/privacy" className="hover:text-ink">Privacy</Link>
+              <Link href="/terms" className="hover:text-ink">Terms</Link>
+              <span>Lagos, Nigeria</span>
+            </div>
           </div>
         </div>
       </footer>

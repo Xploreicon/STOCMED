@@ -418,9 +418,21 @@ export default function Signup() {
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
                 disabled={isLoading} className="mt-0.5 w-4 h-4 flex-shrink-0" style={{ accentColor: 'var(--primary)' }} />
               <span>
-                {selectedRole === 'pharmacy'
-                  ? "I confirm I'm authorized to register this pharmacy and consent to the account data needed to provide the service."
-                  : 'I consent to the account data needed to provide the StocMed service.'}
+                {selectedRole === 'pharmacy' ? (
+                  <>
+                    I confirm I&apos;m authorized to register this pharmacy and agree to StocMed&apos;s{' '}
+                    <Link href="/terms" target="_blank" className="text-primary underline hover:text-primary-hover font-medium">Terms of Service</Link>{' '}
+                    and{' '}
+                    <Link href="/privacy" target="_blank" className="text-primary underline hover:text-primary-hover font-medium">Privacy Policy</Link>.
+                  </>
+                ) : (
+                  <>
+                    I agree to StocMed&apos;s{' '}
+                    <Link href="/terms" target="_blank" className="text-primary underline hover:text-primary-hover font-medium">Terms of Service</Link>{' '}
+                    and consent to data processing under the{' '}
+                    <Link href="/privacy" target="_blank" className="text-primary underline hover:text-primary-hover font-medium">Privacy Policy</Link>.
+                  </>
+                )}
               </span>
             </label>
             {errors.terms && <p className="text-xs text-danger -mt-2">{errors.terms}</p>}
