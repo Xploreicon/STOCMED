@@ -1,9 +1,5 @@
-const CACHE_NAME = 'stocmed-v5';
+const CACHE_NAME = 'stocmed-v6';
 const ASSETS_TO_CACHE = [
-  '/',
-  '/dashboard',
-  '/chat',
-  '/history',
   '/offline.html',
   '/manifest.json',
   '/icon-192.png',
@@ -71,6 +67,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Safari rejects redirected navigation responses returned by a service worker.
+  // Keep navigations network-first and rebuild followed redirects as clean responses.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (!networkResponse.redirected) {
+            return networkResponse;
+          }
+
+          return new Response(networkResponse.body, {
+            status: networkResponse.status,
+            statusText: networkResponse.statusText,
+            headers: networkResponse.headers,
+          });
+        })
+        .catch(() => caches.match('/offline.html'))
+    );
+    return;
+  }
+
   // Stale-while-revalidate for page assets & static resources
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -97,13 +114,6 @@ self.addEventListener('fetch', (event) => {
         });
 
         return networkResponse;
-      }).catch((err) => {
-        // If offline and request is an HTML page navigation, return offline fallback
-        if (event.request.headers.get('accept')?.includes('text/html')) {
-          return caches.match('/offline.html');
-        }
-        // Rethrow the error so that the browser and Next.js can handle aborts and network failures natively
-        throw err;
       });
     })
   );
