@@ -42,6 +42,11 @@ export default function PharmacyInventory() {
   const addProductStrength = searchParams.get('strength');
   const addProductDosageForm = searchParams.get('dosage_form');
   const addProductCategory = searchParams.get('category');
+  const importedCount = Number(searchParams.get('imported'))
+  const skippedCount = Number(searchParams.get('skipped'))
+  const importErrorCount = Number(searchParams.get('errors'))
+  const hasImportResult = searchParams.has('imported') &&
+    [importedCount, skippedCount, importErrorCount].every(Number.isInteger)
 
   const preselectedProduct = addProductId ? {
     id: addProductId,
@@ -71,7 +76,7 @@ export default function PharmacyInventory() {
     }
   }, [user, authLoading, isPharmacy, router]);
 
-  const { data: drugsData, isLoading, refetch } = useQuery({
+  const { data: drugsData, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['pharmacy-drugs', showDelisted],
     queryFn: async () => {
       const url = showDelisted
@@ -95,6 +100,21 @@ export default function PharmacyInventory() {
         </div>
       </div>
     );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex min-h-[60vh] flex-1 items-center justify-center">
+        <div className="max-w-md rounded-lg border border-danger/20 bg-danger/5 p-6 text-center">
+          <XCircle className="mx-auto h-8 w-8 text-danger" />
+          <h1 className="mt-3 text-lg font-semibold text-ink">Inventory could not be loaded</h1>
+          <p className="mt-1 text-sm text-ink-muted">
+            {error instanceof Error ? error.message : 'The inventory request failed.'}
+          </p>
+          <Button className="mt-4" onClick={() => refetch()}>Try again</Button>
+        </div>
+      </div>
+    )
   }
 
   const drugs = drugsData?.drugs || [];
@@ -231,6 +251,15 @@ export default function PharmacyInventory() {
           </Button>
         </div>
       </div>
+
+      {hasImportResult && (
+        <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-success/20 bg-success/5 px-4 py-3 text-sm">
+          <span className="font-semibold text-success">Import complete</span>
+          <span className="text-ink-muted">{importedCount} imported</span>
+          <span className="text-ink-muted">{skippedCount} skipped</span>
+          <span className={importErrorCount > 0 ? 'text-danger' : 'text-ink-muted'}>{importErrorCount} errors</span>
+        </div>
+      )}
 
       {/* Summary Stat Row */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">

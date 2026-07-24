@@ -4,6 +4,16 @@ import type { Database } from '@/types/supabase'
 type SupabaseServerClient = SupabaseClient<Database, 'public', any>
 
 export const EXPIRING_SOON_DAYS = 60
+const INVENTORY_PAGE_SIZE = 500
+const ID_QUERY_CHUNK_SIZE = 100
+
+function chunkValues<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = []
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size))
+  }
+  return chunks
+}
 
 export type MovementUiType = 'Restock' | 'Adjustment' | 'Return' | 'Write-off' | 'Expiry' | 'Sale'
 
@@ -99,29 +109,35 @@ export async function getEnrichedInventory(
   pharmacyId: string,
   options: { showDelisted?: boolean } = {}
 ): Promise<{ rows: EnrichedInventoryRow[]; stats: InventoryStats }> {
-  let query = supabase
-    .from('pharmacy_inventory')
-    .select('*, products(*), batches(*)')
-    .eq('pharmacy_id', pharmacyId)
-    .order('created_at', { ascending: false })
+  const inventoryRows: any[] = []
+  for (let from = 0; ; from += INVENTORY_PAGE_SIZE) {
+    let query = supabase
+      .from('pharmacy_inventory')
+      .select('*, products(*), batches(*)')
+      .eq('pharmacy_id', pharmacyId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: true })
+      .range(from, from + INVENTORY_PAGE_SIZE - 1)
 
-  if (!options.showDelisted) {
-    query = query.is('deleted_at', null)
+    if (!options.showDelisted) {
+      query = query.is('deleted_at', null)
+    }
+
+    const { data: page, error: invError } = await query
+    if (invError) throw invError
+    inventoryRows.push(...(page ?? []))
+    if (!page || page.length < INVENTORY_PAGE_SIZE) break
   }
 
-  const { data: inventoryRows, error: invError } = await query
-
-  if (invError) throw invError
-
-  const inventoryIds = (inventoryRows ?? []).map((r: any) => r.id)
-  const batchIds = (inventoryRows ?? []).flatMap((r: any) => (r.batches ?? []).map((b: any) => b.id))
+  const inventoryIds = inventoryRows.map((r: any) => r.id)
+  const batchIds = inventoryRows.flatMap((r: any) => (r.batches ?? []).map((b: any) => b.id))
 
   let movementsByBatch = new Map<string, number>()
   let reservationAvailability = new Map<string, { reserved_quantity: number; sellable_quantity: number }>()
   let reservedByBatch = new Map<string, number>()
-  if (inventoryIds.length > 0) {
+  for (const inventoryIdChunk of chunkValues(inventoryIds, ID_QUERY_CHUNK_SIZE)) {
     const { data, error } = await (supabase.rpc as any)('reservation_sellable_quantities', {
-      p_inventory_ids: inventoryIds,
+      p_inventory_ids: inventoryIdChunk,
     })
     // A deployment can run against a database before the additive migration is applied.
     if (error && error.code !== 'PGRST202' && error.code !== '42883') throw error
@@ -129,18 +145,18 @@ export async function getEnrichedInventory(
       reservationAvailability.set(entry.inventory_id, entry)
     }
     const { data: batchData, error: batchError } = await (supabase.rpc as any)('reservation_batch_quantities', {
-      p_inventory_ids: inventoryIds,
+      p_inventory_ids: inventoryIdChunk,
     })
     if (batchError && batchError.code !== 'PGRST202' && batchError.code !== '42883') throw batchError
     for (const entry of batchData ?? []) {
       reservedByBatch.set(entry.batch_id, Number(entry.reserved_quantity))
     }
   }
-  if (inventoryIds.length > 0) {
+  for (const inventoryIdChunk of chunkValues(inventoryIds, ID_QUERY_CHUNK_SIZE)) {
     const { data: movements, error: movError } = await supabase
       .from('stock_movements')
       .select('batch_id, quantity')
-      .in('inventory_id', inventoryIds)
+      .in('inventory_id', inventoryIdChunk)
 
     if (movError) throw movError
 
@@ -152,7 +168,7 @@ export async function getEnrichedInventory(
   }
   void batchIds
 
-  const rows: EnrichedInventoryRow[] = (inventoryRows ?? []).map((inv: any) => {
+  const rows: EnrichedInventoryRow[] = inventoryRows.map((inv: any) => {
     const product = inv.products
     const batches: EnrichedBatch[] = (inv.batches ?? [])
       .map((b: any) => {

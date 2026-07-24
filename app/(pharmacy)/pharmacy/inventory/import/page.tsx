@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -87,6 +88,9 @@ function previewValidation(row: any, source: ImportSource, dosageForms: string[]
 
 export default function BulkImportWizard() {
   const router = useRouter();
+  const queryClient = useQueryClient();
+  const commitLockRef = useRef(false)
+  const importBatchIdRef = useRef<string | null>(null)
 
   const [step, setStep] = useState<Step>('upload');
   const [source, setSource] = useState<ImportSource>('stocmed');
@@ -237,22 +241,32 @@ export default function BulkImportWizard() {
 
   // Commit Import
   const handleCommitImport = async () => {
+    if (commitLockRef.current) return
+    commitLockRef.current = true
+    setIsImporting(true)
+
     // Check if any row has validation errors
     const errorCount = matchedRows.filter(r => r.validation.errors.length > 0).length;
     if (errorCount > 0) {
       alert(`Resolve the validation errors in ${errorCount} row(s) before importing. No rows have been committed.`);
+      commitLockRef.current = false
+      setIsImporting(false)
       return;
     }
 
-    setIsImporting(true);
     setImportProgress(0);
 
     try {
+      if (!importBatchIdRef.current) importBatchIdRef.current = crypto.randomUUID()
       const payloadRows = matchedRows.map(r => ({
         mapped: r.mapped,
         selected_product_id: r.selected_product_id
       }));
-      const requestBody = { matchedRows: payloadRows, source: source === 'quickbooks' ? 'quickbooks' : undefined };
+      const requestBody = {
+        matchedRows: payloadRows,
+        import_batch_id: importBatchIdRef.current,
+        source: source === 'quickbooks' ? 'quickbooks' : undefined,
+      };
       const preflightRes = await fetch('/api/pharmacy/inventory/import/commit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -294,13 +308,22 @@ export default function BulkImportWizard() {
         throw new Error([result.error || 'Import failed', rowDetails].filter(Boolean).join('\n'));
       }
 
+      const imported = Number(result.imported ?? 0)
+      const skipped = Number(result.skipped ?? 0)
+      const errors = Number(result.errors ?? 0)
+      const total = Number(result.total ?? imported + skipped + errors)
+      if (result.success !== true || imported + skipped + errors !== total) {
+        throw new Error('Import response could not be verified against the database result')
+      }
       setImportProgress(100);
-      setImportStats({ imported: result.imported, skipped: 0, errors: 0, total: result.total });
+      setImportStats({ imported, skipped, errors, total });
       setIsImporting(false);
-      setStep('summary');
+      await queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'] })
+      router.replace(`/pharmacy/inventory?imported=${imported}&skipped=${skipped}&errors=${errors}`)
     } catch (err: any) {
       console.error(err);
       alert(err.message || 'Error executing import transaction');
+      commitLockRef.current = false
       setIsImporting(false);
       setStep('matching');
     }
@@ -446,10 +469,10 @@ export default function BulkImportWizard() {
               </div>
               <Button
                 onClick={handleCommitImport}
-                disabled={isValidating || matchedRows.some(row => row.validation.errors.length > 0) || (source === 'quickbooks' && matchedRows.some(row => !row.selected_product_id))}
+                disabled={isImporting || isValidating || matchedRows.some(row => row.validation.errors.length > 0) || (source === 'quickbooks' && matchedRows.some(row => !row.selected_product_id))}
                 className="shadow-lg"
               >
-                Import {matchedRows.length} Items
+                {isImporting ? 'Importing…' : `Import ${matchedRows.length} Items`}
               </Button>
             </div>
 

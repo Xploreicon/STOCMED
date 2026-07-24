@@ -17,6 +17,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
+    const importBatchId = typeof body?.import_batch_id === 'string' ? body.import_batch_id : ''
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(importBatchId)) {
+      return NextResponse.json({ error: 'A valid import batch ID is required' }, { status: 400 })
+    }
     if (body?.source === 'quickbooks') {
       const parsed = quickBooksImportSchema.safeParse(body)
       if (!parsed.success) {
@@ -121,12 +125,32 @@ export async function POST(request: NextRequest) {
       p_pharmacy_id: pharmacy.id,
       p_user_id: user.id,
       p_rows: body.matchedRows,
+      p_import_id: importBatchId,
     })
 
     if (error) {
       console.error('import_inventory_file RPC failed:', error)
       return NextResponse.json(
         { error: `Import rolled back: ${error.message}`, rowErrors: [] },
+        { status: 409 }
+      )
+    }
+
+    const imported = Number(data?.imported)
+    const skipped = Number(data?.skipped)
+    const errors = Number(data?.errors)
+    const total = Number(data?.total)
+    if (
+      data?.success !== true ||
+      !Number.isInteger(imported) ||
+      !Number.isInteger(skipped) ||
+      !Number.isInteger(errors) ||
+      !Number.isInteger(total) ||
+      imported + skipped + errors !== total
+    ) {
+      console.error('import_inventory_file returned an unverifiable result:', data)
+      return NextResponse.json(
+        { error: 'Import result could not be verified; completion was not reported' },
         { status: 409 }
       )
     }
