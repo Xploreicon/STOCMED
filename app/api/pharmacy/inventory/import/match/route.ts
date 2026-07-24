@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
-import { isSafeAutoMatch, parseImportBoolean, parseImportDate } from '@/lib/inventory-import'
+import { determineImportRouting, parseImportBoolean, parseImportDate } from '@/lib/inventory-import'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(request: NextRequest) {
@@ -97,8 +97,19 @@ export async function POST(request: NextRequest) {
       const normalizedType = ['medicine', 'drug', 'rx'].includes(suppliedType)
         ? 'medicine'
         : ['store', 'grocery', 'frontstore'].includes(suppliedType) ? 'store' : ''
-      const itemType = normalizedType || (isSafeAutoMatch(matches[0]) ? 'medicine' : 'store')
-      const tracksExpiry = itemType === 'medicine' ? true : suppliedTracksExpiry
+
+      // Build the preliminary mapped fields for routing analysis
+      const preliminaryMapped: Record<string, unknown> = {
+        item_type: normalizedType,
+        strength,
+        dosage_form: dosageForm,
+      }
+
+      // 3-outcome routing: confident match → medicine, medicine signals →
+      // create_new, otherwise → store. Explicit CSV type=medicine is NEVER
+      // routed to Store.
+      const routing = determineImportRouting(preliminaryMapped, matches[0])
+      const tracksExpiry = routing.itemType === 'medicine' ? true : suppliedTracksExpiry
 
       matchedRows.push({
         mapped: {
@@ -109,7 +120,7 @@ export async function POST(request: NextRequest) {
           category,
           pack_size: packSize,
           sku,
-          item_type: itemType,
+          item_type: routing.itemType,
           tracks_expiry: tracksExpiry,
           price,
           quantity,
@@ -117,6 +128,7 @@ export async function POST(request: NextRequest) {
           batch_number: batchNumber,
           expiry_date: expiryDate
         },
+        selected_product_id: routing.selectedProductId,
         matches
       })
     }

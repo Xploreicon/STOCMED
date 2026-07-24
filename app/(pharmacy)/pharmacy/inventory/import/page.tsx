@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import {
   autoMapImportHeaders,
+  hasMedicineSignals,
   isSafeAutoMatch,
   matchConflictLabels,
   parseImportDate,
@@ -55,10 +56,15 @@ function previewValidation(row: any, source: ImportSource) {
   if (!Number.isInteger(Number(row.mapped.quantity)) || Number(row.mapped.quantity) < 0) {
     errors.push('Stock quantity must be a non-negative whole number')
   }
+  // 'create_new' is a valid selection — it triggers self-enrichment
   if (isMedicine && !row.selected_product_id) errors.push('Select a catalogue match for medicine')
   if (isMedicine && !row.mapped.strength) errors.push('Strength is missing or not mapped')
   if (isMedicine && !row.mapped.dosage_form) errors.push('Dosage form is missing or not mapped')
-  if (!isMedicine && row.selected_product_id) errors.push('Store rows cannot use a catalogue product')
+  if (!isMedicine && row.selected_product_id && row.selected_product_id !== 'create_new') errors.push('Store rows cannot use a catalogue product')
+  // Warn when a medicine-looking item is routed to Store
+  if (!isMedicine && hasMedicineSignals(row.mapped)) {
+    warnings.push('This looks like a medicine. Store items do NOT appear in patient search.')
+  }
   if (tracksExpiry) {
     if (!row.mapped.batch_number) errors.push('Batch number is missing or not mapped')
     if (!row.mapped.expiry_date) {
@@ -176,8 +182,11 @@ export default function BulkImportWizard() {
       // tenant-owned Store stock unless the spreadsheet supplied a type.
       const initializedResults = results.map((row: any) => {
         const bestMatch = row.matches && row.matches[0];
-        const itemType = source === 'quickbooks' ? 'medicine' : row.mapped.item_type;
-        const selectedId = itemType === 'medicine' && isSafeAutoMatch(bestMatch) ? bestMatch.id : '';
+        const itemType = source === 'quickbooks' ? 'medicine' : (row.mapped.item_type || (row.selected_product_id ? 'medicine' : 'store'));
+        // Use server-determined selected_product_id (which may be 'create_new')
+        const selectedId = source === 'quickbooks'
+          ? (isSafeAutoMatch(bestMatch) ? bestMatch.id : '')
+          : (row.selected_product_id || (itemType === 'medicine' && isSafeAutoMatch(bestMatch) ? bestMatch.id : row.selected_product_id || ''));
         const initialized = {
           ...row,
           mapped: { ...row.mapped, item_type: itemType, tracks_expiry: itemType === 'medicine' || row.mapped.tracks_expiry },
@@ -201,7 +210,7 @@ export default function BulkImportWizard() {
     setMatchedRows((rows) => rows.map((row, index) => {
       if (!indexes.includes(index)) return row
       const selectedProductId = itemType === 'medicine'
-        ? row.selected_product_id || (isSafeAutoMatch(row.matches?.[0]) ? row.matches[0].id : '')
+        ? row.selected_product_id || (isSafeAutoMatch(row.matches?.[0]) ? row.matches[0].id : 'create_new')
         : ''
       const updated = {
         ...row,
@@ -586,12 +595,19 @@ export default function BulkImportWizard() {
                                 className="w-[220px] px-2 py-1.5 border border-border rounded-md focus:ring-1 focus:ring-primary text-xs bg-white"
                               >
                                 <option value="">{row.mapped.item_type === 'store' ? 'Not added to catalogue' : 'Select a catalogue match'}</option>
+                                <option value="create_new">⚠️ MEDICINE — new catalogue product</option>
                                 {row.matches && row.matches.map((m: any) => (
                                   <option key={m.id} value={m.id} disabled={m.strength_match === false || m.form_match === false}>
                                     {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}, {m.dosage_form}) - {Math.round(m.confidence * 100)}%{matchConflictLabels(m).length ? ` - ${matchConflictLabels(m).join(', ')}` : ''}
                                   </option>
                                 ))}
                               </select>
+                              {row.selected_product_id === 'create_new' && (
+                                <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded">
+                                  <Sparkles className="h-3 w-3" />
+                                  Creates unverified catalogue product
+                                </div>
+                              )}
                             </td>
                             <td className="p-3 text-center">
                               {hasErrors ? (

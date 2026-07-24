@@ -2,7 +2,7 @@ import React from 'react';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
-import { Building2, FileText, ShieldAlert, Settings, ClipboardList, Database, LogOut, ShieldCheck } from 'lucide-react';
+import { Building2, FileText, ShieldAlert, Settings, ClipboardList, Database, LogOut, ShieldCheck, PackageSearch } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +48,7 @@ export default async function AdminLayout({
       ? [
           { href: '/admin/audit', label: 'Triage logs', icon: Database },
           { href: '/admin/pharmacy-verifications', label: 'Pharmacy verification', icon: Building2 },
+          { href: '/admin/catalogue-review', label: 'Catalogue review', icon: PackageSearch },
           { href: '/admin/config', label: 'Safety config', icon: ShieldAlert },
         ]
       : []),

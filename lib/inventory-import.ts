@@ -113,3 +113,69 @@ export function matchConflictLabels(match: Record<string, unknown> | null | unde
     match.form_match === false ? 'form differs' : null,
   ].filter((reason): reason is string => Boolean(reason))
 }
+
+/**
+ * Returns true when a row carries signals that it represents a medicine —
+ * either the CSV "type" column explicitly says medicine/drug/rx, or the row
+ * has a non-empty strength or dosage-form value.
+ */
+export function hasMedicineSignals(mapped: Record<string, unknown>): boolean {
+  const suppliedType = String(mapped.item_type ?? '').trim().toLowerCase()
+  if (['medicine', 'drug', 'rx'].includes(suppliedType)) return true
+  if (mapped.strength && String(mapped.strength).trim()) return true
+  if (mapped.dosage_form && String(mapped.dosage_form).trim()) return true
+  return false
+}
+
+export type ImportRouting = {
+  itemType: 'medicine' | 'store'
+  selectedProductId: string
+}
+
+/**
+ * Three-outcome routing for import rows:
+ *
+ *   A. Confident catalogue match → Medicine (linked to existing product)
+ *   B. No confident match BUT the row looks like a medicine (has strength
+ *      and/or dosage form, or CSV "type" column says medicine/drug/rx) →
+ *      Medicine with `selected_product_id = 'create_new'` (self-enrichment)
+ *   C. No match AND no medicine signals → Store
+ *
+ * When the CSV explicitly says type=medicine, the row is NEVER routed to
+ * Store regardless of match confidence.  Explicit user intent beats the
+ * heuristic.
+ */
+export function determineImportRouting(
+  mapped: Record<string, unknown>,
+  bestMatch: Record<string, unknown> | null | undefined,
+): ImportRouting {
+  const suppliedType = String(mapped.item_type ?? '').trim().toLowerCase()
+
+  // Explicit Store designation
+  if (['store', 'grocery', 'frontstore'].includes(suppliedType)) {
+    return { itemType: 'store', selectedProductId: '' }
+  }
+
+  const safeMatch = isSafeAutoMatch(bestMatch)
+
+  // Explicit medicine/drug/rx designation — NEVER Store
+  if (['medicine', 'drug', 'rx'].includes(suppliedType)) {
+    return {
+      itemType: 'medicine',
+      selectedProductId: safeMatch ? String(bestMatch!.id) : 'create_new',
+    }
+  }
+
+  // Confident catalogue match → medicine
+  if (safeMatch) {
+    return { itemType: 'medicine', selectedProductId: String(bestMatch!.id) }
+  }
+
+  // Heuristic: row has strength or dosage-form → medicine (self-enrichment)
+  if (hasMedicineSignals(mapped)) {
+    return { itemType: 'medicine', selectedProductId: 'create_new' }
+  }
+
+  // Fall-through: no match, no signals → Store
+  return { itemType: 'store', selectedProductId: '' }
+}

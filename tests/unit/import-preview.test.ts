@@ -58,4 +58,129 @@ describe('bulk import preview validation', () => {
       'Expiry date is missing, invalid, or not mapped',
     ]))
   })
+
+  it('accepts create_new as a valid catalogue selection for medicine rows', () => {
+    const futureDate = new Date()
+    futureDate.setFullYear(futureDate.getFullYear() + 1)
+    const expiryDate = futureDate.toISOString().slice(0, 10)
+
+    expect(validateRows([{
+      mapped: {
+        item_type: 'medicine',
+        generic_name: 'Chloroquine Phosphate',
+        strength: '250mg',
+        dosage_form: 'tablet',
+        price: 500,
+        quantity: 24,
+        batch_number: 'B001',
+        expiry_date: expiryDate,
+      },
+      selected_product_id: 'create_new',
+    }])).toEqual([])
+  })
+
+  it('still requires strength and dosage_form for create_new medicine rows', () => {
+    const futureDate = new Date()
+    futureDate.setFullYear(futureDate.getFullYear() + 1)
+    const expiryDate = futureDate.toISOString().slice(0, 10)
+
+    const errors = validateRows([{
+      mapped: {
+        item_type: 'medicine',
+        generic_name: 'Mystery Drug',
+        price: 1000,
+        quantity: 10,
+        batch_number: 'B002',
+        expiry_date: expiryDate,
+      },
+      selected_product_id: 'create_new',
+    }])
+    expect(errors[0].errors).toEqual(expect.arrayContaining([
+      'Strength is required for medicine matching',
+      'Dosage form is required for medicine matching',
+    ]))
+  })
+})
+
+describe('40-row fixture — 15 medicines / 25 store items', () => {
+  // This fixture models the actual pharmacy CSV structure:
+  // 15 rows with type=medicine (all have strength and dosage_form)
+  // 25 rows with type=store (no strength, no dosage_form)
+
+  const futureDate = new Date()
+  futureDate.setFullYear(futureDate.getFullYear() + 1)
+  const expiry = futureDate.toISOString().slice(0, 10)
+  const validUuid = '11111111-1111-4111-8111-111111111111'
+
+  const MEDICINES = [
+    'Paracetamol', 'Amoxicillin', 'Ibuprofen', 'Ciprofloxacin', 'Metronidazole',
+    'Chloroquine', 'Artemether-Lumefantrine', 'Diclofenac', 'Ceftriaxone', 'Omeprazole',
+    'Metformin', 'Amlodipine', 'Lisinopril', 'Tramadol', 'Loperamide',
+  ]
+
+  const STORE_ITEMS = [
+    'Baby Formula', 'Bath Soap', 'Body Cream', 'Toothpaste', 'Cotton Wool',
+    'Plaster', 'Face Mask', 'Hand Sanitizer', 'Tissue Paper', 'Baby Diapers',
+    'Shampoo', 'Vaseline', 'Detergent', 'Air Freshener', 'Bleach',
+    'Mosquito Coil', 'Insect Spray', 'Candles', 'Batteries', 'Phone Charger',
+    'Notebook', 'Pen', 'Biscuits', 'Soft Drinks', 'Bottled Water',
+  ]
+
+  function buildMedicineRow(name: string, selectedProductId: string) {
+    return {
+      mapped: {
+        item_type: 'medicine',
+        generic_name: name,
+        strength: '500mg',
+        dosage_form: 'tablet',
+        price: 1000,
+        quantity: 50,
+        batch_number: 'B001',
+        expiry_date: expiry,
+      },
+      selected_product_id: selectedProductId,
+    }
+  }
+
+  function buildStoreRow(name: string) {
+    return {
+      mapped: {
+        item_type: 'store',
+        tracks_expiry: false,
+        generic_name: name,
+        price: 500,
+        quantity: 24,
+      },
+      selected_product_id: '',
+    }
+  }
+
+  it('validates all 40 rows with 9 matched + 6 create_new medicines and 25 stores', () => {
+    const rows = [
+      // 9 medicines with catalogue match
+      ...MEDICINES.slice(0, 9).map((name) => buildMedicineRow(name, validUuid)),
+      // 6 medicines with create_new (no catalogue match)
+      ...MEDICINES.slice(9).map((name) => buildMedicineRow(name, 'create_new')),
+      // 25 store items
+      ...STORE_ITEMS.map(buildStoreRow),
+    ]
+
+    const errors = validateRows(rows)
+    expect(errors).toEqual([])
+  })
+
+  it('counts exactly 15 medicines and 25 store items', () => {
+    const rows = [
+      ...MEDICINES.slice(0, 9).map((name) => buildMedicineRow(name, validUuid)),
+      ...MEDICINES.slice(9).map((name) => buildMedicineRow(name, 'create_new')),
+      ...STORE_ITEMS.map(buildStoreRow),
+    ]
+
+    const medicines = rows.filter((r) => r.mapped.item_type === 'medicine')
+    const stores = rows.filter((r) => r.mapped.item_type === 'store')
+
+    expect(medicines.length).toBe(15)
+    expect(stores.length).toBe(25)
+    expect(rows.length).toBe(40)
+  })
 })
