@@ -186,6 +186,7 @@ export async function getEnrichedInventory(
           is_expiring_soon: days >= 0 && days <= EXPIRING_SOON_DAYS,
         }
       })
+      .filter((batch: EnrichedBatch) => batch.remaining_qty > 0)
       .sort((a: EnrichedBatch, b: EnrichedBatch) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
 
     const earliestActiveBatch = batches.find((b) => b.remaining_qty > 0) ?? batches[0] ?? null
