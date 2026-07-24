@@ -263,7 +263,10 @@ export default function BulkImportWizard() {
             },
           })));
         }
-        throw new Error(preflight.error || 'Import preflight failed');
+        const rowDetails = Array.isArray(preflight.rowErrors)
+          ? preflight.rowErrors.map((entry: any) => `Row ${entry.row}: ${entry.errors.join(', ')}`).join('\n')
+          : '';
+        throw new Error([preflight.error || 'Import preflight failed', rowDetails].filter(Boolean).join('\n'));
       }
 
       setStep('progress');

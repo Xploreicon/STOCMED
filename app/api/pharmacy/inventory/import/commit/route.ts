@@ -38,12 +38,15 @@ export async function POST(request: NextRequest) {
     }
 
     const rowErrors = validateRows(body.matchedRows)
-    // Filter out 'create_new' — those will be resolved to real product IDs
-    // after validation passes, right before the commit.
+    // Filter out 'create_new' and empty strings — only real UUIDs should be queried against products
     const selectedProductIds = Array.from(new Set(
       body.matchedRows
         .map((row: ImportRow) => row.selected_product_id)
-        .filter((id: unknown): id is string => typeof id === 'string' && id !== 'create_new')
+        .filter((id: unknown): id is string =>
+          typeof id === 'string' &&
+          id.trim() !== '' &&
+          id !== 'create_new'
+        )
     ))
 
     if (selectedProductIds.length) {
@@ -53,7 +56,11 @@ export async function POST(request: NextRequest) {
         .in('id', selectedProductIds)
 
       if (productError) {
-        return NextResponse.json({ error: 'Could not validate catalogue selections' }, { status: 500 })
+        console.error('Failed to validate catalogue selections:', productError)
+        return NextResponse.json(
+          { error: `Could not validate catalogue selections: ${productError.message}` },
+          { status: 500 }
+        )
       }
 
       type CatalogueSelection = {
@@ -65,13 +72,13 @@ export async function POST(request: NextRequest) {
         (products || []).map((product: CatalogueSelection) => [product.id, product])
       )
       body.matchedRows.forEach((row: ImportRow, index: number) => {
-        // Skip create_new rows — they have no existing product to validate against
-        if (row.selected_product_id === 'create_new') return
-        const selected = row.selected_product_id ? productsById.get(row.selected_product_id) : null
+        // Skip create_new and unselected/store rows
+        if (!row.selected_product_id || row.selected_product_id === 'create_new') return
+        const selected = productsById.get(row.selected_product_id)
         const errors: string[] = []
-        if (row.selected_product_id && !selected) {
+        if (!selected) {
           errors.push('Selected catalogue product does not exist')
-        } else if (selected && row.mapped?.item_type !== 'store') {
+        } else if (row.mapped?.item_type !== 'store') {
           if (normalizeImportStrength(selected.strength) !== normalizeImportStrength(row.mapped?.strength)) {
             errors.push(`Selected catalogue strength differs (${selected.strength || 'missing'} vs ${String(row.mapped?.strength || 'missing')})`)
           }
@@ -88,8 +95,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (rowErrors.length) {
+      console.error('Import validation failed:', JSON.stringify(rowErrors))
       return NextResponse.json(
-        { error: 'Import validation failed; no rows were committed', rowErrors },
+        { error: `Import validation failed on ${rowErrors.length} row(s); no rows were committed`, rowErrors },
         { status: 422 }
       )
     }
@@ -103,23 +111,29 @@ export async function POST(request: NextRequest) {
     for (const row of body.matchedRows) {
       if (row.selected_product_id !== 'create_new') continue
       const mapped = row.mapped ?? {}
+      const genericName = String(mapped.generic_name || '').trim()
+      const strength = String(mapped.strength || '').trim()
+      const dosageForm = String(mapped.dosage_form || '').trim()
+      const category = String(mapped.category || 'Uncategorised').trim() || 'Uncategorised'
+
       const { data: newProduct, error: createError } = await supabase.rpc(
         'create_unverified_catalog_product',
         {
           p_pharmacy_id: pharmacy.id,
-          p_generic_name: String(mapped.generic_name || ''),
-          p_brand_name: String(mapped.brand_name || '') || null,
+          p_generic_name: genericName,
+          p_brand_name: String(mapped.brand_name || '').trim() || null,
           p_manufacturer: null,
-          p_strength: String(mapped.strength || ''),
-          p_dosage_form: String(mapped.dosage_form || ''),
-          p_category: String(mapped.category || 'Uncategorised'),
-          p_pack_size: String(mapped.pack_size || '') || null,
+          p_strength: strength,
+          p_dosage_form: dosageForm,
+          p_category: category,
+          p_pack_size: String(mapped.pack_size || '').trim() || null,
           p_image_url: null,
         }
       )
-      if (createError || !newProduct) {
+      if (createError || !newProduct || !newProduct.id) {
+        console.error(`Failed to create catalogue product for "${genericName}":`, createError)
         return NextResponse.json(
-          { error: `Failed to create catalogue product for "${mapped.generic_name}": ${createError?.message || 'unknown error'}` },
+          { error: `Failed to create catalogue product for "${genericName}": ${createError?.message || 'unknown error'}` },
           { status: 409 }
         )
       }
@@ -133,6 +147,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (error) {
+      console.error('import_inventory_file RPC failed:', error)
       return NextResponse.json(
         { error: `Import rolled back: ${error.message}`, rowErrors: [] },
         { status: 409 }
@@ -141,7 +156,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data, { status: 201 })
   } catch (error) {
-    console.error('Import commit failed')
+    console.error('Import commit failed:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Internal server error committing import' },
       { status: 500 }
