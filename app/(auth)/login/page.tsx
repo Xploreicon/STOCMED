@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/components/brand/Logo';
+import { GoogleOAuthButton } from '@/components/auth/GoogleOAuthButton';
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +16,6 @@ export default function Login() {
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || null;
   const [isLoading, setIsLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
@@ -101,6 +101,16 @@ export default function Login() {
           <h1 className="font-display font-medium text-[28px] text-ink text-center">Welcome back</h1>
           <p className="text-[15px] text-ink-muted text-center mt-2 mb-8">Log in to continue to StocMed</p>
 
+          <GoogleOAuthButton
+            next={redirectTo}
+            onError={(message) => setErrors(message ? { general: message } : {})}
+          />
+          <div className="flex items-center gap-3 my-6" aria-hidden="true">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-[13px] text-ink-light">or use email</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {errors.general && (
               <div className="rounded-button border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger font-medium">
@@ -136,18 +146,7 @@ export default function Login() {
               {errors.password && <p className="text-xs text-danger font-medium mt-1.5">{errors.password}</p>}
             </div>
 
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-[14px] text-ink-muted cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  disabled={isLoading}
-                  className="w-4 h-4"
-                  style={{ accentColor: 'var(--primary)' }}
-                />
-                <span>Remember me</span>
-              </label>
+            <div className="flex items-center justify-end">
               <Link href="/forgot-password" className="text-[14px] font-medium text-primary hover:underline">
                 Forgot password?
               </Link>

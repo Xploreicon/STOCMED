@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/components/brand/Logo';
+import { GoogleOAuthButton } from '@/components/auth/GoogleOAuthButton';
 import {
   isPcnNumberFormatValid,
   normalizePcnNumber,
@@ -58,6 +59,11 @@ export default function Signup() {
     if (roleParam === 'patient' || roleParam === 'pharmacy') {
       setSelectedRole(roleParam as Role);
       setCurrentStep(2);
+    }
+    if (searchParams.get('oauth') === 'pharmacy_requires_password') {
+      setErrors({
+        general: 'New pharmacy accounts must use email and password so we can collect PCN and pharmacy details. Existing pharmacy accounts can use Google from the login page.',
+      });
     }
   }, [searchParams]);
 
@@ -139,6 +145,7 @@ export default function Signup() {
             role: selectedRole,
             full_name: formData.full_name,
             phone: formData.phone,
+            location: selectedRole === 'patient' ? formData.location : formData.city,
             pharmacy_profile:
               selectedRole === 'pharmacy'
                 ? {
@@ -164,18 +171,27 @@ export default function Signup() {
         return;
       }
 
-      const { error: userError } = await supabase.from('users').insert({
-        user_id: authData.user.id,
-        email: formData.email,
-        full_name: formData.full_name,
-        phone: formData.phone,
-        role: selectedRole!,
-        location: selectedRole === 'patient' ? formData.location : formData.city,
-      } as any);
-
-      if (userError) console.error('Error inserting user:', userError);
-
       const hasSession = !!authData.session;
+
+      if (hasSession) {
+        const expectedLocation = selectedRole === 'patient' ? formData.location : formData.city;
+        const { data: persistedProfile, error: profileError } = await (supabase.from('users') as any)
+          .select('user_id, role, location')
+          .eq('user_id', authData.user.id)
+          .single();
+
+        if (
+          profileError
+          || !persistedProfile
+          || persistedProfile.role !== selectedRole
+          || persistedProfile.location !== expectedLocation
+        ) {
+          await supabase.auth.signOut();
+          throw new Error(
+            'Your account profile and location could not be saved. No session was started; please retry signup.'
+          );
+        }
+      }
 
       if (selectedRole === 'pharmacy' && hasSession) {
         const {
@@ -211,7 +227,9 @@ export default function Signup() {
         });
 
         if (metadataError) {
-          console.error('Failed to store pharmacy_id in auth metadata', metadataError);
+          throw new Error(
+            'Your pharmacy was created, but account setup did not finish. Please contact support before retrying.'
+          );
         }
       }
 
@@ -297,6 +315,24 @@ export default function Signup() {
               ? 'List your inventory and get discovered by patients searching nearby.'
               : 'Find medication and reserve it at nearby pharmacies.'}
           </p>
+
+          {selectedRole === 'patient' ? (
+            <>
+              <GoogleOAuthButton
+                onError={(message) => setErrors(message ? { general: message } : {})}
+              />
+              <div className="flex items-center gap-3 my-6" aria-hidden="true">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-[13px] text-ink-light">or use email</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+            </>
+          ) : (
+            <div className="mb-6 rounded-button border border-border bg-surface px-4 py-3 text-sm leading-6 text-ink-muted">
+              New pharmacy accounts must use email and password so StocMed can collect PCN and pharmacy details. Already registered?{' '}
+              <Link href="/login" className="font-medium text-primary hover:underline">Sign in with Google</Link>.
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
             {errors.general && (
