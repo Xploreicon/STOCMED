@@ -9,9 +9,9 @@ BEGIN
 END $$;
 
 ALTER TABLE public.pharmacies
-  ADD COLUMN IF NOT EXISTS reservations_enabled BOOLEAN NOT NULL DEFAULT FALSE,
   ADD COLUMN IF NOT EXISTS reservation_hold_minutes INTEGER NOT NULL DEFAULT 240
-    CHECK (reservation_hold_minutes BETWEEN 30 AND 1440);
+    CHECK (reservation_hold_minutes BETWEEN 30 AND 1440),
+  ADD COLUMN IF NOT EXISTS reservations_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS public.reservations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

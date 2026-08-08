@@ -9,12 +9,16 @@ ALTER TABLE public.pharmacy_inventory
 ALTER TABLE public.pharmacy_inventory
   ADD COLUMN IF NOT EXISTS image_url TEXT DEFAULT NULL;
 
--- 3. Partial index for efficient active-item queries
+-- 3. Keep the production column order for the inventory notes field.
+ALTER TABLE public.pharmacy_inventory
+  ADD COLUMN IF NOT EXISTS notes TEXT;
+
+-- 4. Partial index for efficient active-item queries
 CREATE INDEX IF NOT EXISTS idx_pharmacy_inventory_active
   ON public.pharmacy_inventory (pharmacy_id)
   WHERE deleted_at IS NULL;
 
--- 4. Update RLS policies to exclude delisted items from patient / anon views
+-- 5. Update RLS policies to exclude delisted items from patient / anon views
 --    while allowing pharmacy owners to see their own delisted rows.
 
 -- Anon: only active + listed items

@@ -1,8 +1,7 @@
--- Support for the inventory Adjust Stock and Edit Drug UI:
--- a distinct "write off" movement type (separate from expiry write-offs)
--- and a free-text notes field on pharmacy_inventory rows.
+-- Production's inventory movement vocabulary is captured here for fresh
+-- replays. The pharmacy_inventory notes column is added later, after the
+-- production-ordered deleted_at and image_url columns.
 
-ALTER TYPE stock_movement_type ADD VALUE IF NOT EXISTS 'write_off';
-
-ALTER TABLE public.pharmacy_inventory
-  ADD COLUMN IF NOT EXISTS notes TEXT;
+-- Production's canonical stock_movement_type intentionally has no write_off
+-- label. Inventory write-offs use the existing expiry_writeoff/adjustment
+-- labels, so a fresh replay must not introduce a migration-only enum value.

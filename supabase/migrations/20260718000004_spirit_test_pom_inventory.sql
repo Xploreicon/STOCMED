@@ -13,7 +13,10 @@ BEGIN
     SELECT 1 FROM public.pharmacies
     WHERE id = v_pharmacy_id AND is_test_account AND is_verified
       AND verification_status = 'full' AND reservations_enabled
-  ) THEN RAISE EXCEPTION 'Spirit ideal test account is not provisioned'; END IF;
+  ) THEN
+    RAISE NOTICE 'Skipping Spirit POM fixture: Spirit ideal test account is not present in this environment';
+    RETURN;
+  END IF;
 
   SELECT id INTO v_product_id
   FROM public.products

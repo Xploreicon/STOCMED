@@ -3,21 +3,33 @@
 
 INSERT INTO auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
   raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 ) VALUES
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000001', 'authenticated', 'authenticated',
    'pharmacy.test@stocmed.local', crypt('StocMedTest123!', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"full_name":"Test Cashier"}', now(), now()),
+   '', '', '', '',
+   '{"provider":"email","providers":["email"]}', '{"role":"pharmacy","full_name":"Test Cashier","phone":"+2348000000001","location":"Ikeja","pharmacy_id":"30000000-0000-4000-8000-000000000001"}', now(), now()),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000002', 'authenticated', 'authenticated',
    'pharmacy.other@stocmed.local', crypt('StocMedTest123!', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"full_name":"Other Pharmacy"}', now(), now()),
+   '', '', '', '',
+   '{"provider":"email","providers":["email"]}', '{"role":"pharmacy","full_name":"Other Pharmacy","phone":"+2348000000002","location":"Abuja","pharmacy_id":"30000000-0000-4000-8000-000000000002"}', now(), now()),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000003', 'authenticated', 'authenticated',
    'patient.test@stocmed.local', crypt('StocMedTest123!', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"full_name":"Test Patient"}', now(), now()),
+   '', '', '', '',
+   '{"provider":"email","providers":["email"]}', '{"role":"patient","full_name":"Test Patient","phone":"+2348000000003","location":"Lagos"}', now(), now()),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-4000-8000-000000000004', 'authenticated', 'authenticated',
    'admin.test@stocmed.local', crypt('StocMedTest123!', gen_salt('bf')), now(),
-   '{"provider":"email","providers":["email"]}', '{"full_name":"Test Administrator"}', now(), now())
-ON CONFLICT (id) DO UPDATE SET encrypted_password = EXCLUDED.encrypted_password, email_confirmed_at = now();
+   '', '', '', '',
+   '{"provider":"email","providers":["email"]}', '{"role":"patient","full_name":"Test Administrator","phone":"+2348000000004","location":"Lagos"}', now(), now())
+ON CONFLICT (id) DO UPDATE SET
+  encrypted_password = EXCLUDED.encrypted_password,
+  email_confirmed_at = now(),
+  confirmation_token = '',
+  recovery_token = '',
+  email_change_token_new = '',
+  email_change = '',
+  raw_user_meta_data = EXCLUDED.raw_user_meta_data;
 
 INSERT INTO auth.identities (id, user_id, provider_id, identity_data, provider, created_at, updated_at, last_sign_in_at)
 VALUES
@@ -41,26 +53,26 @@ BEGIN
   IF users_id_type = 'bigint' THEN
     INSERT INTO public.users (user_id, email, full_name, phone, role, is_admin, is_licensed_pharmacist)
     VALUES
-      ('10000000-0000-4000-8000-000000000001', 'pharmacy.test@stocmed.local', 'Test Cashier', '08000000001', 'pharmacy', false, false),
-      ('10000000-0000-4000-8000-000000000002', 'pharmacy.other@stocmed.local', 'Other Pharmacy', '08000000002', 'pharmacy', false, false),
-      ('10000000-0000-4000-8000-000000000003', 'patient.test@stocmed.local', 'Test Patient', '08000000003', 'patient', false, false),
-      ('10000000-0000-4000-8000-000000000004', 'admin.test@stocmed.local', 'Test Administrator', '08000000004', 'patient', false, false)
+      ('10000000-0000-4000-8000-000000000001', 'pharmacy.test@stocmed.local', 'Test Cashier', '+2348000000001', 'pharmacy', false, false),
+      ('10000000-0000-4000-8000-000000000002', 'pharmacy.other@stocmed.local', 'Other Pharmacy', '+2348000000002', 'pharmacy', false, false),
+      ('10000000-0000-4000-8000-000000000003', 'patient.test@stocmed.local', 'Test Patient', '+2348000000003', 'patient', false, false),
+      ('10000000-0000-4000-8000-000000000004', 'admin.test@stocmed.local', 'Test Administrator', '+2348000000004', 'patient', false, false)
     ON CONFLICT (user_id) DO UPDATE SET full_name = EXCLUDED.full_name;
   ELSE
     INSERT INTO public.users (id, user_id, email, full_name, phone, role, is_admin, is_licensed_pharmacist)
     VALUES
-      ('10000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'pharmacy.test@stocmed.local', 'Test Cashier', '08000000001', 'pharmacy', false, false),
-      ('10000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002', 'pharmacy.other@stocmed.local', 'Other Pharmacy', '08000000002', 'pharmacy', false, false),
-      ('10000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000003', 'patient.test@stocmed.local', 'Test Patient', '08000000003', 'patient', false, false),
-      ('10000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000004', 'admin.test@stocmed.local', 'Test Administrator', '08000000004', 'patient', false, false)
+      ('10000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'pharmacy.test@stocmed.local', 'Test Cashier', '+2348000000001', 'pharmacy', false, false),
+      ('10000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002', 'pharmacy.other@stocmed.local', 'Other Pharmacy', '+2348000000002', 'pharmacy', false, false),
+      ('10000000-0000-4000-8000-000000000003', '10000000-0000-4000-8000-000000000003', 'patient.test@stocmed.local', 'Test Patient', '+2348000000003', 'patient', false, false),
+      ('10000000-0000-4000-8000-000000000004', '10000000-0000-4000-8000-000000000004', 'admin.test@stocmed.local', 'Test Administrator', '+2348000000004', 'patient', false, false)
     ON CONFLICT (user_id) DO UPDATE SET full_name = EXCLUDED.full_name;
   END IF;
 END $$;
 
 INSERT INTO public.pharmacies (id, user_id, pharmacy_name, license_number, address, city, state, phone, is_verified, is_active)
 VALUES
-  ('30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'StocMed Test Pharmacy', '900001', '1 Test Street', 'Ikeja', 'Lagos', '08000000001', false, true),
-  ('30000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002', 'Isolation Test Pharmacy', '900002', '2 Test Street', 'Abuja', 'FCT', '08000000002', false, true)
+  ('30000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'StocMed Test Pharmacy', '900001', '1 Test Street', 'Ikeja', 'Lagos', '+2348000000001', false, true),
+  ('30000000-0000-4000-8000-000000000002', '10000000-0000-4000-8000-000000000002', 'Isolation Test Pharmacy', '900002', '2 Test Street', 'Abuja', 'FCT', '+2348000000002', false, true)
 ON CONFLICT (id) DO UPDATE SET pharmacy_name = EXCLUDED.pharmacy_name;
 
 -- Seed trust through the same append-only, service-only provisioning path used

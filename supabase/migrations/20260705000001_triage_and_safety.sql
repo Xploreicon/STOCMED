@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.triage_logs (
     layers_triggered TEXT[] NOT NULL,
     matched_product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
     thread_id TEXT,
-    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES public.users(user_id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.thread_locks (
     thread_id TEXT PRIMARY KEY,
     locked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     lock_reason TEXT NOT NULL, -- 'RESTRICTED' | 'CRISIS'
-    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL
+    user_id UUID REFERENCES public.users(user_id) ON DELETE SET NULL
 );
 
 -- 4. Create triage_config table
@@ -29,19 +29,19 @@ CREATE TABLE IF NOT EXISTS public.triage_config (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     config_key TEXT NOT NULL UNIQUE, -- 'restricted_terms', 'red_flag_terms', 'crisis_terms', 'pom_molecules'
     config_value JSONB NOT NULL,
-    updated_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    updated_by UUID REFERENCES public.users(user_id) ON DELETE SET NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 5. Create rx_submissions table
 CREATE TABLE IF NOT EXISTS public.rx_submissions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES public.users(user_id) ON DELETE SET NULL,
     thread_id TEXT,
     product_name TEXT NOT NULL,
     file_url TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'submitted', -- 'submitted', 'under_review', 'verified', 'rejected'
-    reviewed_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    reviewed_by UUID REFERENCES public.users(user_id) ON DELETE SET NULL,
     review_notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS public.rx_submissions (
 -- 6. Create symptom_intakes table
 CREATE TABLE IF NOT EXISTS public.symptom_intakes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    user_id UUID REFERENCES public.users(user_id) ON DELETE SET NULL,
     thread_id TEXT,
     symptoms TEXT NOT NULL,
     duration TEXT,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS public.symptom_intakes (
     allergies TEXT,
     photo_url TEXT,
     status TEXT NOT NULL DEFAULT 'submitted', -- 'submitted', 'under_review', 'answered'
-    assigned_pharmacist UUID REFERENCES public.users(id) ON DELETE SET NULL,
+    assigned_pharmacist UUID REFERENCES public.users(user_id) ON DELETE SET NULL,
     pharmacist_response TEXT,
     sla_deadline TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS public.symptom_intakes (
 -- 7. Create research_consent table
 CREATE TABLE IF NOT EXISTS public.research_consent (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE UNIQUE,
+    user_id UUID NOT NULL REFERENCES public.users(user_id) ON DELETE CASCADE UNIQUE,
     consented BOOLEAN NOT NULL,
     consent_text_version TEXT NOT NULL,
     sessions_since_consent INTEGER NOT NULL DEFAULT 0,
@@ -95,7 +95,7 @@ CREATE POLICY "Allow admins to view triage logs" ON public.triage_logs
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND users.is_admin = TRUE
+            WHERE users.user_id = auth.uid() AND users.is_admin = TRUE
         )
     );
 
@@ -113,12 +113,12 @@ CREATE POLICY "Allow admins to manage thread locks" ON public.thread_locks
     FOR ALL USING (
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND users.is_admin = TRUE
+            WHERE users.user_id = auth.uid() AND users.is_admin = TRUE
         )
     ) WITH CHECK (
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND users.is_admin = TRUE
+            WHERE users.user_id = auth.uid() AND users.is_admin = TRUE
         )
     );
 
@@ -132,12 +132,12 @@ CREATE POLICY "Allow admins to manage triage config" ON public.triage_config
     FOR ALL USING (
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND users.is_admin = TRUE
+            WHERE users.user_id = auth.uid() AND users.is_admin = TRUE
         )
     ) WITH CHECK (
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND users.is_admin = TRUE
+            WHERE users.user_id = auth.uid() AND users.is_admin = TRUE
         )
     );
 
@@ -148,7 +148,7 @@ CREATE POLICY "Allow users to view own rx submissions" ON public.rx_submissions
         user_id = auth.uid() OR
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
+            WHERE users.user_id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
         )
     );
 
@@ -161,7 +161,7 @@ CREATE POLICY "Allow admins/pharmacists to update rx submissions" ON public.rx_s
     FOR UPDATE USING (
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
+            WHERE users.user_id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
         )
     );
 
@@ -172,7 +172,7 @@ CREATE POLICY "Allow users to view own symptom intakes" ON public.symptom_intake
         user_id = auth.uid() OR
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
+            WHERE users.user_id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
         )
     );
 
@@ -185,7 +185,7 @@ CREATE POLICY "Allow admins/pharmacists to update symptom intakes" ON public.sym
     FOR UPDATE USING (
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
+            WHERE users.user_id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
         )
     );
 
@@ -196,7 +196,7 @@ CREATE POLICY "Allow users/admins to view research consent" ON public.research_c
         user_id = auth.uid() OR
         EXISTS (
             SELECT 1 FROM public.users 
-            WHERE users.id = auth.uid() AND users.is_admin = TRUE
+            WHERE users.user_id = auth.uid() AND users.is_admin = TRUE
         )
     );
 
@@ -217,7 +217,7 @@ CREATE POLICY "Allow owner or staff to view prescriptions" ON storage.objects
       owner = auth.uid() OR
       EXISTS (
         SELECT 1 FROM public.users 
-        WHERE users.id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
+        WHERE users.user_id = auth.uid() AND (users.is_admin = TRUE OR users.is_licensed_pharmacist = TRUE)
       )
     )
   );
@@ -236,7 +236,7 @@ CREATE POLICY "Allow owner or staff to manage prescriptions" ON storage.objects
       owner = auth.uid() OR
       EXISTS (
         SELECT 1 FROM public.users 
-        WHERE users.id = auth.uid() AND users.is_admin = TRUE
+        WHERE users.user_id = auth.uid() AND users.is_admin = TRUE
       )
     )
   );

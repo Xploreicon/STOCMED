@@ -3,7 +3,9 @@
 
 ALTER TABLE public.pharmacies
   ADD COLUMN IF NOT EXISTS is_test_account BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS test_account_label TEXT;
+  ADD COLUMN IF NOT EXISTS test_account_label TEXT,
+  ADD COLUMN IF NOT EXISTS opening_time TIME,
+  ADD COLUMN IF NOT EXISTS closing_time TIME;
 
 ALTER TABLE public.pharmacies
   DROP CONSTRAINT IF EXISTS pharmacies_test_account_label_complete;
@@ -26,14 +28,12 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM auth.users
     WHERE id = v_admin_user_id AND LOWER(email) = 'iconfavour005@gmail.com'
-  ) THEN
-    RAISE EXCEPTION 'Expected administrator auth identity was not found';
-  END IF;
-  IF NOT EXISTS (
+  ) OR NOT EXISTS (
     SELECT 1 FROM public.pharmacies
     WHERE id = v_spirit_pharmacy_id AND user_id = v_spirit_user_id
   ) THEN
-    RAISE EXCEPTION 'Expected Spirit pharmacy ownership was not found';
+    RAISE NOTICE 'Skipping production-only admin/Spirit fixture: required identities are not present in this environment';
+    RETURN;
   END IF;
   IF EXISTS (
     SELECT 1 FROM public.pharmacies

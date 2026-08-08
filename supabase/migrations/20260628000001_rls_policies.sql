@@ -9,17 +9,17 @@ ALTER TABLE public.chat_messages ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Allow users to view own profile" ON public.users;
 CREATE POLICY "Allow users to view own profile" 
 ON public.users FOR SELECT 
-USING (auth.uid() = id);
+USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Allow users to insert own profile" ON public.users;
 CREATE POLICY "Allow users to insert own profile" 
 ON public.users FOR INSERT 
-WITH CHECK (auth.uid() = id OR auth.uid() IS NULL); -- Allow registration triggers or custom signup flows
+WITH CHECK (auth.uid() = user_id OR auth.uid() IS NULL); -- Allow registration triggers or custom signup flows
 
 DROP POLICY IF EXISTS "Allow users to update own profile" ON public.users;
 CREATE POLICY "Allow users to update own profile" 
 ON public.users FOR UPDATE 
-USING (auth.uid() = id);
+USING (auth.uid() = user_id);
 
 -- 2. Pharmacies policies
 DROP POLICY IF EXISTS "Allow active pharmacies to be publicly viewable" ON public.pharmacies;

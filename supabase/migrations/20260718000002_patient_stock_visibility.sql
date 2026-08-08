@@ -4,6 +4,15 @@
 
 DO $$
 BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.pharmacies
+    WHERE id = '2937265c-c164-4fda-918f-cb4ece9e29f2'::UUID
+  ) THEN
+    RAISE NOTICE 'Skipping Spirit visibility fixture: Spirit pharmacy is not present in this environment';
+    RETURN;
+  END IF;
+
   PERFORM set_config('app.pharmacy_verification_transition', 'on', TRUE);
   PERFORM set_config('app.pilot_pharmacy_verification', 'on', TRUE);
   PERFORM set_config('app.reservation_toggle_rpc', 'on', TRUE);
