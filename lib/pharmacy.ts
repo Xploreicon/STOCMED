@@ -75,29 +75,15 @@ export async function ensurePharmacyRecord(
   user: User
 ): Promise<PharmacyRow | null> {
   const metadata = user.user_metadata ?? {}
-  const metadataPharmacyId = metadata.pharmacy_id as string | undefined
 
-  if (metadataPharmacyId) {
-    const { data, error } = await (supabase
-      .from('pharmacies') as any)
-      .select(PHARMACY_PROFILE_SELECT)
-      .eq('id', metadataPharmacyId)
-      .eq('user_id', user.id)
-      .maybeSingle()
+  // Resolve the owner row inside PostgreSQL. This avoids making every
+  // authenticated pharmacy route depend on broad direct table grants while
+  // keeping tenant resolution authoritative through auth.uid().
+  const { data: existingPharmacy, error: lookupError } = await (supabase.rpc as any)(
+    'get_authenticated_pharmacy_profile'
+  )
 
-    if (!error && data) {
-      return data as unknown as PharmacyRow
-    }
-  }
-
-  const { data: existingPharmacy, error: lookupError } = await (supabase
-    .from('pharmacies') as any)
-    .select(PHARMACY_PROFILE_SELECT)
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .maybeSingle()
-
-  if (lookupError && lookupError.code !== 'PGRST116') {
+  if (lookupError) {
     console.error('Error fetching pharmacy for user:', lookupError)
     throw lookupError
   }

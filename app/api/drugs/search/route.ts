@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { POM_MOLECULES_LIST } from '@/lib/triage/keyword-lists'
 import { getDeterministicSafetyRedirect } from '@/lib/triage/deterministic-safety-redirect'
@@ -6,10 +7,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-function areDigitalRxReservationsEnabled(pharmacy: Record<string, any> | null) {
+function areDigitalRxReservationsEnabled(isTestAccount: boolean) {
   const globallyEnabled = process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
     && process.env.RX_RESERVATIONS_ENABLED === 'true'
-  return globallyEnabled || pharmacy?.is_test_account === true
+  return globallyEnabled || isTestAccount
 }
 
 type ReservationAvailability = {
@@ -122,7 +123,6 @@ export async function GET(request: NextRequest) {
           latitude,
           longitude,
           is_active,
-          is_test_account,
           logo_url
         ),
         batches (
@@ -210,7 +210,6 @@ export async function GET(request: NextRequest) {
                 latitude,
                 longitude,
                 is_active,
-                is_test_account,
                 logo_url
               ),
               batches (
@@ -266,6 +265,31 @@ export async function GET(request: NextRequest) {
       ((capabilities || []) as ReservationCapability[]).map((entry) => [entry.inventory_id, entry.reservations_enabled])
     )
 
+    // is_test_account is intentionally not client-readable. Resolve the
+    // server-only feature exception separately and never include it in the
+    // public pharmacy object.
+    const pharmacyIds = Array.from(new Set(
+      (inventory || [])
+        .map((row: any) => row.pharmacies?.id)
+        .filter((id: unknown): id is string => typeof id === 'string')
+    ))
+    const admin = getAdminClient()
+    const { data: internalPharmacyFlags, error: internalFlagError } = admin && pharmacyIds.length
+      ? await admin
+        .from('pharmacies')
+        .select('id,is_test_account')
+        .in('id', pharmacyIds)
+      : { data: [], error: null }
+
+    if (internalFlagError) {
+      console.warn('Non-fatal: could not resolve internal pharmacy flags:', internalFlagError.message)
+    }
+
+    const testAccountByPharmacyId = new Map<string, boolean>(
+      ((internalPharmacyFlags || []) as Array<{ id: string; is_test_account: boolean | null }>)
+        .map((entry) => [entry.id, entry.is_test_account === true])
+    )
+
     // Map database results to the old flat 'drugs' schema structure
     let results = (inventory || []).map((row: any) => {
       const price = typeof row.price === 'number' ? row.price : Number(row.price)
@@ -307,8 +331,10 @@ export async function GET(request: NextRequest) {
       const fullyVerifiedPharmacy = isPharmacyFullyVerified(pharmacy)
       const reservationsEnabled = (reservationsEnabledByInventoryId.get(row.id) ?? false)
         && (!requiresPrescription || fullyVerifiedPharmacy)
-      const digitalRxEnabled = areDigitalRxReservationsEnabled(pharmacy)
-      const { is_test_account: _internalTestAccount, ...publicPharmacy } = pharmacy ?? {}
+      const digitalRxEnabled = areDigitalRxReservationsEnabled(
+        testAccountByPharmacyId.get(pharmacy?.id) === true
+      )
+      const publicPharmacy = pharmacy ?? {}
 
       return {
         id: row.id,
