@@ -4,6 +4,33 @@ import { isPcnNumberFormatValid, normalizePcnNumber } from '@/lib/validation/pcn
 
 type PharmacyRow = Database['public']['Tables']['pharmacies']['Row']
 
+export const PHARMACY_PROFILE_SELECT = [
+  'id',
+  'user_id',
+  'pharmacy_name',
+  'license_number',
+  'address',
+  'city',
+  'state',
+  'latitude',
+  'longitude',
+  'phone',
+  'is_verified',
+  'is_active',
+  'reservations_enabled',
+  'verification_status',
+  'pcn_confirmation_status',
+  'provisional_started_at',
+  'provisional_expires_at',
+  'verification_submitted_at',
+  'pcn_standards_accepted_at',
+  'created_at',
+  'updated_at',
+  'logo_url',
+  'opening_time',
+  'closing_time',
+].join(',')
+
 type SupabaseServerClient = SupabaseClient<Database, 'public', any>
 
 type PendingPharmacyProfile = {
@@ -51,21 +78,21 @@ export async function ensurePharmacyRecord(
   const metadataPharmacyId = metadata.pharmacy_id as string | undefined
 
   if (metadataPharmacyId) {
-    const { data, error } = await supabase
-      .from('pharmacies')
-      .select('*')
+    const { data, error } = await (supabase
+      .from('pharmacies') as any)
+      .select(PHARMACY_PROFILE_SELECT)
       .eq('id', metadataPharmacyId)
       .eq('user_id', user.id)
       .maybeSingle()
 
     if (!error && data) {
-      return data
+      return data as unknown as PharmacyRow
     }
   }
 
-  const { data: existingPharmacy, error: lookupError } = await supabase
-    .from('pharmacies')
-    .select('*')
+  const { data: existingPharmacy, error: lookupError } = await (supabase
+    .from('pharmacies') as any)
+    .select(PHARMACY_PROFILE_SELECT)
     .eq('user_id', user.id)
     .eq('is_active', true)
     .maybeSingle()
@@ -103,7 +130,7 @@ export async function ensurePharmacyRecord(
   }
 
   const { data: registrationResult, error: insertError } = await (supabase.rpc as any)(
-    'register_provisional_pharmacy',
+    'register_provisional_pharmacy_client',
     {
       p_pharmacy_name: pendingProfile.pharmacy_name.trim(),
       p_license_number: normalizePcnNumber(pendingProfile.license_number),

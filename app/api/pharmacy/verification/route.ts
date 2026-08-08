@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
     premises_certificate: premisesPath,
     superintendent_annual_licence: superintendentPath,
   })
-  const { data, error } = await (supabase.rpc as any)('submit_pharmacy_verification_requirements', {
+  const { data, error } = await (supabase.rpc as any)('submit_pharmacy_verification_requirements_client', {
     p_document_reference: documentReference,
     p_standards_version: standardsVersion,
     p_agree_to_standards: true,

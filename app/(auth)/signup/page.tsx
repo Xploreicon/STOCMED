@@ -197,7 +197,7 @@ export default function Signup() {
         const {
           data: pharmacyRecord,
           error: pharmacyError,
-        } = await (supabase.rpc as any)('register_provisional_pharmacy', {
+        } = await (supabase.rpc as any)('register_provisional_pharmacy_client', {
           p_pharmacy_name: formData.pharmacy_name.trim(),
           p_license_number: normalizedPcnNumber,
           p_address: formData.address.trim(),

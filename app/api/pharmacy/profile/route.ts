@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { ensurePharmacyRecord, PHARMACY_PROFILE_SELECT } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -62,7 +62,7 @@ export async function PATCH(request: NextRequest) {
 
     if (typeof body.reservations_enabled === 'boolean') {
       const { data: reservationProfile, error: reservationError } = await (supabase.rpc as any)(
-        'set_pharmacy_reservations_enabled',
+        'set_pharmacy_reservations_enabled_client',
         { p_enabled: body.reservations_enabled }
       )
 
@@ -97,7 +97,7 @@ export async function PATCH(request: NextRequest) {
       .from('pharmacies') as any)
       .update(updates)
       .eq('id', pharmacyRecord.id)
-      .select()
+      .select(PHARMACY_PROFILE_SELECT)
       .single()
 
     if (error) {
