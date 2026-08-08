@@ -1,7 +1,7 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(8);
+SELECT plan(9);
 
 SELECT ok(
   NOT has_column_privilege('authenticated', 'public.pharmacies', 'sp_code_hash', 'SELECT'),
@@ -76,5 +76,18 @@ SELECT is(
 );
 
 RESET ROLE;
+
+SET LOCAL ROLE anon;
+SELECT lives_ok(
+  $$SELECT inventory.id, batch.expiry_date
+    FROM public.pharmacy_inventory AS inventory
+    LEFT JOIN public.batches AS batch ON batch.inventory_id = inventory.id
+    WHERE inventory.item_type = 'medicine'
+      AND inventory.is_listed = TRUE
+      AND inventory.deleted_at IS NULL$$,
+  'anonymous public inventory read with embedded batches no longer raises 42501'
+);
+RESET ROLE;
+
 SELECT * FROM finish();
 ROLLBACK;
