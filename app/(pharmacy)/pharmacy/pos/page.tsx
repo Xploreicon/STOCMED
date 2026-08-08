@@ -41,9 +41,12 @@ export default function PosPage() {
   const [currentShift, setCurrentShift] = useState<LocalShift | null>(null)
   const [popularItems, setPopularItems] = useState<LocalInventoryItem[]>([])
   const [loadedReservation, setLoadedReservation] = useState<LoadedReservation | null>(null)
+  const pharmacyRef = useRef<typeof pharmacy>(pharmacy)
   const searchRef = useRef<HTMLInputElement>(null)
   const syncIntervalRef = useRef<NodeJS.Timeout|null>(null)
   const pickupParamAttemptedRef = useRef<string | null>(null)
+
+  useEffect(() => { pharmacyRef.current = pharmacy }, [pharmacy])
 
   // Keep search focused
   useEffect(() => { searchRef.current?.focus() }, [cart.length, showReceipt])
@@ -153,11 +156,12 @@ export default function PosPage() {
     const result = await syncPendingSales()
     setSyncStatus(result.status)
     setPendingCount(result.pending)
-    if (result.synced > 0 && pharmacy) {
+    const currentPharmacy = pharmacyRef.current
+    if (result.synced > 0 && currentPharmacy) {
       if (showSuccessToast) {
         toast.success(`Synced ${result.synced} sale${result.synced > 1 ? 's' : ''}`)
       }
-      await syncInventoryCache(pharmacy.id)
+      await syncInventoryCache(currentPharmacy.id)
     }
     return result
   }
