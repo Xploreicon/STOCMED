@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { LogOut } from 'lucide-react';
@@ -19,6 +19,7 @@ import { Logo } from '@/components/brand/Logo';
 
 interface NavbarProps {
   pharmacyName?: string;
+  pharmacyLogoUrl?: string | null;
   userRole?: 'patient' | 'pharmacy';
 }
 
@@ -30,11 +31,14 @@ function initialsFrom(nameOrEmail?: string | null) {
   return letters.toUpperCase();
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ pharmacyName, userRole }) => {
+export const Navbar: React.FC<NavbarProps> = ({ pharmacyName, pharmacyLogoUrl, userRole }) => {
   const router = useRouter();
   const { user, isPatient, isPharmacy } = useUser();
   const resolvedRole = userRole ?? (isPatient ? 'patient' : isPharmacy ? 'pharmacy' : undefined);
   const isPharmacyUI = resolvedRole === 'pharmacy';
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
+
+  useEffect(() => setLogoLoadFailed(false), [pharmacyLogoUrl]);
 
   const handleSignOut = async () => {
     const supabase = createClient();
@@ -62,7 +66,15 @@ export const Navbar: React.FC<NavbarProps> = ({ pharmacyName, userRole }) => {
                   className="w-9 h-9 rounded-full bg-surface border border-border flex items-center justify-center text-[14px] font-medium text-primary hover:bg-primary/5 transition-colors"
                   aria-label="Account menu"
                 >
-                  {initials}
+                  {isPharmacyUI && pharmacyLogoUrl && !logoLoadFailed ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={pharmacyLogoUrl}
+                      alt=""
+                      className="h-full w-full rounded-full object-cover"
+                      onError={() => setLogoLoadFailed(true)}
+                    />
+                  ) : initials}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">

@@ -261,28 +261,37 @@ export default function PharmacySettings() {
       <h1 className="text-[24px] font-medium text-ink mb-[28px]">Settings</h1>
 
       {/* Tabs */}
-      <div className="flex gap-0 border-b border-border mb-8">
-        <Button
-          onClick={() => setActiveTab('profile')}
-          className={`pb-3 px-5 text-[15px] font-medium transition-colors border-b-2 ${
-            activeTab === 'profile'
-              ? 'text-primary border-primary font-medium'
-              : 'text-ink-muted border-transparent hover:text-ink'
-          }`}
-        >
-          Pharmacy profile
-        </Button>
-        <Button
-          onClick={() => setActiveTab('account')}
-          className={`pb-3 px-5 text-[15px] font-medium transition-colors border-b-2 ${
-            activeTab === 'account'
-              ? 'text-primary border-primary font-medium'
-              : 'text-ink-muted border-transparent hover:text-ink'
-          }`}
-        >
-          Account
-        </Button>
-      </div>
+      <nav
+        aria-label="Pharmacy settings sections"
+        className="mb-8 overflow-x-auto rounded-button border border-border bg-surface p-1"
+      >
+        <div className="flex min-w-max items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('profile')}
+            aria-current={activeTab === 'profile' ? 'page' : undefined}
+            className={`inline-flex min-h-11 items-center justify-center rounded-button px-4 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+              activeTab === 'profile'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-ink-muted hover:bg-white hover:text-ink'
+            }`}
+          >
+            Pharmacy profile
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('account')}
+            aria-current={activeTab === 'account' ? 'page' : undefined}
+            className={`inline-flex min-h-11 items-center justify-center rounded-button px-4 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+              activeTab === 'account'
+                ? 'bg-primary text-white shadow-sm'
+                : 'text-ink-muted hover:bg-white hover:text-ink'
+            }`}
+          >
+            Account
+          </button>
+        </div>
+      </nav>
 
       {/* Profile Tab Content */}
       {activeTab === 'profile' && (

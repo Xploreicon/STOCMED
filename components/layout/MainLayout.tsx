@@ -36,6 +36,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
       <Navbar
         userRole={role}
         pharmacyName={role === 'pharmacy' ? pharmacyProfile?.pharmacy_name : undefined}
+        pharmacyLogoUrl={role === 'pharmacy' ? pharmacyProfile?.logo_url : undefined}
       />
 
       {role === 'pharmacy' && <PharmacyReservationsBar />}
