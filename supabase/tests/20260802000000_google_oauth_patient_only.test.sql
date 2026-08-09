@@ -1,7 +1,7 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(7);
+SELECT plan(9);
 
 INSERT INTO auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -103,6 +103,13 @@ DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '91000000-0000-4000-8000-000000000002', TRUE);
 END $$;
 SET LOCAL ROLE authenticated;
+SELECT lives_ok(
+  $$SELECT public.register_provisional_pharmacy_client(
+      'Existing Google Pharmacy', '981235', '2 OAuth Street',
+      'Ikeja', 'Lagos', '+2348030000002'
+    )$$,
+  'existing Google-linked pharmacy fixture has a real provisional pharmacy row'
+);
 SELECT is(
   (public.complete_oauth_profile(
     'patient', 'Ignored', '+2348039999999', 'Abuja',
@@ -110,6 +117,15 @@ SELECT is(
   )->>'role'),
   'pharmacy',
   'existing Google-linked pharmacy role is preserved unchanged'
+);
+SELECT is(
+  (public.complete_oauth_profile(
+    'patient', 'Ignored', '+2348039999999', 'Abuja',
+    NULL, NULL, NULL, NULL, NULL
+  )->>'pharmacy_id')::UUID,
+  (SELECT id FROM public.pharmacies
+   WHERE user_id = '91000000-0000-4000-8000-000000000002'),
+  'existing Google-linked pharmacy resolves its authoritative pharmacy row'
 );
 RESET ROLE;
 

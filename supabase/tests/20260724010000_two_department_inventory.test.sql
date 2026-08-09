@@ -1,7 +1,7 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(19);
+SELECT plan(21);
 
 INSERT INTO public.products (
   id, generic_name, brand_name, strength, dosage_form, category, pack_size, is_verified
@@ -140,11 +140,22 @@ DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
   PERFORM set_config('request.jwt.claim.sub', '10000000-0000-4000-8000-000000000001', TRUE);
 END $$;
+SET LOCAL ROLE authenticated;
 SELECT lives_ok(
-  $$SELECT public.sync_pos_sale(
+  $$SELECT public.sync_shift_open(
+      '84000000-0000-4000-8000-000000000010',
+      '30000000-0000-4000-8000-000000000001',
+      0,
+      NOW()
+    )$$,
+  'authenticated cashier opens a shift through the current sync RPC'
+);
+SELECT lives_ok(
+  $$SELECT public.sync_pos_sale_with_shift(
     '30000000-0000-4000-8000-000000000001',
     jsonb_build_object(
       'id', '84000000-0000-4000-8000-000000000001',
+      'shift_id', '84000000-0000-4000-8000-000000000010',
       'payment_method', 'cash',
       'discount', 60,
       'items', jsonb_build_array(
@@ -166,7 +177,12 @@ SELECT lives_ok(
       )
     )
   )$$,
-  'medicine and both Store expiry modes complete in one sale'
+  'authenticated shift-aware POS completes medicine and both Store expiry modes in one sale'
+);
+SELECT is(
+  (SELECT shift_id FROM public.sales WHERE id = '84000000-0000-4000-8000-000000000001'),
+  '84000000-0000-4000-8000-000000000010'::UUID,
+  'current POS wrapper attaches the mixed sale to the authenticated cashier shift'
 );
 SELECT is(
   (SELECT COUNT(*) FROM public.sale_items WHERE sale_id = '84000000-0000-4000-8000-000000000001'),
@@ -190,7 +206,6 @@ SELECT is(
   'batchless Store sale decrements the shared ledger'
 );
 
-SET LOCAL ROLE authenticated;
 CREATE TEMP TABLE product_count_before AS SELECT COUNT(*) AS count FROM public.products;
 SELECT lives_ok(
   $$SELECT public.import_inventory_file(

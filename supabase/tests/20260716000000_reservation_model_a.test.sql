@@ -1,7 +1,7 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT plan(78);
+SELECT plan(79);
 
 CREATE FUNCTION pg_temp.raises_insufficient_privilege(p_sql TEXT)
 RETURNS BOOLEAN
@@ -220,7 +220,13 @@ RESET ROLE;
 UPDATE public.reservations
 SET expires_at = NOW() - INTERVAL '1 minute'
 WHERE inventory_id = '40000000-0000-4000-8000-000000000001' AND status = 'active';
+DO $$ BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'service_role', TRUE);
+  PERFORM set_config('request.jwt.claim.sub', '', TRUE);
+END $$;
+SET LOCAL ROLE service_role;
 SELECT is(public.expire_reservations(), 1, 'expiry job releases the lapsed hold');
+RESET ROLE;
 SELECT is(
   (SELECT sellable_quantity FROM public.reservation_sellable_quantities(ARRAY['40000000-0000-4000-8000-000000000001'::UUID])),
   40,
@@ -294,6 +300,7 @@ DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'service_role', TRUE);
   PERFORM set_config('request.jwt.claim.sub', '', TRUE);
 END $$;
+SET LOCAL ROLE service_role;
 SELECT throws_ok(
   $$INSERT INTO public.rx_submissions (
       id, user_id, product_name, file_url, flow_model, destination_pharmacy_id,
@@ -309,7 +316,6 @@ SELECT throws_ok(
   'Model A submission fails closed while retention is unconfirmed'
 );
 
-SET LOCAL ROLE service_role;
 SELECT lives_ok(
   $$SELECT public.provision_pilot_role(
       '10000000-0000-4000-8000-000000000002', 'admin', TRUE,
@@ -363,6 +369,7 @@ DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'service_role', TRUE);
   PERFORM set_config('request.jwt.claim.sub', '', TRUE);
 END $$;
+SET LOCAL ROLE service_role;
 SELECT lives_ok(
   $$INSERT INTO public.rx_submissions (
       id, user_id, product_name, file_url, flow_model, destination_pharmacy_id,
@@ -375,6 +382,7 @@ SELECT lives_ok(
     )$$,
   'server path creates a Model A submission after retention confirmation'
 );
+RESET ROLE;
 SELECT is((SELECT product_name FROM public.rx_submissions WHERE id = '74000000-0000-4000-8000-000000000001'), 'Aquaclav Pilot', 'server derives product name');
 SELECT is((SELECT COUNT(*)::INTEGER FROM public.rx_audit_records WHERE submission_id = '74000000-0000-4000-8000-000000000001'), 1, 'submission atomically creates one audit record');
 SELECT ok(
@@ -508,12 +516,6 @@ SELECT ok(
   'PCN format accepts only six-to-nine numeric digits'
 );
 SELECT is(
-  (SELECT pharmacist_license_number FROM public.users
-   WHERE user_id = '10000000-0000-4000-8000-000000000001'),
-  'PCN/900001',
-  'licensed pharmacist provisioning stores the normalized structured PCN identity'
-);
-SELECT is(
   has_function_privilege(
     'authenticated',
     'public.provision_licensed_pharmacist(uuid,text,boolean,text)',
@@ -527,10 +529,23 @@ DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.sub', '', TRUE);
 END $$;
 SET LOCAL ROLE service_role;
-SELECT throws_ok(
+SELECT lives_ok(
   $$SELECT public.provision_licensed_pharmacist(
       '10000000-0000-4000-8000-000000000002',
-      'pcn/900001', TRUE, 'Synthetic duplicate licence test'
+      'pcn/981234', TRUE, 'Dedicated pgTAP licence fixture'
+    )$$,
+  'service role provisions a dedicated pharmacist licence fixture'
+);
+SELECT is(
+  (SELECT pharmacist_license_number FROM public.users
+   WHERE user_id = '10000000-0000-4000-8000-000000000002'),
+  'PCN/981234',
+  'licence provisioning persists the normalized structured PCN identity'
+);
+SELECT throws_ok(
+  $$SELECT public.provision_licensed_pharmacist(
+      '10000000-0000-4000-8000-000000000003',
+      'Pcn/981234', TRUE, 'Synthetic duplicate licence test'
     )$$,
   'P0001',
   'This PCN pharmacist licence is already provisioned to another account',

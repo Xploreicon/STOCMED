@@ -134,7 +134,7 @@ SELECT throws_ok(
     NULL
   )$$,
   'P0001',
-  NULL,
+  'Row 1 failed: selected catalogue strength differs (500 mg vs 250mg)',
   'database import boundary rejects a conflicting strength'
 );
 SELECT throws_ok(
@@ -154,7 +154,7 @@ SELECT throws_ok(
     NULL
   )$$,
   'P0001',
-  NULL,
+  'Row 1 failed: selected catalogue form differs (tablet vs syrup)',
   'database import boundary rejects a conflicting dosage form'
 );
 RESET ROLE;

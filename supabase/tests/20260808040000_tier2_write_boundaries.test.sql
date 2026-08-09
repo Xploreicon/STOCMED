@@ -1,20 +1,68 @@
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
-SELECT no_plan();
+SELECT plan(120);
 
-CREATE FUNCTION pg_temp.raises_insufficient_privilege(p_sql TEXT)
-RETURNS BOOLEAN
+CREATE FUNCTION pg_temp.sqlstate_for(p_sql TEXT)
+RETURNS TEXT
 LANGUAGE plpgsql
 AS $$
 BEGIN
   EXECUTE p_sql;
-  RETURN FALSE;
+  RETURN '00000';
 EXCEPTION
-  WHEN insufficient_privilege THEN
-    RETURN TRUE;
+  WHEN OTHERS THEN
+    RETURN SQLSTATE;
 END;
 $$;
+
+CREATE TEMP TABLE tier2_mutation_rpc_manifest (
+  signature TEXT PRIMARY KEY
+);
+
+INSERT INTO tier2_mutation_rpc_manifest(signature) VALUES
+  ('public.admin_reset_sp_authorization_code(uuid,text)'),
+  ('public.authorize_sp_action(uuid,text,text,text)'),
+  ('public.cancel_reservation(uuid,text)'),
+  ('public.capture_quickbooks_expiry(uuid,uuid,text,date)'),
+  ('public.capture_quickbooks_expiry(uuid,uuid,text,date,text)'),
+  ('public.capture_store_product(uuid,text,text,text,text,text)'),
+  ('public.configure_sp_authorization(text,text,text,jsonb)'),
+  ('public.create_inventory_item(uuid,jsonb)'),
+  ('public.create_inventory_selling_unit(uuid,text,integer,numeric,text,text)'),
+  ('public.create_purchase_order(uuid,uuid,date,text,jsonb)'),
+  ('public.create_unverified_catalog_product(uuid,text,text,text,text,text,text,text,text)'),
+  ('public.delist_pharmacy_inventory_item(uuid,text)'),
+  ('public.expire_reservations()'),
+  ('public.handle_sale_completion()'),
+  ('public.import_inventory_file(uuid,uuid,jsonb,uuid)'),
+  ('public.import_inventory_file(uuid,uuid,jsonb,uuid,text)'),
+  ('public.import_inventory_row(uuid,uuid,text,jsonb)'),
+  ('public.mark_pharmacy_reservation_queue_seen(uuid)'),
+  ('public.purge_expired_health_data()'),
+  ('public.purge_expired_user_search_history()'),
+  ('public.receive_goods(uuid,uuid,uuid,text,jsonb)'),
+  ('public.receive_goods_t2_internal(uuid,uuid,uuid,text,jsonb)'),
+  ('public.record_guarded_stock_adjustment(uuid,text,integer,text,uuid,text,date,numeric,text)'),
+  ('public.remove_inventory_selling_unit(uuid,uuid,text)'),
+  ('public.restore_pharmacy_inventory_item(uuid,text)'),
+  ('public.reverse_completed_sale(uuid,uuid,text,text,text)'),
+  ('public.seed_pharmacy_features()'),
+  ('public.seed_pharmacy_sp_action_gates()'),
+  ('public.set_authenticated_pharmacy_features(jsonb,text)'),
+  ('public.set_stocked_product_image(uuid,uuid,text)'),
+  ('public.stage_quickbooks_import(uuid,jsonb)'),
+  ('public.sync_pos_sale(uuid,jsonb)'),
+  ('public.sync_pos_sale_with_shift(uuid,jsonb)'),
+  ('public.sync_shift_close(uuid,uuid,numeric,text,timestamptz)'),
+  ('public.sync_shift_open(uuid,uuid,numeric,timestamptz)'),
+  ('public.update_authenticated_pharmacy_profile(jsonb,text)'),
+  ('public.update_pharmacy_inventory_item(uuid,jsonb,text)'),
+  ('public.update_sp_authorization_settings(numeric,integer,boolean,text)'),
+  ('public.validate_sp_authorization(uuid,text,text)'),
+  ('public.verify_and_audit_sp_action(uuid,text,text,text)'),
+  ('public.verify_current_sp_code(uuid,text,text,text)'),
+  ('public.verify_gated_sp_action(uuid,text,text,text)');
 
 SELECT is(
   (
@@ -106,73 +154,19 @@ SELECT ok(
   'Tier 1 SP hash denial remains intact for authenticated and anonymous roles'
 );
 
-SELECT is(
-  (
-    SELECT COUNT(*)
-    FROM pg_proc procedure
-    JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
-    WHERE namespace.nspname = 'public'
-      AND procedure.proname = 'void_sale'
-  ),
-  0::BIGINT,
-  'legacy void_sale is removed'
-);
-
-SELECT is(
-  (
-    SELECT COUNT(*)
-    FROM pg_proc procedure
-    JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
-    WHERE namespace.nspname = 'public'
-      AND procedure.proname = 'create_guarded_stock_adjustment'
-  ),
-  0::BIGINT,
-  'legacy stock-adjustment overload is removed'
-);
-
-SELECT is(
-  (
-    SELECT COUNT(*)
-    FROM pg_proc procedure
-    JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
-    WHERE namespace.nspname = 'public'
-      AND procedure.proname IN (
-        'authorize_sp_action', 'configure_sp_authorization',
-        'update_sp_authorization_settings', 'update_authenticated_pharmacy_profile',
-        'update_pharmacy_inventory_item', 'delist_pharmacy_inventory_item',
-        'restore_pharmacy_inventory_item', 'create_inventory_selling_unit',
-        'remove_inventory_selling_unit', 'set_authenticated_pharmacy_features',
-        'record_guarded_stock_adjustment', 'sync_pos_sale_with_shift',
-        'reverse_completed_sale', 'import_inventory_file',
-        'stage_quickbooks_import', 'capture_quickbooks_expiry', 'receive_goods',
-        'seed_pharmacy_features', 'seed_pharmacy_sp_action_gates',
-        'cancel_reservation', 'capture_store_product',
-        'mark_pharmacy_reservation_queue_seen', 'expire_reservations',
-        'purge_expired_health_data', 'purge_expired_user_search_history',
-        'handle_sale_completion'
-      )
-      AND has_function_privilege('anon', procedure.oid, 'EXECUTE')
-  ),
-  0::BIGINT,
-  'anonymous callers cannot execute any mutation RPC overload'
-);
-
 SELECT ok(
-  (
-    SELECT BOOL_AND(procedure.prosecdef)
-    FROM pg_proc procedure
-    JOIN pg_namespace namespace ON namespace.oid = procedure.pronamespace
-    WHERE namespace.nspname = 'public'
-      AND procedure.proname IN (
-        'configure_sp_authorization', 'update_sp_authorization_settings',
-        'update_authenticated_pharmacy_profile', 'update_pharmacy_inventory_item',
-        'delist_pharmacy_inventory_item', 'restore_pharmacy_inventory_item',
-        'create_inventory_selling_unit', 'remove_inventory_selling_unit',
-        'set_authenticated_pharmacy_features', 'record_guarded_stock_adjustment'
-      )
-  ),
-  'replacement mutation RPCs are SECURITY DEFINER'
-);
+  procedure.oid IS NOT NULL
+    AND procedure.prosecdef
+    AND NOT has_function_privilege('anon', procedure.oid, 'EXECUTE'),
+  format(
+    'Tier 2 mutation RPC %s exists, is SECURITY DEFINER, and denies anon',
+    manifest.signature
+  )
+)
+FROM tier2_mutation_rpc_manifest manifest
+LEFT JOIN pg_proc procedure
+  ON procedure.oid = to_regprocedure(manifest.signature)
+ORDER BY manifest.signature;
 
 DO $$
 BEGIN
@@ -182,8 +176,8 @@ END
 $$;
 SET LOCAL ROLE anon;
 
-SELECT ok(
-  pg_temp.raises_insufficient_privilege($sql$
+SELECT is(
+  pg_temp.sqlstate_for($sql$
     INSERT INTO public.sales (
       id, pharmacy_id, cashier_id, subtotal, discount, total, payment_method, status
     ) VALUES (
@@ -193,6 +187,7 @@ SELECT ok(
       1, 0, 1, 'cash', 'completed'
     )
   $sql$),
+  '42501',
   'anonymous direct sales insert is denied'
 );
 
@@ -217,53 +212,161 @@ END
 $$;
 SET LOCAL ROLE authenticated;
 
-SELECT ok(
-  pg_temp.raises_insufficient_privilege($sql$
-    UPDATE public.pharmacies
-    SET sp_code_hash = 'forged'
-    WHERE id = '30000000-0000-4000-8000-000000000001'
+SELECT is(
+  pg_temp.sqlstate_for(bypass.statement),
+  '42501',
+  format(
+    'direct authenticated %s on protected table %s is denied',
+    bypass.operation,
+    bypass.table_name
+  )
+)
+FROM (VALUES
+  (1, 'pharmacies', 'INSERT', $sql$
+    INSERT INTO public.pharmacies (
+      id, user_id, pharmacy_name, license_number, address, city, state, phone,
+      is_verified, is_active, reservations_enabled
+    ) VALUES (
+      'a1000000-0000-4000-8000-000000000101',
+      '10000000-0000-4000-8000-000000000003',
+      'Forbidden Pharmacy', '981101', '1 Bypass Street', 'Ikeja', 'Lagos',
+      '+2348000000101', FALSE, TRUE, FALSE
+    )
   $sql$),
-  'direct authenticated SP hash update is denied'
-);
-
-SELECT ok(
-  pg_temp.raises_insufficient_privilege($sql$
-    UPDATE public.pharmacy_inventory
-    SET price = 1
+  (2, 'pharmacies', 'UPDATE', $sql$
+    UPDATE public.pharmacies SET sp_code_hash = 'forged' WHERE FALSE
+  $sql$),
+  (3, 'pharmacies', 'DELETE', $sql$
+    DELETE FROM public.pharmacies WHERE FALSE
+  $sql$),
+  (4, 'pharmacy_inventory', 'INSERT', $sql$
+    INSERT INTO public.pharmacy_inventory (
+      id, pharmacy_id, product_id, price, low_stock_threshold, is_listed
+    ) SELECT
+      'a1000000-0000-4000-8000-000000000102',
+      '30000000-0000-4000-8000-000000000001',
+      product_id, 1, 0, TRUE
+    FROM public.pharmacy_inventory
     WHERE id = '40000000-0000-4000-8000-000000000001'
   $sql$),
-  'direct authenticated inventory price update is denied'
-);
-
-SELECT ok(
-  pg_temp.raises_insufficient_privilege($sql$
+  (5, 'pharmacy_inventory', 'UPDATE', $sql$
+    UPDATE public.pharmacy_inventory SET price = 1 WHERE FALSE
+  $sql$),
+  (6, 'pharmacy_inventory', 'DELETE', $sql$
+    DELETE FROM public.pharmacy_inventory WHERE FALSE
+  $sql$),
+  (7, 'batches', 'INSERT', $sql$
+    INSERT INTO public.batches (
+      id, inventory_id, batch_number, expiry_date, quantity_received, cost_price
+    ) VALUES (
+      'a1000000-0000-4000-8000-000000000103',
+      '40000000-0000-4000-8000-000000000001',
+      'FORBIDDEN-BATCH', CURRENT_DATE + 365, 1, 1
+    )
+  $sql$),
+  (8, 'batches', 'UPDATE', $sql$
+    UPDATE public.batches SET expiry_date = CURRENT_DATE + 365 WHERE FALSE
+  $sql$),
+  (9, 'batches', 'DELETE', $sql$
+    DELETE FROM public.batches WHERE FALSE
+  $sql$),
+  (10, 'selling_units', 'INSERT', $sql$
+    INSERT INTO public.selling_units (
+      id, inventory_id, unit_name, units_per, price
+    ) VALUES (
+      'a1000000-0000-4000-8000-000000000104',
+      '40000000-0000-4000-8000-000000000001',
+      'Forbidden unit', 2, 1
+    )
+  $sql$),
+  (11, 'selling_units', 'UPDATE', $sql$
+    UPDATE public.selling_units SET price = 1 WHERE FALSE
+  $sql$),
+  (12, 'selling_units', 'DELETE', $sql$
+    DELETE FROM public.selling_units WHERE FALSE
+  $sql$),
+  (13, 'sales', 'INSERT', $sql$
     INSERT INTO public.sales (
       id, pharmacy_id, cashier_id, subtotal, discount, total, payment_method, status
     ) VALUES (
-      'a1000000-0000-4000-8000-000000000001',
+      'a1000000-0000-4000-8000-000000000105',
       '30000000-0000-4000-8000-000000000001',
       '10000000-0000-4000-8000-000000000001',
       1, 0, 1, 'cash', 'completed'
     )
   $sql$),
-  'direct authenticated sales insert is denied'
-);
-
-SELECT ok(
-  pg_temp.raises_insufficient_privilege($sql$
-    UPDATE public.pharmacy_features
-    SET is_enabled = TRUE, enabled_at = NOW(), enabled_by = auth.uid()
-    WHERE pharmacy_id = '30000000-0000-4000-8000-000000000001'
-      AND feature_key = 'reservations'
+  (14, 'sales', 'UPDATE', $sql$
+    UPDATE public.sales SET status = 'refunded' WHERE FALSE
   $sql$),
-  'direct authenticated pharmacy feature update is denied'
-);
+  (15, 'sales', 'DELETE', $sql$
+    DELETE FROM public.sales WHERE FALSE
+  $sql$),
+  (16, 'sale_items', 'INSERT', $sql$
+    INSERT INTO public.sale_items (
+      id, sale_id, inventory_id, quantity, unit_price, line_total
+    ) VALUES (
+      'a1000000-0000-4000-8000-000000000106',
+      'a1000000-0000-4000-8000-000000000105',
+      '40000000-0000-4000-8000-000000000001',
+      1, 1, 1
+    )
+  $sql$),
+  (17, 'sale_items', 'UPDATE', $sql$
+    UPDATE public.sale_items SET quantity = 2 WHERE FALSE
+  $sql$),
+  (18, 'sale_items', 'DELETE', $sql$
+    DELETE FROM public.sale_items WHERE FALSE
+  $sql$),
+  (19, 'pharmacy_features', 'INSERT', $sql$
+    INSERT INTO public.pharmacy_features (
+      pharmacy_id, feature_key, is_enabled
+    ) VALUES (
+      '30000000-0000-4000-8000-000000000001', 'reservations', TRUE
+    )
+  $sql$),
+  (20, 'pharmacy_features', 'UPDATE', $sql$
+    UPDATE public.pharmacy_features SET is_enabled = TRUE WHERE FALSE
+  $sql$),
+  (21, 'pharmacy_features', 'DELETE', $sql$
+    DELETE FROM public.pharmacy_features WHERE FALSE
+  $sql$),
+  (22, 'pharmacy_sp_action_gates', 'INSERT', $sql$
+    INSERT INTO public.pharmacy_sp_action_gates (
+      pharmacy_id, action_key, is_gated
+    ) VALUES (
+      '30000000-0000-4000-8000-000000000001', 'price_change', TRUE
+    )
+  $sql$),
+  (23, 'pharmacy_sp_action_gates', 'UPDATE', $sql$
+    UPDATE public.pharmacy_sp_action_gates SET is_gated = TRUE WHERE FALSE
+  $sql$),
+  (24, 'pharmacy_sp_action_gates', 'DELETE', $sql$
+    DELETE FROM public.pharmacy_sp_action_gates WHERE FALSE
+  $sql$)
+) AS bypass(ordinal, table_name, operation, statement)
+ORDER BY bypass.ordinal;
 
 SELECT ok(
   (
     public.configure_sp_authorization('set_code', '246810', NULL, NULL)->>'success'
   )::BOOLEAN,
   'first SP code setup succeeds without a current code'
+);
+
+SELECT is(
+  public.configure_sp_authorization(
+    'set_code', '975310', NULL, NULL
+  )->>'code',
+  'SP_CURRENT_CODE_REQUIRED',
+  'an existing SP code cannot be changed without the current code'
+);
+
+SELECT is(
+  public.configure_sp_authorization(
+    'set_gates', NULL, NULL, jsonb_build_object('price_change', TRUE)
+  )->>'code',
+  'SP_CURRENT_CODE_REQUIRED',
+  'action gating cannot be changed without the current SP code'
 );
 
 SELECT ok(
@@ -332,6 +435,89 @@ SELECT is(
   'denied price change leaves inventory unchanged'
 );
 
+SELECT is(
+  public.update_pharmacy_inventory_item(
+    '40000000-0000-4000-8000-000000000001',
+    jsonb_build_object('price', 1601),
+    'not-a-valid-sp-token'
+  )->>'code',
+  'SP_AUTH_REQUIRED',
+  'an invalid SP token cannot authorize a gated price change'
+);
+
+INSERT INTO issued_sp_tokens(action_key, token)
+SELECT 'wrong_action', public.authorize_sp_action(
+  '30000000-0000-4000-8000-000000000001',
+  '246810',
+  'financial_reports',
+  'T2 wrong-action token test'
+);
+
+SELECT ok(
+  public.validate_sp_authorization(
+    '30000000-0000-4000-8000-000000000001',
+    (SELECT token FROM issued_sp_tokens WHERE action_key = 'wrong_action'),
+    'financial_reports'
+  ),
+  'wrong-action fixture token is valid for the action it was issued for'
+);
+
+SELECT is(
+  public.update_pharmacy_inventory_item(
+    '40000000-0000-4000-8000-000000000001',
+    jsonb_build_object('price', 1602),
+    (SELECT token FROM issued_sp_tokens WHERE action_key = 'wrong_action')
+  )->>'code',
+  'SP_AUTH_REQUIRED',
+  'an SP token issued for another action cannot authorize a price change'
+);
+
+INSERT INTO issued_sp_tokens(action_key, token)
+SELECT 'expired_price', public.authorize_sp_action(
+  '30000000-0000-4000-8000-000000000001',
+  '246810',
+  'price_change',
+  'T2 expired token test'
+);
+
+SELECT ok(
+  public.validate_sp_authorization(
+    '30000000-0000-4000-8000-000000000001',
+    (SELECT token FROM issued_sp_tokens WHERE action_key = 'expired_price'),
+    'price_change'
+  ),
+  'expiry fixture token is valid before its grant is expired'
+);
+
+RESET ROLE;
+UPDATE public.sp_authorization_grants
+SET expires_at = NOW() - INTERVAL '1 minute'
+WHERE token_hash = encode(
+  extensions.digest(
+    (SELECT token FROM issued_sp_tokens WHERE action_key = 'expired_price'),
+    'sha256'
+  ),
+  'hex'
+);
+SET LOCAL ROLE authenticated;
+
+SELECT is(
+  public.update_pharmacy_inventory_item(
+    '40000000-0000-4000-8000-000000000001',
+    jsonb_build_object('price', 1603),
+    (SELECT token FROM issued_sp_tokens WHERE action_key = 'expired_price')
+  )->>'code',
+  'SP_AUTH_REQUIRED',
+  'an expired SP token cannot authorize a gated price change'
+);
+
+SELECT is(
+  (SELECT price FROM public.pharmacy_inventory
+   WHERE id = '40000000-0000-4000-8000-000000000001'),
+  1500::NUMERIC,
+  'invalid, wrong-action, and expired tokens leave the price unchanged'
+);
+
 INSERT INTO issued_sp_tokens(action_key, token)
 SELECT 'price_change', public.authorize_sp_action(
   '30000000-0000-4000-8000-000000000001',
@@ -353,6 +539,65 @@ SELECT ok(
   )->>'success')::BOOLEAN,
   'matching price token updates only allowlisted inventory metadata'
 );
+
+RESET ROLE;
+DO $$
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
+  PERFORM set_config(
+    'request.jwt.claim.sub',
+    '10000000-0000-4000-8000-000000000002',
+    TRUE
+  );
+END
+$$;
+SET LOCAL ROLE authenticated;
+DO $$
+DECLARE
+  v_result JSONB;
+BEGIN
+  v_result := public.configure_sp_authorization('set_code', '135790', NULL, NULL);
+  IF NOT COALESCE((v_result->>'success')::BOOLEAN, FALSE) THEN
+    RAISE EXCEPTION 'Cross-tenant fixture could not set its SP code';
+  END IF;
+  v_result := public.configure_sp_authorization(
+    'set_gates', NULL, '135790', jsonb_build_object('price_change', TRUE)
+  );
+  IF NOT COALESCE((v_result->>'success')::BOOLEAN, FALSE) THEN
+    RAISE EXCEPTION 'Cross-tenant fixture could not enable its price gate';
+  END IF;
+END
+$$;
+
+SELECT is(
+  public.update_pharmacy_inventory_item(
+    '40000000-0000-4000-8000-000000000002',
+    jsonb_build_object('price', 1750),
+    (SELECT token FROM issued_sp_tokens WHERE action_key = 'price_change')
+  )->>'code',
+  'SP_AUTH_REQUIRED',
+  'an SP token cannot be reused by another authenticated pharmacy tenant'
+);
+
+SELECT is(
+  (SELECT price FROM public.pharmacy_inventory
+   WHERE id = '40000000-0000-4000-8000-000000000002'),
+  1700::NUMERIC,
+  'cross-tenant token rejection leaves the other pharmacy price unchanged'
+);
+
+RESET ROLE;
+DO $$
+BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
+  PERFORM set_config(
+    'request.jwt.claim.sub',
+    '10000000-0000-4000-8000-000000000001',
+    TRUE
+  );
+END
+$$;
+SET LOCAL ROLE authenticated;
 
 SELECT is(
   public.import_inventory_file(
