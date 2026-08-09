@@ -4,16 +4,18 @@ import { Button } from '@/components/ui/button'
 
 import React, { useState } from 'react'
 import { Minus, Plus, Trash2, X } from 'lucide-react'
-import type { LocalSaleItem } from '@/lib/db/pos-local-db'
+import type { LocalInventoryItem, LocalSaleItem } from '@/lib/db/pos-local-db'
 import { formatExpShort } from '@/lib/pos/fefo'
 
 type CartItem = LocalSaleItem & { id: string }
 
 interface CartPanelProps {
   cart: CartItem[]
+  inventory: LocalInventoryItem[]
   discount: number
   onUpdateQty: (id: string, delta: number) => void
   onDirectQty: (id: string, qty: number) => void
+  onSelectSellingUnit: (inventoryId: string, sellingUnitId: string | null) => void
   onRemove: (id: string) => void
   onClearCart: () => void
   onSetDiscount: (v: number) => void
@@ -23,7 +25,7 @@ interface CartPanelProps {
 }
 
 export default function CartPanel({
-  cart, discount, onUpdateQty, onDirectQty, onRemove,
+  cart, inventory, discount, onUpdateQty, onDirectQty, onSelectSellingUnit, onRemove,
   onClearCart, onSetDiscount, onHoldSale, heldCount, onResumeHeld,
 }: CartPanelProps) {
   const [editingQtyId, setEditingQtyId] = useState<string | null>(null)
@@ -79,7 +81,11 @@ export default function CartPanel({
             <p className="text-xs font-medium">Scan or search to add items</p>
           </div>
         ) : (
-          cart.map(item => (
+          cart.map(item => {
+            const inventoryItem = inventory.find((entry) => entry.id === item.inventory_id)
+            const isFirstInventoryLine = cart.findIndex((entry) => entry.inventory_id === item.inventory_id) === cart.indexOf(item)
+            const unitsPer = item.selling_units_per ?? 1
+            return (
             <div key={item.id} className="bg-[var(--pos-bg)] p-3 rounded-lg border border-white/5">
               <div className="flex justify-between items-start mb-1">
                 <div className="min-w-0 flex-1">
@@ -87,6 +93,11 @@ export default function CartPanel({
                     {item.brand_name || item.generic_name}
                   </h4>
                   <p className="text-[10px] text-white/40">{item.strength}</p>
+                  {item.selling_unit_name && (
+                    <p className="mt-0.5 text-[10px] font-medium text-[var(--pos-accent)]">
+                      {item.selling_unit_name} · {item.quantity} base {inventoryItem?.base_unit_name ?? 'units'}
+                    </p>
+                  )}
                   {item.expiry_date && (
                     <p className="text-[10px] text-[var(--pos-success)]/70 mt-0.5">
                       Exp: {formatExpShort(item.expiry_date)}
@@ -97,6 +108,29 @@ export default function CartPanel({
                   <X className="h-3 w-3" />
                 </Button>
               </div>
+              {isFirstInventoryLine && inventoryItem && inventoryItem.selling_units.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5 border-t border-white/5 pt-2">
+                  {!inventoryItem.whole_pack_only && (
+                    <Button
+                      type="button"
+                      onClick={() => onSelectSellingUnit(item.inventory_id, null)}
+                      className={`rounded-md border px-2 py-1 text-[10px] ${!item.selling_unit_id ? 'border-[var(--pos-accent)] bg-[var(--pos-accent)]/15 text-[var(--pos-accent)]' : 'border-white/10 text-white/60'}`}
+                    >
+                      Single · ₦{inventoryItem.price.toLocaleString()}
+                    </Button>
+                  )}
+                  {inventoryItem.selling_units.map((unit) => (
+                    <Button
+                      key={unit.id}
+                      type="button"
+                      onClick={() => onSelectSellingUnit(item.inventory_id, unit.id)}
+                      className={`rounded-md border px-2 py-1 text-[10px] ${item.selling_unit_id === unit.id ? 'border-[var(--pos-accent)] bg-[var(--pos-accent)]/15 text-[var(--pos-accent)]' : 'border-white/10 text-white/60'}`}
+                    >
+                      {unit.unit_name} · ₦{unit.price.toLocaleString()}
+                    </Button>
+                  ))}
+                </div>
+              )}
               <div className="flex justify-between items-center mt-2">
                 <div className="flex items-center bg-[var(--pos-panel)] rounded border border-white/10">
                   <Button onClick={() => onUpdateQty(item.id, -1)} className="px-2 py-1 text-white/50 hover:text-white">
@@ -114,10 +148,10 @@ export default function CartPanel({
                     />
                   ) : (
                     <Button
-                      onClick={() => startDirectEntry(item.id, item.quantity)}
+                      onClick={() => startDirectEntry(item.id, Math.max(1, Math.round(item.quantity / unitsPer)))}
                       className="px-2 text-xs font-semibold text-white/80 hover:text-[var(--pos-accent)] cursor-text min-w-[28px] text-center"
                     >
-                      {item.quantity}
+                      {Math.max(1, Math.round(item.quantity / unitsPer))}
                     </Button>
                   )}
                   <Button onClick={() => onUpdateQty(item.id, 1)} className="px-2 py-1 text-white/50 hover:text-white">
@@ -130,7 +164,8 @@ export default function CartPanel({
                 </div>
               </div>
             </div>
-          ))
+            )
+          })
         )}
       </div>
 

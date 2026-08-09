@@ -21,6 +21,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider';
+import type { PharmacyFeatureKey } from '@/lib/pharmacy-features';
 
 interface SidebarProps {
   userType: 'patient' | 'pharmacy';
@@ -32,6 +34,7 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   href: string;
+  feature?: PharmacyFeatureKey;
 }
 
 const patientNavItems: NavItem[] = [
@@ -47,9 +50,9 @@ const pharmacyNavItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/pharmacy/dashboard' },
   { label: 'Inventory', icon: Boxes, href: '/pharmacy/inventory' },
   { label: 'Import', icon: Upload, href: '/pharmacy/inventory/import' },
-  { label: 'Procurement', icon: ClipboardList, href: '/pharmacy/procurement' },
+  { label: 'Procurement', icon: ClipboardList, href: '/pharmacy/procurement', feature: 'purchase_orders_and_receiving' },
   { label: 'POS', icon: Calculator, href: '/pharmacy/pos' },
-  { label: 'Reservations', icon: ClipboardCheck, href: '/pharmacy/reservations' },
+  { label: 'Reservations', icon: ClipboardCheck, href: '/pharmacy/reservations', feature: 'reservations' },
   { label: 'Shifts', icon: Wallet, href: '/pharmacy/shifts' },
   { label: 'Reports', icon: BarChart3, href: '/pharmacy/reports' },
   { label: 'Settings', icon: Settings, href: '/pharmacy/settings' },
@@ -57,7 +60,9 @@ const pharmacyNavItems: NavItem[] = [
 
 export const Sidebar: React.FC<SidebarProps> = ({ userType, className, onNavigate }) => {
   const pathname = usePathname();
-  const navItems = userType === 'patient' ? patientNavItems : pharmacyNavItems;
+  const { isEnabled } = usePharmacyFeatures();
+  const navItems = (userType === 'patient' ? patientNavItems : pharmacyNavItems)
+    .filter(item => userType === 'patient' || !item.feature || isEnabled(item.feature));
 
   return (
     <aside

@@ -106,6 +106,8 @@ export interface Database {
           created_at: string
           updated_at: string
           logo_url: string | null
+          opening_time: string | null
+          closing_time: string | null
         }
         Insert: {
           id?: string
@@ -138,6 +140,8 @@ export interface Database {
           created_at?: string
           updated_at?: string
           logo_url?: string | null
+          opening_time?: string | null
+          closing_time?: string | null
         }
         Relationships: [
           {
@@ -179,6 +183,8 @@ export interface Database {
           created_at?: string
           updated_at?: string
           logo_url?: string | null
+          opening_time?: string | null
+          closing_time?: string | null
         }
       }
       drugs: {

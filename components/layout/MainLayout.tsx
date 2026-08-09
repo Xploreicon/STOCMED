@@ -9,15 +9,18 @@ import { PharmacyReservationsBar } from '@/components/pharmacy/PharmacyReservati
 import { useQuery } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider';
 
 interface MainLayoutProps {
   children: React.ReactNode;
   role: 'patient' | 'pharmacy';
+  initialPharmacyProfile?: { pharmacy_name: string | null; logo_url: string | null } | null;
 }
 
-export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
+export const MainLayout: React.FC<MainLayoutProps> = ({ children, role, initialPharmacyProfile }) => {
   const pathname = usePathname();
   const isChat = pathname === '/chat';
+  const { isEnabled } = usePharmacyFeatures();
 
   const { data: pharmacyProfile } = useQuery({
     queryKey: ['pharmacy-profile'],
@@ -29,6 +32,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
       return response.json();
     },
     enabled: role === 'pharmacy',
+    // The server value only contains the two header fields. Keep it as
+    // per-observer placeholder data so it cannot seed the shared full-profile
+    // cache with a partial object (or null) before Settings loads.
+    placeholderData: role === 'pharmacy' ? initialPharmacyProfile : undefined,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   return (
@@ -39,7 +49,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, role }) => {
         pharmacyLogoUrl={role === 'pharmacy' ? pharmacyProfile?.logo_url : undefined}
       />
 
-      {role === 'pharmacy' && <PharmacyReservationsBar />}
+      {role === 'pharmacy' && isEnabled('reservations') && <PharmacyReservationsBar />}
 
       <div className="flex-1 flex w-full min-h-0">
         {/* Desktop sidebar — hidden on mobile (bottom nav takes over) */}

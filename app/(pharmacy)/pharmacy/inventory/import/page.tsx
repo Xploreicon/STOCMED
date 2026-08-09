@@ -19,6 +19,14 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import Link from 'next/link';
+import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal';
+import {
+  clearCachedSpToken,
+  getCachedSpToken,
+  isSpAuthorizationRequired,
+  spAuthorizationRequiredError,
+  withSpAuthorizationHeader,
+} from '@/lib/sp-authorization-client';
 import {
   autoMapImportHeaders,
   hasMedicineSignals,
@@ -117,6 +125,7 @@ export default function BulkImportWizard() {
     total: 0,
   });
   const [isImporting, setIsImporting] = useState(false);
+  const [showPriceAuthorization, setShowPriceAuthorization] = useState(false);
 
   // File Upload Handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -240,10 +249,11 @@ export default function BulkImportWizard() {
   }
 
   // Commit Import
-  const handleCommitImport = async () => {
+  const handleCommitImport = async (authorizedToken?: string) => {
     if (commitLockRef.current) return
     commitLockRef.current = true
     setIsImporting(true)
+    const token = authorizedToken ?? getCachedSpToken('price_change')
 
     // Check if any row has validation errors
     const errorCount = matchedRows.filter(r => r.validation.errors.length > 0).length;
@@ -269,12 +279,16 @@ export default function BulkImportWizard() {
       };
       const preflightRes = await fetch('/api/pharmacy/inventory/import/commit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withSpAuthorizationHeader('price_change', token, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({ ...requestBody, validate_only: true }),
       });
       const preflight = await preflightRes.json();
 
       if (!preflightRes.ok) {
+        if (preflightRes.status === 403 && preflight.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('price_change')
+          throw spAuthorizationRequiredError(preflight.error || 'Superintendent authorization is required.')
+        }
         if (Array.isArray(preflight.rowErrors)) {
           const errorsByRow = new Map<number, string[]>(
             preflight.rowErrors.map((entry: any) => [entry.row - 1, entry.errors])
@@ -296,12 +310,16 @@ export default function BulkImportWizard() {
       setStep('progress');
       const res = await fetch('/api/pharmacy/inventory/import/commit', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withSpAuthorizationHeader('price_change', token, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(requestBody),
       });
 
       const result = await res.json();
       if (!res.ok) {
+        if (res.status === 403 && result.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('price_change')
+          throw spAuthorizationRequiredError(result.error || 'Superintendent authorization is required.')
+        }
         const rowDetails = Array.isArray(result.rowErrors)
           ? result.rowErrors.map((entry: any) => `Row ${entry.row}: ${entry.errors.join(', ')}`).join('\n')
           : '';
@@ -322,7 +340,8 @@ export default function BulkImportWizard() {
       router.replace(`/pharmacy/inventory?imported=${imported}&skipped=${skipped}&errors=${errors}`)
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'Error executing import transaction');
+      if (isSpAuthorizationRequired(err)) setShowPriceAuthorization(true)
+      else alert(err.message || 'Error executing import transaction');
       commitLockRef.current = false
       setIsImporting(false);
       setStep('matching');
@@ -468,7 +487,7 @@ export default function BulkImportWizard() {
                 </p>
               </div>
               <Button
-                onClick={handleCommitImport}
+                onClick={() => void handleCommitImport()}
                 disabled={isImporting || isValidating || matchedRows.some(row => row.validation.errors.length > 0) || (source === 'quickbooks' && matchedRows.some(row => !row.selected_product_id))}
                 className="shadow-lg"
               >
@@ -711,6 +730,14 @@ export default function BulkImportWizard() {
             )}
           </Card>
         )}
+
+        <SpAuthorizationModal
+          open={showPriceAuthorization}
+          action="price_change"
+          description="Authorise imported selling-price changes"
+          onAuthorized={(token) => handleCommitImport(token)}
+          onClose={() => setShowPriceAuthorization(false)}
+        />
 
         {/* STEP 4: Progress */}
         {step === 'progress' && (

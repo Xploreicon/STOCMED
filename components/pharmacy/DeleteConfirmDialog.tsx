@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, Trash2, Loader2, ArchiveX, Info } from 'lucide-react';
+import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal';
+import { clearCachedSpToken, getCachedSpToken, withSpAuthorizationHeader } from '@/lib/sp-authorization-client';
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
@@ -28,15 +30,22 @@ export default function DeleteConfirmDialog({
 }: DeleteConfirmDialogProps) {
   const queryClient = useQueryClient();
   const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const [showSpAuthorization, setShowSpAuthorization] = useState(false);
 
   const deleteDrugMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (token: string | null) => {
       const response = await fetch(`/api/pharmacy/drugs/${drug.id}`, {
         method: 'DELETE',
+        headers: withSpAuthorizationHeader('delist_inventory', token),
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to remove drug');
+        const failure = new Error(data.error || 'Failed to remove drug');
+        if (response.status === 403 && data.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('delist_inventory');
+          failure.name = 'SP_AUTH_REQUIRED';
+        }
+        throw failure;
       }
       return data;
     },
@@ -58,12 +67,16 @@ export default function DeleteConfirmDialog({
     },
   });
 
-  const handleConfirm = async () => {
+  const removeInventory = async (token: string | null) => {
     try {
-      await deleteDrugMutation.mutateAsync();
+      await deleteDrugMutation.mutateAsync(token);
     } catch (error: any) {
-      // Error is shown via mutation state — no raw FK error reaches the user
+      if (error instanceof Error && error.name === 'SP_AUTH_REQUIRED') setShowSpAuthorization(true);
     }
+  };
+
+  const handleConfirm = async () => {
+    await removeInventory(getCachedSpToken('delist_inventory'));
   };
 
   const handleClose = () => {
@@ -80,6 +93,7 @@ export default function DeleteConfirmDialog({
   const hasTradeHistory = drug?.quantity_in_stock > 0 || (drug?.batches && drug.batches.length > 1);
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
@@ -171,5 +185,16 @@ export default function DeleteConfirmDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <SpAuthorizationModal
+      open={showSpAuthorization}
+      action="delist_inventory"
+      description={`Authorise removing ${drugName} from active inventory`}
+      onAuthorized={(token) => {
+        setShowSpAuthorization(false);
+        void removeInventory(token);
+      }}
+      onClose={() => setShowSpAuthorization(false)}
+    />
+    </>
   );
 }

@@ -9,6 +9,8 @@ import { X } from 'lucide-react';
 import type { EnrichedInventoryRow } from '@/lib/pharmacyInventory';
 import type { MovementUiType } from '@/lib/pharmacyInventory';
 import { formatExpiry } from '@/lib/inventoryUi';
+import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal';
+import { clearCachedSpToken, getCachedSpToken, withSpAuthorizationHeader } from '@/lib/sp-authorization-client';
 
 interface AdjustStockModalProps {
   isOpen: boolean;
@@ -30,12 +32,13 @@ export default function AdjustStockModal({ isOpen, onClose, row, onSuccess }: Ad
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showSpAuthorization, setShowSpAuthorization] = useState(false);
 
   const adjustMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (token: string | null) => {
       const response = await fetch(`/api/pharmacy/drugs/${row.id}/adjust`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withSpAuthorizationHeader('stock_adjustment', token, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           type,
           batch_id: batchId || null,
@@ -45,7 +48,12 @@ export default function AdjustStockModal({ isOpen, onClose, row, onSuccess }: Ad
       });
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.error || 'Failed to save stock movement');
+        const failure = new Error(err.error || 'Failed to save stock movement');
+        if (response.status === 403 && err.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('stock_adjustment');
+          failure.name = 'SP_AUTH_REQUIRED';
+        }
+        throw failure;
       }
       return response.json();
     },
@@ -56,9 +64,7 @@ export default function AdjustStockModal({ isOpen, onClose, row, onSuccess }: Ad
     },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
+  const saveAdjustment = async (token: string | null) => {
     if (!reason.trim()) {
       setError('A reason is required');
       return;
@@ -68,13 +74,21 @@ export default function AdjustStockModal({ isOpen, onClose, row, onSuccess }: Ad
       return;
     }
     try {
-      await adjustMutation.mutateAsync();
+      await adjustMutation.mutateAsync(token);
     } catch (err: any) {
       setError(err.message || 'Failed to save stock movement');
+      if (err instanceof Error && err.name === 'SP_AUTH_REQUIRED') setShowSpAuthorization(true);
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    await saveAdjustment(getCachedSpToken('stock_adjustment'));
+  };
+
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-[400px] rounded-feature p-7">
         <form onSubmit={handleSubmit}>
@@ -157,5 +171,16 @@ export default function AdjustStockModal({ isOpen, onClose, row, onSuccess }: Ad
         </form>
       </DialogContent>
     </Dialog>
+    <SpAuthorizationModal
+      open={showSpAuthorization}
+      action="stock_adjustment"
+      description={`Authorise ${type.toLowerCase()} of ${row.generic_name}`}
+      onAuthorized={(token) => {
+        setShowSpAuthorization(false);
+        void saveAdjustment(token);
+      }}
+      onClose={() => setShowSpAuthorization(false)}
+    />
+    </>
   );
 }

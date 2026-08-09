@@ -24,6 +24,17 @@ export interface LocalInventoryItem {
   quantity_in_stock: number;
   barcode: string | null;
   batches: LocalBatch[];
+  selling_units: Array<{
+    id: string;
+    unit_name: string;
+    units_per: number;
+    price: number;
+    barcode: string | null;
+    is_default: boolean;
+    sort_order: number;
+  }>;
+  base_unit_name: string;
+  whole_pack_only: boolean;
 }
 
 export interface LocalSaleItem {
@@ -38,6 +49,9 @@ export interface LocalSaleItem {
   strength: string;
   batch_number: string | null;
   expiry_date: string | null;
+  selling_unit_id?: string | null;
+  selling_unit_name?: string;
+  selling_units_per?: number;
 }
 
 export interface LocalSale {
@@ -54,6 +68,7 @@ export interface LocalSale {
   status: 'pending' | 'completed' | 'cancelled';
   created_at: string;
   reservation_id?: string;
+  sp_authorization_token?: string;
   items: LocalSaleItem[];
   // Sync metadata
   sync_status: 'pending' | 'synced' | 'error';

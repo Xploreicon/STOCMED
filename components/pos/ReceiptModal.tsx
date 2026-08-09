@@ -2,20 +2,29 @@
 
 import { Button } from '@/components/ui/button'
 
-import React from 'react'
-import { CheckCircle, Printer, Share2 } from 'lucide-react'
+import React, { useState } from 'react'
+import { CheckCircle, Loader2, Printer, RotateCcw, Share2 } from 'lucide-react'
+import { toast } from 'sonner'
 import type { LocalSale } from '@/lib/db/pos-local-db'
 import { formatExpShort } from '@/lib/pos/fefo'
+import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal'
+import { clearCachedSpToken, getCachedSpToken, withSpAuthorizationHeader } from '@/lib/sp-authorization-client'
 
 interface ReceiptModalProps {
   sale: LocalSale
   pharmacyName: string
+  pharmacyLogoUrl?: string | null
   cashierName: string
   isOnline: boolean
   onClose: () => void
 }
 
-export default function ReceiptModal({ sale, pharmacyName, cashierName, isOnline, onClose }: ReceiptModalProps) {
+export default function ReceiptModal({ sale, pharmacyName, pharmacyLogoUrl, cashierName, isOnline, onClose }: ReceiptModalProps) {
+  const [reversalReason, setReversalReason] = useState('')
+  const [pendingReversal, setPendingReversal] = useState<'void' | 'refund' | null>(null)
+  const [isReversing, setIsReversing] = useState(false)
+  const [reversedAs, setReversedAs] = useState<'void' | 'refund' | null>(null)
+
   const handlePrint = () => {
     // In production: trigger Bluetooth thermal printer via Web Bluetooth API
     window.print()
@@ -32,6 +41,45 @@ export default function ReceiptModal({ sale, pharmacyName, cashierName, isOnline
     }
   }
 
+  const reverseSale = async (kind: 'void' | 'refund', token: string | null) => {
+    setIsReversing(true)
+    try {
+      const response = await fetch(`/api/pharmacy/sales/${sale.id}/reverse`, {
+        method: 'POST',
+        headers: withSpAuthorizationHeader(
+          'void_or_refund',
+          token,
+          { 'Content-Type': 'application/json' },
+        ),
+        body: JSON.stringify({ kind, reason: reversalReason.trim() }),
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        if (body?.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('void_or_refund')
+          setPendingReversal(kind)
+          return
+        }
+        throw new Error(body?.error || `Could not ${kind} the sale.`)
+      }
+      setPendingReversal(null)
+      setReversedAs(kind)
+      toast.success(kind === 'refund' ? 'Sale refunded and stock restored' : 'Sale voided and stock restored')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Could not ${kind} the sale.`)
+    } finally {
+      setIsReversing(false)
+    }
+  }
+
+  const requestReversal = (kind: 'void' | 'refund') => {
+    if (reversalReason.trim().length < 3) {
+      toast.error('Enter a short reason before reversing this sale.')
+      return
+    }
+    void reverseSale(kind, getCachedSpToken('void_or_refund'))
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="bg-[var(--pos-panel)] rounded-2xl max-w-sm w-full p-5 border border-white/10 flex flex-col gap-4 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -45,6 +93,12 @@ export default function ReceiptModal({ sale, pharmacyName, cashierName, isOnline
 
         {/* Thermal receipt preview */}
         <div className="bg-white text-[var(--pos-bg)] font-mono text-[9px] p-3 rounded-lg" id="receipt-print-area">
+          <div className="mx-auto mb-1 flex h-10 w-10 items-center justify-center overflow-hidden rounded bg-primary/10 font-sans text-sm font-bold text-primary">
+            {pharmacyLogoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={pharmacyLogoUrl} alt="" className="h-full w-full object-contain" />
+            ) : pharmacyName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'PH'}
+          </div>
           <div className="text-center font-bold uppercase tracking-wider text-[10px] mb-1">StocMed Pharmacy Receipt</div>
           <div className="text-center text-[8px] mb-2">{pharmacyName}</div>
           <div className="border-t border-dashed border-border py-1.5 space-y-0.5">
@@ -101,10 +155,50 @@ export default function ReceiptModal({ sale, pharmacyName, cashierName, isOnline
           </Button>
         </div>
 
+        {isOnline && sale.sync_status === 'synced' && !reversedAs && (
+          <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+            <label className="block text-[11px] font-medium text-white/70" htmlFor="reversal-reason">
+              Reason for void or refund
+            </label>
+            <input
+              id="reversal-reason"
+              value={reversalReason}
+              onChange={(event) => setReversalReason(event.target.value)}
+              maxLength={300}
+              placeholder="e.g. customer returned unopened item"
+              className="mt-2 h-9 w-full rounded-md border border-white/10 bg-black/20 px-3 text-xs text-white outline-none placeholder:text-white/25 focus:border-amber-400/50"
+            />
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <Button type="button" disabled={isReversing} onClick={() => requestReversal('void')} className="h-9 bg-white/5 text-xs text-white hover:bg-white/10">
+                {isReversing ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="mr-1 h-3.5 w-3.5" />}
+                Void sale
+              </Button>
+              <Button type="button" disabled={isReversing} onClick={() => requestReversal('refund')} className="h-9 bg-amber-500/15 text-xs text-amber-200 hover:bg-amber-500/25">
+                Refund sale
+              </Button>
+            </div>
+          </div>
+        )}
+        {reversedAs && (
+          <p className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-center text-xs font-medium text-amber-200">
+            This sale has been {reversedAs === 'refund' ? 'refunded' : 'voided'} and its stock restored.
+          </p>
+        )}
+
         <Button onClick={onClose} className="w-full bg-[var(--primary)] hover:bg-[var(--primary-mid)] text-white py-2.5 rounded-lg font-bold text-sm transition">
           New Sale
         </Button>
       </div>
+      <SpAuthorizationModal
+        open={pendingReversal !== null}
+        action="void_or_refund"
+        description={`${pendingReversal === 'refund' ? 'Refund' : 'Void'} sale ${sale.id.substring(0, 8).toUpperCase()}`}
+        onAuthorized={(token) => {
+          const kind = pendingReversal
+          if (kind) void reverseSale(kind, token)
+        }}
+        onClose={() => setPendingReversal(null)}
+      />
     </div>
   )
 }

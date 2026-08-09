@@ -20,6 +20,13 @@ import {
 import EditDrugModal from './EditDrugModal';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
 import AdjustStockModal from './AdjustStockModal';
+import { SpAuthorizationModal } from './SpAuthorizationModal';
+import {
+  clearCachedSpToken,
+  getCachedSpToken,
+  spAuthorizationRequiredError,
+  withSpAuthorizationHeader,
+} from '@/lib/sp-authorization-client';
 
 interface InventoryTableProps {
   drugs: any[];
@@ -118,16 +125,22 @@ export default function InventoryTable({
   const [deletingDrug, setDeletingDrug] = useState<any | null>(null);
   const [adjustingDrug, setAdjustingDrug] = useState<any | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoreAuthorization, setRestoreAuthorization] = useState<any | null>(null);
   const queryClient = useQueryClient();
 
   const restoreMutation = useMutation({
-    mutationFn: async (drugId: string) => {
+    mutationFn: async ({ drugId, token }: { drugId: string; token: string | null }) => {
       setRestoringId(drugId);
       const response = await fetch(`/api/pharmacy/drugs/${drugId}/restore`, {
         method: 'PATCH',
+        headers: withSpAuthorizationHeader('restore_inventory', token),
       });
       if (!response.ok) {
         const data = await response.json();
+        if (response.status === 403 && data.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('restore_inventory');
+          throw spAuthorizationRequiredError(data.error || 'Superintendent authorization is required.');
+        }
         throw new Error(data.error || 'Failed to restore drug');
       }
       return response.json();
@@ -140,6 +153,16 @@ export default function InventoryTable({
       setRestoringId(null);
     },
   });
+
+  const restoreDrug = async (drug: any, token = getCachedSpToken('restore_inventory')) => {
+    try {
+      await restoreMutation.mutateAsync({ drugId: drug.id, token });
+    } catch (error) {
+      if (error instanceof Error && error.name === 'SP_AUTH_REQUIRED') {
+        setRestoreAuthorization(drug);
+      }
+    }
+  };
 
   if (viewMode === 'grid') {
     return (
@@ -229,7 +252,7 @@ export default function InventoryTable({
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => restoreMutation.mutate(drug.id)}
+                      onClick={() => void restoreDrug(drug)}
                       disabled={restoringId === drug.id}
                       className="flex-1 text-xs text-primary hover:bg-primary/5 hover:text-primary hover:border-primary/20"
                     >
@@ -318,6 +341,17 @@ export default function InventoryTable({
             }}
           />
         )}
+        <SpAuthorizationModal
+          open={restoreAuthorization !== null}
+          action="restore_inventory"
+          description={`Authorise restoring ${restoreAuthorization?.brand_name || restoreAuthorization?.generic_name || 'this inventory item'}`}
+          onAuthorized={async (token) => {
+            const drug = restoreAuthorization;
+            if (drug) await restoreDrug(drug, token);
+            setRestoreAuthorization(null);
+          }}
+          onClose={() => setRestoreAuthorization(null)}
+        />
       </>
     );
   }
@@ -432,7 +466,7 @@ export default function InventoryTable({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => restoreMutation.mutate(drug.id)}
+                          onClick={() => void restoreDrug(drug)}
                           disabled={restoringId === drug.id}
                           className="text-xs text-primary hover:bg-primary/5 hover:text-primary"
                         >
@@ -523,6 +557,17 @@ export default function InventoryTable({
           }}
         />
       )}
+      <SpAuthorizationModal
+        open={restoreAuthorization !== null}
+        action="restore_inventory"
+        description={`Authorise restoring ${restoreAuthorization?.brand_name || restoreAuthorization?.generic_name || 'this inventory item'}`}
+        onAuthorized={async (token) => {
+          const drug = restoreAuthorization;
+          if (drug) await restoreDrug(drug, token);
+          setRestoreAuthorization(null);
+        }}
+        onClose={() => setRestoreAuthorization(null)}
+      />
     </>
   );
 }

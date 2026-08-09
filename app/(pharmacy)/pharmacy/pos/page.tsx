@@ -12,6 +12,9 @@ import CartPanel from '@/components/pos/CartPanel'
 import CheckoutPanel from '@/components/pos/CheckoutPanel'
 import ReceiptModal from '@/components/pos/ReceiptModal'
 import SyncPill from '@/components/pos/SyncPill'
+import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal'
+import { clearCachedSpToken, getCachedSpToken } from '@/lib/sp-authorization-client'
+import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider'
 
 type CartItem = LocalSaleItem & { id: string }
 type PaymentMethod = 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'other'
@@ -21,10 +24,12 @@ type LoadedReservation = {
   batch_id: string
   quantity: number
 }
+type SellingUnit = LocalInventoryItem['selling_units'][number]
 
 export default function PosPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { isEnabled } = usePharmacyFeatures()
   const [isOnline, setIsOnline] = useState(true)
   const [syncStatus, setSyncStatus] = useState<'synced'|'pending'|'syncing'|'error'>('synced')
   const [pendingCount, setPendingCount] = useState(0)
@@ -33,7 +38,7 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [discount, setDiscount] = useState(0)
   const [cashier, setCashier] = useState<{id:string;name:string}|null>(null)
-  const [pharmacy, setPharmacy] = useState<{id:string;name:string}|null>(null)
+  const [pharmacy, setPharmacy] = useState<{id:string;name:string;logoUrl:string|null}|null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
   const [lastSale, setLastSale] = useState<LocalSale|null>(null)
   const [heldSales, setHeldSales] = useState<HeldSale[]>([])
@@ -41,12 +46,20 @@ export default function PosPage() {
   const [currentShift, setCurrentShift] = useState<LocalShift | null>(null)
   const [popularItems, setPopularItems] = useState<LocalInventoryItem[]>([])
   const [loadedReservation, setLoadedReservation] = useState<LoadedReservation | null>(null)
-  const pharmacyRef = useRef<typeof pharmacy>(pharmacy)
+  const [discountThreshold, setDiscountThreshold] = useState(10)
+  const [largeDiscountGated, setLargeDiscountGated] = useState<boolean | null>(null)
+  const [pendingDiscountCheckout, setPendingDiscountCheckout] = useState<{
+    method: PaymentMethod
+    amountTendered: number | null
+  } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const syncIntervalRef = useRef<NodeJS.Timeout|null>(null)
   const pickupParamAttemptedRef = useRef<string | null>(null)
+  const pharmacyRef = useRef(pharmacy)
 
-  useEffect(() => { pharmacyRef.current = pharmacy }, [pharmacy])
+  useEffect(() => {
+    pharmacyRef.current = pharmacy
+  }, [pharmacy])
 
   // Keep search focused
   useEffect(() => { searchRef.current?.focus() }, [cart.length, showReceipt])
@@ -59,7 +72,7 @@ export default function PosPage() {
     window.addEventListener('online', on)
     window.addEventListener('offline', off)
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
-    // Event handlers intentionally bind the current sync implementation once.
+    // Stable listeners read current tenant state through pharmacyRef during sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -79,7 +92,7 @@ export default function PosPage() {
         if (res.status === 401) { router.push('/login'); return }
         const profile = await res.json()
         if (!profile.id || !profile.user_id) return
-        setPharmacy({ id: profile.id, name: profile.pharmacy_name })
+        setPharmacy({ id: profile.id, name: profile.pharmacy_name, logoUrl: profile.logo_url ?? null })
         setCashier({ id: profile.user_id, name: profile.pharmacy_name || 'Cashier' })
         localStorage.setItem('stocmed-pos-context', JSON.stringify({
           pharmacy_id: profile.id, cashier_id: profile.user_id,
@@ -87,7 +100,9 @@ export default function PosPage() {
         }))
         if (posLocalDb) {
           const cached = await posLocalDb.local_inventory_cache.toArray()
-          if (cached.length > 0) setInventory(cached)
+          if (cached.length > 0) setInventory(cached.map(item => isEnabled('packs_and_units') ? item : {
+            ...item, selling_units: [], whole_pack_only: false,
+          }))
           const held = await posLocalDb.held_sales.toArray()
           setHeldSales(held)
           const openShift = await posLocalDb.local_shifts.where('status').equals('open').first()
@@ -96,6 +111,15 @@ export default function PosPage() {
         if (navigator.onLine) {
           await syncInventoryCache(profile.id)
           fetchPopular()
+          const controlsResponse = await fetch('/api/pharmacy/sp-authorization')
+          if (controlsResponse.ok) {
+            const controls = await controlsResponse.json()
+            setDiscountThreshold(Number(controls.discountThreshold ?? 10))
+            const largeDiscountGate = Array.isArray(controls.gates)
+              ? controls.gates.find((gate: { action_key?: string }) => gate.action_key === 'large_discount')
+              : null
+            setLargeDiscountGated(largeDiscountGate ? largeDiscountGate.is_gated === true : null)
+          }
         }
         updatePendingCount()
       } catch (err) { console.error('POS init error:', err) }
@@ -128,6 +152,9 @@ export default function PosPage() {
         brand_name: drug.brand_name, strength: drug.strength, dosage_form: drug.dosage_form,
         pack_size: drug.pack_size, price: Number(drug.price),
         quantity_in_stock: Number(drug.sellable_quantity ?? drug.quantity_in_stock), barcode: drug.barcode,
+        selling_units: isEnabled('packs_and_units') ? (drug.selling_units ?? []) : [],
+        base_unit_name: drug.base_unit_name ?? 'unit',
+        whole_pack_only: isEnabled('packs_and_units') ? (drug.whole_pack_only ?? false) : false,
         batches: (drug.batches || []).map((b: any) => ({
           id: b.id, batch_number: b.batch_number, expiry_date: b.expiry_date,
           quantity_received: b.quantity_received, remaining_qty: b.remaining_qty ?? b.quantity_received,
@@ -172,14 +199,26 @@ export default function PosPage() {
   }
 
   // FEFO-powered add to cart
-  const addToCart = useCallback((item: LocalInventoryItem) => {
+  const addToCart = useCallback((item: LocalInventoryItem, requestedUnit?: SellingUnit | null) => {
     if (loadedReservation?.inventory_id === item.id) {
       toast.error('The reserved item and quantity are locked for this pickup')
       return false
     }
-    const existingIdx = cart.findIndex(c => c.inventory_id === item.id)
-    const currentQty = existingIdx >= 0 ? cart[existingIdx].quantity : 0
-    const newQty = currentQty + 1
+    const selectedUnit = requestedUnit === undefined
+      ? (item.whole_pack_only ? item.selling_units.find((unit) => unit.is_default) ?? item.selling_units[0] : null)
+      : requestedUnit
+    if (item.whole_pack_only && !selectedUnit) {
+      toast.error('Set a pack price before selling this whole-pack medicine')
+      return false
+    }
+    const existingLines = cart.filter(c => c.inventory_id === item.id)
+    const existingUnitId = existingLines[0]?.selling_unit_id ?? null
+    const selectedUnitId = selectedUnit?.id ?? null
+    const currentQty = existingUnitId === selectedUnitId
+      ? existingLines.reduce((sum, line) => sum + line.quantity, 0)
+      : 0
+    const step = selectedUnit?.units_per ?? 1
+    const newQty = currentQty + step
     const result = allocateInventory(item, newQty)
     if (!result.success) {
       toast.error(result.error)
@@ -189,9 +228,13 @@ export default function PosPage() {
     const newCartItems: CartItem[] = result.allocations.map(a => ({
       id: `${item.id}_${a.batch_id}`,
       inventory_id: item.id, batch_id: a.batch_id, quantity: a.quantity,
-      unit_price: item.price, line_total: a.quantity * item.price,
+      unit_price: selectedUnit ? selectedUnit.price / selectedUnit.units_per : item.price,
+      line_total: a.quantity * (selectedUnit ? selectedUnit.price / selectedUnit.units_per : item.price),
       generic_name: item.generic_name, brand_name: item.brand_name,
       strength: item.strength, batch_number: a.batch_number, expiry_date: a.expiry_date,
+      selling_unit_id: selectedUnit?.id ?? null,
+      selling_unit_name: selectedUnit?.unit_name ?? item.base_unit_name,
+      selling_units_per: step,
     }))
     // Replace all lines for this inventory_id
     setCart(prev => [...prev.filter(c => c.inventory_id !== item.id), ...newCartItems])
@@ -209,18 +252,24 @@ export default function PosPage() {
     if (!invItem) return
     // Get total qty for this inventory item across all batch lines
     const totalQty = cart.filter(c => c.inventory_id === item.inventory_id).reduce((s, c) => s + c.quantity, 0)
-    const newTotal = totalQty + delta
+    const step = item.selling_units_per ?? 1
+    const newTotal = totalQty + (delta * step)
     if (newTotal <= 0) {
       setCart(prev => prev.filter(c => c.inventory_id !== item.inventory_id))
       return
     }
     const result = allocateInventory(invItem, newTotal)
     if (!result.success) { toast.error(result.error); return }
+    const selectedUnit = invItem.selling_units.find((unit) => unit.id === item.selling_unit_id)
+    const basePrice = selectedUnit ? selectedUnit.price / selectedUnit.units_per : invItem.price
     const newItems: CartItem[] = result.allocations.map(a => ({
       id: `${invItem.id}_${a.batch_id}`, inventory_id: invItem.id, batch_id: a.batch_id,
-      quantity: a.quantity, unit_price: invItem.price, line_total: a.quantity * invItem.price,
+      quantity: a.quantity, unit_price: basePrice, line_total: a.quantity * basePrice,
       generic_name: invItem.generic_name, brand_name: invItem.brand_name,
       strength: invItem.strength, batch_number: a.batch_number, expiry_date: a.expiry_date,
+      selling_unit_id: item.selling_unit_id ?? null,
+      selling_unit_name: item.selling_unit_name,
+      selling_units_per: step,
     }))
     setCart(prev => [...prev.filter(c => c.inventory_id !== item.inventory_id), ...newItems])
   }
@@ -234,13 +283,19 @@ export default function PosPage() {
     }
     const invItem = inventory.find(i => i.id === item.inventory_id)
     if (!invItem) return
-    const result = allocateInventory(invItem, qty)
+    const step = item.selling_units_per ?? 1
+    const result = allocateInventory(invItem, qty * step)
     if (!result.success) { toast.error(result.error); return }
+    const selectedUnit = invItem.selling_units.find((unit) => unit.id === item.selling_unit_id)
+    const basePrice = selectedUnit ? selectedUnit.price / selectedUnit.units_per : invItem.price
     const newItems: CartItem[] = result.allocations.map(a => ({
       id: `${invItem.id}_${a.batch_id}`, inventory_id: invItem.id, batch_id: a.batch_id,
-      quantity: a.quantity, unit_price: invItem.price, line_total: a.quantity * invItem.price,
+      quantity: a.quantity, unit_price: basePrice, line_total: a.quantity * basePrice,
       generic_name: invItem.generic_name, brand_name: invItem.brand_name,
       strength: invItem.strength, batch_number: a.batch_number, expiry_date: a.expiry_date,
+      selling_unit_id: item.selling_unit_id ?? null,
+      selling_unit_name: item.selling_unit_name,
+      selling_units_per: step,
     }))
     setCart(prev => [...prev.filter(c => c.inventory_id !== item.inventory_id), ...newItems])
   }
@@ -252,6 +307,16 @@ export default function PosPage() {
       setLoadedReservation(null)
     }
     setCart(prev => prev.filter(c => c.inventory_id !== item.inventory_id))
+  }
+
+  const selectSellingUnit = (inventoryId: string, sellingUnitId: string | null) => {
+    const item = inventory.find((entry) => entry.id === inventoryId)
+    if (!item) return
+    const unit = sellingUnitId
+      ? item.selling_units.find((entry) => entry.id === sellingUnitId)
+      : null
+    if (sellingUnitId && !unit) return
+    addToCart(item, unit)
   }
 
   const clearCart = () => {
@@ -360,22 +425,30 @@ export default function PosPage() {
       await loadReservedPickup(searchQuery.trim())
       return
     }
+    const packBarcodeMatch = inventory
+      .map((item) => ({ item, unit: item.selling_units.find((unit) => unit.barcode === searchQuery.trim()) }))
+      .find((entry) => entry.unit)
     const match = inventory.find(i =>
       i.barcode === searchQuery.trim() ||
       i.generic_name.toLowerCase() === searchQuery.trim().toLowerCase()
     )
-    if (match) {
-      const added = addToCart(match)
+    if (packBarcodeMatch?.unit || match) {
+      const selectedItem = packBarcodeMatch?.item ?? match!
+      const added = addToCart(selectedItem, packBarcodeMatch?.unit)
       if (added) {
         setSearchQuery('')
-        toast.success(`Added ${match.brand_name || match.generic_name}`)
+        toast.success(`Added ${packBarcodeMatch?.unit?.unit_name ?? selectedItem.brand_name ?? selectedItem.generic_name}`)
       }
     }
     else toast.error(`No match for "${searchQuery}"`)
   }
 
   // Checkout
-  const handleCheckout = async (method: PaymentMethod, amountTendered: number | null) => {
+  const handleCheckout = async (
+    method: PaymentMethod,
+    amountTendered: number | null,
+    authorizedToken?: string,
+  ) => {
     if (cart.length === 0 || !pharmacy || !cashier) return
     if (!currentShift) {
       toast.error('Open a shift before completing a sale')
@@ -398,6 +471,34 @@ export default function PosPage() {
       }
     }
     const subtotal = cart.reduce((s, i) => s + i.line_total, 0)
+    const discountPercent = subtotal > 0 ? (discount / subtotal) * 100 : 0
+    // An unavailable gate configuration is treated conservatively. Once the
+    // authoritative settings load, an explicitly disabled gate permits the
+    // normal offline path without an SP challenge.
+    const needsDiscountAuthorization = discountPercent > discountThreshold && largeDiscountGated !== false
+    let spAuthorizationToken = authorizedToken
+    if (needsDiscountAuthorization && !spAuthorizationToken) {
+      if (!isOnline) {
+        toast.error('Discounts above the SP threshold require an online authorization.')
+        return
+      }
+      const cachedToken = getCachedSpToken('large_discount')
+      if (!cachedToken) {
+        setPendingDiscountCheckout({ method, amountTendered })
+        return
+      }
+      const validationResponse = await fetch('/api/pharmacy/sp-authorization/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'large_discount', token: cachedToken }),
+      })
+      if (!validationResponse.ok) {
+        clearCachedSpToken('large_discount')
+        setPendingDiscountCheckout({ method, amountTendered })
+        return
+      }
+      spAuthorizationToken = cachedToken
+    }
     const total = Math.max(0, subtotal - discount)
     const reservationForSale = loadedReservation
     const sale: LocalSale = {
@@ -406,6 +507,7 @@ export default function PosPage() {
       amount_tendered: amountTendered, change_due: amountTendered ? Math.max(0, amountTendered - total) : null,
       status: 'completed', created_at: new Date().toISOString(), items: cart,
       reservation_id: reservationForSale?.id,
+      sp_authorization_token: needsDiscountAuthorization ? spAuthorizationToken : undefined,
       sync_status: 'pending', retry_count: 0,
     }
     try {
@@ -424,7 +526,9 @@ export default function PosPage() {
         }
       })
       const cached = await db.local_inventory_cache.toArray()
-      setInventory(cached)
+      setInventory(cached.map(item => isEnabled('packs_and_units') ? item : {
+        ...item, selling_units: [], whole_pack_only: false,
+      }))
     } catch (error) {
       console.error('Could not save POS sale locally:', error)
       toast.error('The sale could not be saved. Nothing was marked as completed.')
@@ -439,6 +543,9 @@ export default function PosPage() {
       await triggerSync(false)
       const storedSale = await db.local_sales.get(sale.id)
       if (storedSale?.sync_status !== 'synced') {
+        if (storedSale?.sync_error?.includes('SP_AUTH_REQUIRED')) {
+          clearCachedSpToken('large_discount')
+        }
         toast.error(storedSale?.sync_error || 'Sale saved locally, but server confirmation failed. Retry sync before handing over stock.')
         return
       }
@@ -459,7 +566,10 @@ export default function PosPage() {
   const filtered = searchQuery.trim()
     ? inventory.filter(i => {
         const q = searchQuery.toLowerCase()
-        return i.generic_name.toLowerCase().includes(q) || (i.brand_name?.toLowerCase().includes(q)) || (i.barcode?.includes(searchQuery))
+        return i.generic_name.toLowerCase().includes(q)
+          || Boolean(i.brand_name?.toLowerCase().includes(q))
+          || Boolean(i.barcode?.includes(searchQuery))
+          || i.selling_units.some((unit) => Boolean(unit.barcode?.includes(searchQuery)))
       })
     : []
 
@@ -566,8 +676,9 @@ export default function PosPage() {
         {/* Right: Cart + Checkout */}
         <div className="flex min-h-[520px] w-full min-w-0 flex-1 flex-col lg:min-h-0 lg:max-w-[420px]">
           <div className="flex-1 overflow-hidden flex flex-col">
-            <CartPanel cart={cart} discount={discount}
+            <CartPanel cart={cart} inventory={inventory} discount={discount}
               onUpdateQty={updateCartQty} onDirectQty={setDirectQty}
+              onSelectSellingUnit={selectSellingUnit}
               onRemove={removeFromCart} onClearCart={clearCart}
               onSetDiscount={setDiscount} onHoldSale={holdCurrentSale}
               heldCount={heldSales.length}
@@ -582,8 +693,19 @@ export default function PosPage() {
 
       {/* Receipt modal */}
       {showReceipt && lastSale && (
-        <ReceiptModal sale={lastSale} pharmacyName={pharmacy?.name || ''} cashierName={cashier?.name || ''} isOnline={isOnline} onClose={() => setShowReceipt(false)} />
+        <ReceiptModal sale={lastSale} pharmacyName={pharmacy?.name || ''} pharmacyLogoUrl={pharmacy?.logoUrl} cashierName={cashier?.name || ''} isOnline={isOnline} onClose={() => setShowReceipt(false)} />
       )}
+      <SpAuthorizationModal
+        open={pendingDiscountCheckout !== null}
+        action="large_discount"
+        description={`Authorise this discount above the ${discountThreshold}% pharmacy threshold`}
+        onAuthorized={(token) => {
+          const checkout = pendingDiscountCheckout
+          setPendingDiscountCheckout(null)
+          if (checkout) void handleCheckout(checkout.method, checkout.amountTendered, token)
+        }}
+        onClose={() => setPendingDiscountCheckout(null)}
+      />
 
       {/* Held sales list */}
       {showHeldList && (

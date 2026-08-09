@@ -84,6 +84,17 @@ export interface EnrichedInventoryRow {
   is_expired: boolean
   is_expiring_soon: boolean
   batches: EnrichedBatch[]
+  selling_units: Array<{
+    id: string
+    unit_name: string
+    units_per: number
+    price: number
+    barcode: string | null
+    is_default: boolean
+    sort_order: number
+  }>
+  base_unit_name: string
+  whole_pack_only: boolean
 }
 
 export interface InventoryStats {
@@ -113,7 +124,7 @@ export async function getEnrichedInventory(
   for (let from = 0; ; from += INVENTORY_PAGE_SIZE) {
     let query = supabase
       .from('pharmacy_inventory')
-      .select('*, products(*), batches(*)')
+      .select('*, products(*), batches(*), selling_units(*)')
       .eq('pharmacy_id', pharmacyId)
       .order('created_at', { ascending: false })
       .order('id', { ascending: true })
@@ -240,6 +251,11 @@ export async function getEnrichedInventory(
       is_expired: earliestActiveBatch?.is_expired ?? false,
       is_expiring_soon: earliestActiveBatch?.is_expiring_soon ?? false,
       batches,
+      selling_units: (inv.selling_units ?? [])
+        .map((unit: any) => ({ ...unit, price: Number(unit.price), units_per: Number(unit.units_per) }))
+        .sort((a: any, b: any) => a.sort_order - b.sort_order),
+      base_unit_name: inv.base_unit_name ?? 'unit',
+      whole_pack_only: inv.whole_pack_only ?? false,
     }
   })
 

@@ -85,7 +85,13 @@ export async function syncPendingSales(
 
     for (const id of result.syncedIds ?? []) {
       await db.local_sales.update(id, {
-        sync_status: 'synced', sync_error: undefined, retry_count: 0, next_retry_at: undefined,
+        sync_status: 'synced',
+        sync_error: undefined,
+        retry_count: 0,
+        next_retry_at: undefined,
+        // A grant is needed only for the server write. Do not retain the
+        // short-lived credential in the completed local receipt.
+        sp_authorization_token: undefined,
       })
       synced++
     }

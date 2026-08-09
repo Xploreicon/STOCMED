@@ -7,6 +7,7 @@ import { useUser } from '@/hooks/useUser';
 import { AlertTriangle, BarChart3, Boxes, CheckCircle2, Loader2, Tags, Upload, XCircle, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { ReorderSuggestions } from '@/components/pharmacy/ReorderSuggestions';
+import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider';
 
 interface PharmacyStats {
   total: number;
@@ -30,6 +31,7 @@ function greeting() {
 export default function PharmacyDashboard() {
   const router = useRouter();
   const { user, isLoading: authLoading, isPharmacy } = useUser();
+  const { isEnabled } = usePharmacyFeatures();
 
   useEffect(() => {
     if (!authLoading && (!user || !isPharmacy)) {
@@ -158,7 +160,7 @@ export default function PharmacyDashboard() {
         })}
       </div>
 
-      <ReorderSuggestions />
+      {isEnabled('smart_reorder') && <ReorderSuggestions />}
 
       {/* Quick actions */}
       <div className="mt-10">

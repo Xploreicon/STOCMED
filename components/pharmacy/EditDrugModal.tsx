@@ -10,9 +10,18 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, AlertCircle, Camera, X, ImageIcon, Pill } from 'lucide-react';
+import { Loader2, AlertCircle, Camera, X, ImageIcon, PackagePlus, Pill, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
+import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal';
+import {
+  clearCachedSpToken,
+  getCachedSpToken,
+  isSpAuthorizationRequired,
+  spAuthorizationRequiredError,
+  withSpAuthorizationHeader,
+} from '@/lib/sp-authorization-client';
+import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider';
 
 interface EditDrugModalProps {
   isOpen: boolean;
@@ -28,12 +37,19 @@ export default function EditDrugModal({
   onSuccess,
 }: EditDrugModalProps) {
   const queryClient = useQueryClient();
+  const { isEnabled } = usePharmacyFeatures();
 
   const [formData, setFormData] = useState({
     price: '',
     low_stock_threshold: '',
   });
   const [formError, setFormError] = useState<string | null>(null);
+  const [packForm, setPackForm] = useState({ unitName: '', unitsPer: '', price: '', barcode: '' });
+  const [isSavingPack, setIsSavingPack] = useState(false);
+  const [spRequest, setSpRequest] = useState<null | {
+    description: string;
+    run: (token: string | null) => Promise<void>;
+  }>(null);
 
   // Pharmacy-level image states
   const [pharmacyImageFile, setPharmacyImageFile] = useState<File | null>(null);
@@ -59,6 +75,7 @@ export default function EditDrugModal({
       setUploadError(null);
       setIsUploading(false);
       setFormError(null);
+      setPackForm({ unitName: '', unitsPer: '', price: '', barcode: '' });
     }
   }, [drug]);
 
@@ -128,14 +145,18 @@ export default function EditDrugModal({
   };
 
   const editDrugMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async ({ data, token }: { data: any; token?: string | null }) => {
       const response = await fetch(`/api/pharmacy/drugs/${drug.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withSpAuthorizationHeader('price_change', token ?? null, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(data),
       });
       if (!response.ok) {
         const error = await response.json();
+        if (response.status === 403 && error.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('price_change');
+          throw spAuthorizationRequiredError(error.error || 'Superintendent authorization is required.');
+        }
         throw new Error(error.error || 'Failed to update drug');
       }
       return response.json();
@@ -153,8 +174,17 @@ export default function EditDrugModal({
     },
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const runPriceChange = async (description: string, operation: (token: string | null) => Promise<void>) => {
+    try {
+      await operation(getCachedSpToken('price_change'));
+    } catch (error) {
+      if (!isSpAuthorizationRequired(error)) throw error;
+      clearCachedSpToken('price_change');
+      setSpRequest({ description, run: operation });
+    }
+  };
+
+  const saveDrug = async (token?: string | null) => {
     setFormError(null);
 
     try {
@@ -184,12 +214,25 @@ export default function EditDrugModal({
       if (pharmacyImageUrl !== undefined) payload.pharmacy_image_url = pharmacyImageUrl;
       if (catalogueImageUrl !== undefined) payload.image_url = catalogueImageUrl;
 
-      await editDrugMutation.mutateAsync(payload);
+      await editDrugMutation.mutateAsync({ data: payload, token });
     } catch (error: any) {
+      if (isSpAuthorizationRequired(error)) throw error;
       setFormError(error.message || 'Failed to update drug');
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (Number(formData.price) !== Number(drug.price)) {
+      await runPriceChange(
+        `Authorise changing the price of ${drug.brand_name || drug.generic_name || 'this inventory item'}`,
+        async (token) => saveDrug(token),
+      );
+      return;
+    }
+    await saveDrug(null);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,11 +243,61 @@ export default function EditDrugModal({
     }));
   };
 
+  const addPackPrice = async (token: string | null) => {
+    setIsSavingPack(true);
+    setFormError(null);
+    try {
+      const response = await fetch(`/api/pharmacy/inventory/${drug.id}/selling-units`, {
+        method: 'POST',
+        headers: withSpAuthorizationHeader('price_change', token, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify(packForm),
+      });
+      const payload = await response.json();
+      if (response.status === 403 && payload?.code === 'SP_AUTH_REQUIRED') {
+        clearCachedSpToken('price_change');
+        throw spAuthorizationRequiredError(payload.error || 'Superintendent authorization is required.');
+      }
+      if (!response.ok) throw new Error(payload.error || 'Could not add the pack price');
+      setPackForm({ unitName: '', unitsPer: '', price: '', barcode: '' });
+      await queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+      onSuccess();
+    } catch (error) {
+      if (isSpAuthorizationRequired(error)) throw error;
+      setFormError(error instanceof Error ? error.message : 'Could not add the pack price');
+    } finally {
+      setIsSavingPack(false);
+    }
+  };
+
+  const removePackPrice = async (sellingUnitId: string, token: string | null) => {
+    setIsSavingPack(true);
+    try {
+      const response = await fetch(`/api/pharmacy/inventory/${drug.id}/selling-units?sellingUnitId=${sellingUnitId}`, {
+        method: 'DELETE',
+        headers: withSpAuthorizationHeader('price_change', token),
+      });
+      const payload = await response.json().catch(() => null);
+      if (response.status === 403 && payload?.code === 'SP_AUTH_REQUIRED') {
+        clearCachedSpToken('price_change');
+        throw spAuthorizationRequiredError(payload.error || 'Superintendent authorization is required.');
+      }
+      if (!response.ok) throw new Error(payload?.error || 'Could not remove the pack price');
+      await queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+      onSuccess();
+    } catch (error) {
+      if (isSpAuthorizationRequired(error)) throw error;
+      setFormError(error instanceof Error ? error.message : 'Could not remove the pack price');
+    } finally {
+      setIsSavingPack(false);
+    }
+  };
+
   if (!drug) return null;
 
   const displayImage = pharmacyImagePreview || catalogueImagePreview || null;
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md p-0 border border-border rounded-xl shadow-2xl overflow-hidden">
         <DialogHeader className="p-6 border-b bg-surface/50">
@@ -392,6 +485,65 @@ export default function EditDrugModal({
                 />
               </div>
             </div>
+
+            {isEnabled('packs_and_units') && <section className="space-y-3 border-t border-border pt-5">
+              <div>
+                <h4 className="text-sm font-semibold text-ink">Pack prices</h4>
+                <p className="mt-1 text-xs leading-5 text-ink-muted">
+                  Optional. Stock always stays in base units; selling a pack deducts the number inside.
+                </p>
+              </div>
+              {(drug.selling_units ?? []).map((unit: any) => (
+                <div key={unit.id} className="flex items-center justify-between gap-3 rounded-button border border-border bg-surface px-3 py-2">
+                  <div className="min-w-0 text-sm">
+                    <p className="truncate font-medium text-ink">{unit.unit_name} · {unit.units_per} units</p>
+                    <p className="text-xs text-ink-muted">₦{Number(unit.price).toLocaleString()}{unit.barcode ? ` · ${unit.barcode}` : ''}</p>
+                  </div>
+                  <Button type="button" variant="ghost" disabled={isSavingPack} onClick={() => void runPriceChange(
+                    `Authorise removing the ${unit.unit_name} pack price`,
+                    async (token) => removePackPrice(unit.id, token),
+                  )} className="h-9 w-9 p-0 text-danger">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input placeholder="What you call it" value={packForm.unitName} onChange={(event) => setPackForm((current) => ({ ...current, unitName: event.target.value }))} />
+                <Input type="number" min="2" step="1" placeholder="Units inside" value={packForm.unitsPer} onChange={(event) => setPackForm((current) => ({ ...current, unitsPer: event.target.value }))} />
+                <Input type="number" min="0.01" step="0.01" placeholder="Pack price" value={packForm.price} onChange={(event) => setPackForm((current) => ({ ...current, price: event.target.value }))} />
+                <Input placeholder="Pack barcode (optional)" value={packForm.barcode} onChange={(event) => setPackForm((current) => ({ ...current, barcode: event.target.value }))} />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSavingPack || !packForm.unitName || !packForm.unitsPer || !packForm.price}
+                onClick={() => void runPriceChange(
+                  `Authorise adding a ${packForm.unitName || 'new'} pack price`,
+                  addPackPrice,
+                )}
+                className="gap-2"
+              >
+                {isSavingPack ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
+                Add a pack price
+              </Button>
+              {drug.item_type === 'medicine' && (drug.selling_units ?? []).length > 0 && (
+                <label className="flex items-start gap-2 rounded-button bg-warning/5 p-3 text-xs leading-5 text-ink-muted">
+                  <input
+                    type="checkbox"
+                    checked={drug.whole_pack_only === true}
+                    onChange={async (event) => {
+                      try {
+                        await editDrugMutation.mutateAsync({ data: { whole_pack_only: event.target.checked } });
+                      } catch (error) {
+                        setFormError(error instanceof Error ? error.message : 'Could not update the pack rule');
+                      }
+                    }}
+                    className="mt-0.5 h-4 w-4 accent-primary"
+                  />
+                  Sell this POM as a whole pack only
+                </label>
+              )}
+            </section>}
           </div>
 
           {/* Footer */}
@@ -418,5 +570,17 @@ export default function EditDrugModal({
         </form>
       </DialogContent>
     </Dialog>
+    <SpAuthorizationModal
+      open={spRequest !== null}
+      action="price_change"
+      description={spRequest?.description ?? 'Authorise this price change'}
+      onAuthorized={async (token) => {
+        const request = spRequest;
+        if (request) await request.run(token);
+        setSpRequest(null);
+      }}
+      onClose={() => setSpRequest(null)}
+    />
+    </>
   );
 }

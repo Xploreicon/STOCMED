@@ -7,7 +7,18 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
-import { AlertTriangle, BadgeCheck, Clock3, FileCheck2, Loader2, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, Clock3, Crosshair, FileCheck2, Loader2, MapPin, ShieldCheck } from 'lucide-react';
+import { PharmacyLogoEditor } from '@/components/pharmacy/PharmacyLogoEditor';
+import { SettingsTabStrip } from '@/components/pharmacy/SettingsTabStrip';
+import { SpSettingsPanel } from '@/components/pharmacy/SpSettingsPanel';
+import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal';
+import {
+  clearCachedSpToken,
+  getCachedSpToken,
+  isSpAuthorizationRequired,
+  spAuthorizationRequiredError,
+  withSpAuthorizationHeader,
+} from '@/lib/sp-authorization-client';
 
 type VerificationStatus = 'provisional' | 'full' | 'revoked';
 
@@ -25,7 +36,7 @@ export default function PharmacySettings() {
   const router = useRouter();
   const { user, isLoading: authLoading, isPharmacy } = useUser();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'profile' | 'account'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'account'>('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [premisesCertificate, setPremisesCertificate] = useState<File | null>(null);
@@ -39,13 +50,29 @@ export default function PharmacySettings() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('Lagos');
   const [phone, setPhone] = useState('');
-  const [openingTime, setOpeningTime] = useState('8:00 AM');
-  const [closingTime, setClosingTime] = useState('9:00 PM');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [isActive, setIsActive] = useState(true);
+  const [openingTime, setOpeningTime] = useState('08:00');
+  const [closingTime, setClosingTime] = useState('21:00');
+  const [isLocating, setIsLocating] = useState(false);
+  const [settingsAuthorization, setSettingsAuthorization] = useState<null | {
+    description: string;
+    run: (token: string | null) => Promise<void>;
+  }>(null);
 
   // Account Form states
   const [email, setEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    if (requestedTab === 'profile' || requestedTab === 'security' || requestedTab === 'account') {
+      setActiveTab(requestedTab);
+    }
+  }, []);
 
   useEffect(() => {
     if (!authLoading && (!user || !isPharmacy)) {
@@ -53,12 +80,20 @@ export default function PharmacySettings() {
     }
   }, [user, authLoading, isPharmacy, router]);
 
-  const { data: pharmacy, isLoading } = useQuery({
+  const {
+    data: pharmacy,
+    isLoading,
+    isFetching,
+    isError: isPharmacyProfileError,
+    error: pharmacyProfileError,
+    refetch: refetchPharmacyProfile,
+  } = useQuery({
     queryKey: ['pharmacy-profile'],
     queryFn: async () => {
       const response = await fetch('/api/pharmacy/profile');
       if (!response.ok) {
-        throw new Error('Failed to fetch pharmacy profile');
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || 'Failed to fetch pharmacy profile');
       }
       return response.json();
     },
@@ -72,6 +107,11 @@ export default function PharmacySettings() {
       setAddress(pharmacy.address || '');
       setCity(pharmacy.city || '');
       setState(pharmacy.state || 'Lagos');
+      setLatitude(pharmacy.latitude == null ? '' : String(pharmacy.latitude));
+      setLongitude(pharmacy.longitude == null ? '' : String(pharmacy.longitude));
+      setIsActive(pharmacy.is_active !== false);
+      setOpeningTime(pharmacy.opening_time?.slice(0, 5) || '08:00');
+      setClosingTime(pharmacy.closing_time?.slice(0, 5) || '21:00');
 
       // Handle phone format
       const rawPhone = pharmacy.phone || '';
@@ -90,14 +130,19 @@ export default function PharmacySettings() {
   }, [user]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async ({ data, token }: { data: any; token: string | null }) => {
       const response = await fetch('/api/pharmacy/profile', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withSpAuthorizationHeader('pharmacy_settings', token, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(data),
       });
       if (!response.ok) {
-        throw new Error('Failed to update profile');
+        const body = await response.json().catch(() => null);
+        if (response.status === 403 && body?.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('pharmacy_settings');
+          throw spAuthorizationRequiredError(body?.error || 'Superintendent authorization is required.');
+        }
+        throw new Error(body?.error || 'Failed to update profile');
       }
       return response.json();
     },
@@ -108,29 +153,18 @@ export default function PharmacySettings() {
     },
   });
 
-  const updateReservationsMutation = useMutation({
-    mutationFn: async (reservationsEnabled: boolean) => {
-      const response = await fetch('/api/pharmacy/profile', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reservations_enabled: reservationsEnabled }),
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new Error(data?.error || 'Failed to update reservation settings');
-      }
-      return data;
-    },
-    onSuccess: (updatedPharmacy, reservationsEnabled) => {
-      queryClient.setQueryData(['pharmacy-profile'], (current: any) => ({
-        ...current,
-        ...updatedPharmacy,
-        reservations_enabled: updatedPharmacy?.reservations_enabled ?? reservationsEnabled,
-      }));
-      queryClient.invalidateQueries({ queryKey: ['pharmacy-profile'] });
-      queryClient.invalidateQueries({ queryKey: ['pharmacy-reservations-summary'] });
-    },
-  });
+  const runSettingsAction = async (
+    description: string,
+    operation: (token: string | null) => Promise<void>,
+  ) => {
+    try {
+      await operation(getCachedSpToken('pharmacy_settings'));
+    } catch (error) {
+      if (!isSpAuthorizationRequired(error)) throw error;
+      clearCachedSpToken('pharmacy_settings');
+      setSettingsAuthorization({ description, run: operation });
+    }
+  };
 
   const submitVerificationMutation = useMutation({
     mutationFn: async () => {
@@ -165,32 +199,60 @@ export default function PharmacySettings() {
     },
   });
 
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const saveProfile = async (token: string | null) => {
     setIsSaving(true);
 
     try {
+      const parsedLatitude = latitude.trim() === '' ? null : Number(latitude);
+      const parsedLongitude = longitude.trim() === '' ? null : Number(longitude);
+      if (
+        (parsedLatitude === null) !== (parsedLongitude === null)
+        || (parsedLatitude !== null && (!Number.isFinite(parsedLatitude) || parsedLatitude < -90 || parsedLatitude > 90))
+        || (parsedLongitude !== null && (!Number.isFinite(parsedLongitude) || parsedLongitude < -180 || parsedLongitude > 180))
+      ) {
+        throw new Error('Enter a valid latitude and longitude together.');
+      }
+      if (openingTime === closingTime) {
+        throw new Error('Opening and closing times must be different.');
+      }
       // Re-add prefix +234
       const fullPhone = phone.trim().startsWith('+234')
         ? phone.trim()
         : `+234 ${phone.trim()}`;
 
-      await updateProfileMutation.mutateAsync({
+      await updateProfileMutation.mutateAsync({ token, data: {
         pharmacy_name: pharmacyName,
         address,
         city,
         state,
         phone: fullPhone,
-      });
+        latitude: parsedLatitude,
+        longitude: parsedLongitude,
+        is_active: isActive,
+        opening_time: openingTime,
+        closing_time: closingTime,
+      }});
     } catch (error) {
+      if (isSpAuthorizationRequired(error)) throw error;
       console.error('Error saving profile:', error);
+      alert(error instanceof Error ? error.message : 'Could not save the pharmacy profile.');
     } finally {
       setIsSaving(false);
     }
   };
 
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await runSettingsAction('Authorise changes to the pharmacy profile, visibility, location, or hours', saveProfile);
+  };
+
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (newPassword !== confirmPassword) {
+      alert('New passwords do not match');
+      return;
+    }
 
     if (newPassword.length < 6) {
       alert('Password must be at least 6 characters');
@@ -201,6 +263,12 @@ export default function PharmacySettings() {
 
     try {
       const supabase = createClient();
+      if (!user?.email) throw new Error('Your account email is unavailable. Sign in again and retry.');
+      const { error: reauthenticationError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (reauthenticationError) throw new Error('Current password is incorrect.');
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
@@ -212,6 +280,7 @@ export default function PharmacySettings() {
       alert('Password updated successfully');
       setCurrentPassword('');
       setNewPassword('');
+      setConfirmPassword('');
     } catch (error: any) {
       console.error('Error changing password:', error);
       alert(error.message || 'Failed to change password');
@@ -220,25 +289,72 @@ export default function PharmacySettings() {
     }
   };
 
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Location is not available in this browser.');
+      return;
+    }
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLatitude(position.coords.latitude.toFixed(6));
+        setLongitude(position.coords.longitude.toFixed(6));
+        setIsLocating(false);
+      },
+      () => {
+        alert('Could not get this device location. Allow location access or enter the coordinates manually.');
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    );
+  };
+
   const handleDeactivate = async () => {
     if (confirm('Are you sure you want to deactivate your pharmacy? Your inventory will be hidden from searches.')) {
       try {
-        await updateProfileMutation.mutateAsync({
-          is_active: false,
+        await runSettingsAction('Authorise deactivating this pharmacy', async (token) => {
+          await updateProfileMutation.mutateAsync({ token, data: { is_active: false } });
+          alert('Pharmacy has been deactivated.');
         });
-        alert('Pharmacy has been deactivated.');
       } catch (err) {
         console.error(err);
       }
     }
   };
 
-  if (authLoading || isLoading) {
+  if (
+    authLoading
+    || (!user || !isPharmacy)
+    || (!!user && isPharmacy && (isLoading || (!pharmacy?.id && isFetching)))
+  ) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-[60vh]">
         <div className="flex items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-ink-muted text-lg">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isPharmacyProfileError || !pharmacy?.id) {
+    return (
+      <div className="mx-auto flex min-h-[60vh] max-w-[560px] items-center justify-center px-4">
+        <div className="w-full rounded-card border border-danger/25 bg-danger/5 p-5 text-center sm:p-6" role="alert">
+          <AlertTriangle className="mx-auto h-8 w-8 text-danger" aria-hidden="true" />
+          <h1 className="mt-3 text-[20px] font-semibold text-ink">Settings could not load</h1>
+          <p className="mt-2 text-[14px] leading-6 text-ink-muted">
+            {pharmacyProfileError instanceof Error
+              ? pharmacyProfileError.message
+              : 'Your pharmacy profile was not returned. Please try again.'}
+          </p>
+          <Button
+            type="button"
+            onClick={() => void refetchPharmacyProfile()}
+            className="mt-5 min-h-11"
+          >
+            Try again
+          </Button>
         </div>
       </div>
     );
@@ -260,42 +376,27 @@ export default function PharmacySettings() {
     <div className="max-w-[680px] mx-auto py-4">
       <h1 className="text-[24px] font-medium text-ink mb-[28px]">Settings</h1>
 
-      {/* Tabs */}
-      <nav
-        aria-label="Pharmacy settings sections"
-        className="mb-8 overflow-x-auto rounded-button border border-border bg-surface p-1"
-      >
-        <div className="flex min-w-max items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab('profile')}
-            aria-current={activeTab === 'profile' ? 'page' : undefined}
-            className={`inline-flex min-h-11 items-center justify-center rounded-button px-4 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
-              activeTab === 'profile'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-ink-muted hover:bg-white hover:text-ink'
-            }`}
-          >
-            Pharmacy profile
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('account')}
-            aria-current={activeTab === 'account' ? 'page' : undefined}
-            className={`inline-flex min-h-11 items-center justify-center rounded-button px-4 text-[14px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
-              activeTab === 'account'
-                ? 'bg-primary text-white shadow-sm'
-                : 'text-ink-muted hover:bg-white hover:text-ink'
-            }`}
-          >
-            Account
-          </button>
-        </div>
-      </nav>
+      <div className="mb-8">
+        <SettingsTabStrip active={activeTab} onSectionChange={setActiveTab} />
+      </div>
 
       {/* Profile Tab Content */}
       {activeTab === 'profile' && (
         <form onSubmit={handleSaveProfile} className="flex flex-col gap-6">
+          <PharmacyLogoEditor
+            pharmacyId={pharmacy.id}
+            pharmacyName={pharmacyName || pharmacy.pharmacy_name || 'Pharmacy'}
+            logoUrl={pharmacy.logo_url ?? null}
+            onChanged={(logoUrl) => {
+              queryClient.setQueryData(['pharmacy-profile'], (current: any) => ({
+                ...current,
+                logo_url: logoUrl,
+              }));
+            }}
+            authorize={(description, operation) => {
+              void runSettingsAction(description, operation);
+            }}
+          />
           <section
             className={`rounded-card border p-4 sm:p-5 ${
               isFullyVerified
@@ -415,65 +516,38 @@ export default function PharmacySettings() {
             </section>
           )}
 
-          <section className="rounded-card border border-border bg-surface p-4 sm:p-5" aria-labelledby="reservations-toggle-label">
+          <section className="rounded-card border border-border bg-white p-4 sm:p-5" aria-labelledby="visibility-toggle-label">
             <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <h2 id="reservations-toggle-label" className="text-[15px] font-semibold text-ink">
-                  Accept reservations (hold stock for patients)
-                </h2>
-                <p id="reservations-toggle-description" className="mt-2 text-[14px] leading-[1.55] text-ink-muted">
-                  When ON, patients can reserve eligible stock for pickup. Provisional pharmacies remain call-only for prescription medicines; OTC holds are unaffected. You must monitor the queue so holds don&apos;t expire.
+              <div>
+                <h2 id="visibility-toggle-label" className="text-[15px] font-semibold text-ink">Pharmacy visibility</h2>
+                <p id="visibility-toggle-description" className="mt-1.5 text-[13px] leading-5 text-ink-muted">
+                  Pause patient visibility without deleting inventory or sales history.
                 </p>
               </div>
               <button
+                data-testid="pharmacy-active"
                 type="button"
                 role="switch"
-                aria-checked={pharmacy?.reservations_enabled === true}
-                aria-labelledby="reservations-toggle-label"
-                aria-describedby="reservations-toggle-description"
-                disabled={updateReservationsMutation.isPending}
-                onClick={() => {
-                  updateReservationsMutation.reset();
-                  updateReservationsMutation.mutate(!(pharmacy?.reservations_enabled === true));
-                }}
-                className={`relative mt-0.5 inline-flex h-7 w-12 flex-shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60 ${
-                  pharmacy?.reservations_enabled === true ? 'bg-primary' : 'bg-ink-muted/30'
-                }`}
+                aria-checked={isActive}
+                aria-labelledby="visibility-toggle-label"
+                aria-describedby="visibility-toggle-description"
+                onClick={() => setIsActive((current) => !current)}
+                className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${isActive ? 'bg-primary' : 'bg-ink-muted/30'}`}
               >
-                <span className="sr-only">
-                  {pharmacy?.reservations_enabled === true ? 'Turn reservations off' : 'Turn reservations on'}
-                </span>
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none inline-block h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${
-                    pharmacy?.reservations_enabled === true ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
+                <span className="sr-only">{isActive ? 'Pause pharmacy visibility' : 'Resume pharmacy visibility'}</span>
+                <span className={`inline-block h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${isActive ? 'translate-x-5' : 'translate-x-0'}`} />
               </button>
             </div>
-            <div className="mt-3 flex items-center gap-2 text-[13px] font-medium">
-              <span className={pharmacy?.reservations_enabled === true ? 'text-success' : 'text-ink-muted'}>
-                Reservations are {pharmacy?.reservations_enabled === true ? 'ON' : 'OFF'}
-              </span>
-              {updateReservationsMutation.isPending && (
-                <span className="inline-flex items-center gap-1.5 text-ink-muted" role="status">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  Saving…
-                </span>
-              )}
-            </div>
-            {updateReservationsMutation.error && (
-              <p className="mt-2 text-[13px] font-medium text-danger" role="alert">
-                {updateReservationsMutation.error instanceof Error
-                  ? updateReservationsMutation.error.message
-                  : 'Failed to update reservation settings'}
-              </p>
-            )}
+            <p className={`mt-3 text-[13px] font-medium ${isActive ? 'text-success' : 'text-warning'}`}>
+              {isActive ? 'Visible to patients' : 'Paused — hidden from patient search'}
+            </p>
           </section>
 
           <div>
-            <label className="block text-[14px] font-medium text-ink mb-2">Pharmacy name</label>
+            <label htmlFor="pharmacy-name" className="block text-[14px] font-medium text-ink mb-2">Pharmacy name</label>
             <input
+              id="pharmacy-name"
+              data-testid="pharmacy-name"
               type="text"
               value={pharmacyName}
               onChange={(e) => setPharmacyName(e.target.value)}
@@ -483,9 +557,10 @@ export default function PharmacySettings() {
           </div>
 
           <div>
-            <label className="block text-[14px] font-medium text-ink mb-2">PCN premises number</label>
+            <label htmlFor="license-number" className="block text-[14px] font-medium text-ink mb-2">PCN premises number</label>
             <div className="flex items-center gap-2.5">
               <input
+                id="license-number"
                 type="text"
                 value={licenseNumber}
                 disabled
@@ -511,8 +586,10 @@ export default function PharmacySettings() {
           </div>
 
           <div>
-            <label className="block text-[14px] font-medium text-ink mb-2">Street address</label>
+            <label htmlFor="pharmacy-address" className="block text-[14px] font-medium text-ink mb-2">Street address</label>
             <input
+              id="pharmacy-address"
+              data-testid="pharmacy-address"
               type="text"
               value={address}
               onChange={(e) => setAddress(e.target.value)}
@@ -521,10 +598,12 @@ export default function PharmacySettings() {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-[14px] font-medium text-ink mb-2">City</label>
+              <label htmlFor="pharmacy-city" className="block text-[14px] font-medium text-ink mb-2">City</label>
               <input
+                id="pharmacy-city"
+                data-testid="pharmacy-city"
                 type="text"
                 value={city}
                 onChange={(e) => setCity(e.target.value)}
@@ -533,8 +612,10 @@ export default function PharmacySettings() {
               />
             </div>
             <div>
-              <label className="block text-[14px] font-medium text-ink mb-2">State</label>
+              <label htmlFor="pharmacy-state" className="block text-[14px] font-medium text-ink mb-2">State</label>
               <select
+                id="pharmacy-state"
+                data-testid="pharmacy-state"
                 value={state}
                 onChange={(e) => setState(e.target.value)}
                 className="w-full h-12 border border-border rounded-button px-3 text-[15px] text-ink bg-white focus:outline-none focus:border-primary"
@@ -549,12 +630,14 @@ export default function PharmacySettings() {
           </div>
 
           <div>
-            <label className="block text-[14px] font-medium text-ink mb-2">Phone number</label>
+            <label htmlFor="pharmacy-phone" className="block text-[14px] font-medium text-ink mb-2">Phone number</label>
             <div className="flex gap-2">
               <div className="w-[72px] h-12 border border-border rounded-button flex items-center justify-center text-[15px] font-medium text-ink-muted bg-[var(--surface)] flex-shrink-0">
                 +234
               </div>
               <input
+                id="pharmacy-phone"
+                data-testid="pharmacy-phone"
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
@@ -564,20 +647,52 @@ export default function PharmacySettings() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <section className="rounded-card border border-border bg-white p-4 sm:p-5" aria-labelledby="pharmacy-location-heading">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 id="pharmacy-location-heading" className="flex items-center gap-2 text-[15px] font-semibold text-ink">
+                  <MapPin className="h-4 w-4 text-primary" />
+                  Pharmacy map location
+                </h2>
+                <p className="mt-1.5 text-[13px] leading-5 text-ink-muted">
+                  Patient distance ranking uses this exact point. Stand at the pharmacy entrance for the best result.
+                </p>
+              </div>
+              <Button type="button" variant="outline" disabled={isLocating} onClick={useCurrentLocation} className="h-10 gap-2">
+                {isLocating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crosshair className="h-4 w-4" />}
+                Use this device
+              </Button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="text-[14px] font-medium text-ink">
+                Latitude
+                <input data-testid="pharmacy-latitude" type="number" min="-90" max="90" step="0.000001" value={latitude} onChange={(event) => setLatitude(event.target.value)} placeholder="6.524400" className="mt-2 h-12 w-full rounded-button border border-border px-4 text-[15px] outline-none focus:border-primary" />
+              </label>
+              <label className="text-[14px] font-medium text-ink">
+                Longitude
+                <input data-testid="pharmacy-longitude" type="number" min="-180" max="180" step="0.000001" value={longitude} onChange={(event) => setLongitude(event.target.value)} placeholder="3.379200" className="mt-2 h-12 w-full rounded-button border border-border px-4 text-[15px] outline-none focus:border-primary" />
+              </label>
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-[14px] font-medium text-ink mb-2">Opening time</label>
+              <label htmlFor="opening-time" className="block text-[14px] font-medium text-ink mb-2">Opening time</label>
               <input
-                type="text"
+                id="opening-time"
+                data-testid="opening-time"
+                type="time"
                 value={openingTime}
                 onChange={(e) => setOpeningTime(e.target.value)}
                 className="w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white focus:outline-none focus:border-primary"
               />
             </div>
             <div>
-              <label className="block text-[14px] font-medium text-ink mb-2">Closing time</label>
+              <label htmlFor="closing-time" className="block text-[14px] font-medium text-ink mb-2">Closing time</label>
               <input
-                type="text"
+                id="closing-time"
+                data-testid="closing-time"
+                type="time"
                 value={closingTime}
                 onChange={(e) => setClosingTime(e.target.value)}
                 className="w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white focus:outline-none focus:border-primary"
@@ -585,7 +700,7 @@ export default function PharmacySettings() {
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-3 pt-2">
+          <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-end">
             <Button
               type="button"
               onClick={() => {
@@ -596,16 +711,22 @@ export default function PharmacySettings() {
                   setState(pharmacy.state || 'Lagos');
                   const rawPhone = pharmacy.phone || '';
                   setPhone(rawPhone.replace('+234', '').trim());
+                  setLatitude(pharmacy.latitude == null ? '' : String(pharmacy.latitude));
+                  setLongitude(pharmacy.longitude == null ? '' : String(pharmacy.longitude));
+                  setIsActive(pharmacy.is_active !== false);
+                  setOpeningTime(pharmacy.opening_time?.slice(0, 5) || '08:00');
+                  setClosingTime(pharmacy.closing_time?.slice(0, 5) || '21:00');
                 }
               }}
-              className="h-12 flex items-center px-6 bg-white text-ink-muted border border-border font-medium text-[15px] rounded-button hover:bg-surface transition-colors"
+              className="h-12 w-full items-center border border-border bg-white px-6 text-[15px] font-medium text-ink-muted hover:bg-surface sm:w-auto"
             >
               Discard changes
             </Button>
             <Button
+              data-testid="save-pharmacy-profile"
               type="submit"
               disabled={isSaving}
-              className="h-12 flex items-center px-6 bg-primary text-white font-medium text-[15px] rounded-button hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-60"
+              className="h-12 w-full items-center px-6 text-[15px] font-medium sm:w-auto"
             >
               {isSaving ? 'Saving...' : 'Save changes'}
             </Button>
@@ -619,13 +740,16 @@ export default function PharmacySettings() {
         </form>
       )}
 
+      {activeTab === 'security' && <SpSettingsPanel />}
+
       {/* Account Tab Content */}
       {activeTab === 'account' && (
         <div className="flex flex-col gap-6">
           <form onSubmit={handleChangePassword} className="flex flex-col gap-6">
             <div>
-              <label className="block text-[14px] font-medium text-ink mb-2">Email address</label>
+              <label htmlFor="account-email" className="block text-[14px] font-medium text-ink mb-2">Email address</label>
               <input
+                id="account-email"
                 type="email"
                 value={email}
                 disabled
@@ -634,8 +758,9 @@ export default function PharmacySettings() {
             </div>
 
             <div>
-              <label className="block text-[14px] font-medium text-ink mb-2">Current password</label>
+              <label htmlFor="current-password" className="block text-[14px] font-medium text-ink mb-2">Current password</label>
               <input
+                id="current-password"
                 type="password"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
@@ -646,13 +771,27 @@ export default function PharmacySettings() {
             </div>
 
             <div>
-              <label className="block text-[14px] font-medium text-ink mb-2">New password</label>
+              <label htmlFor="new-password" className="block text-[14px] font-medium text-ink mb-2">New password</label>
               <input
+                id="new-password"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
                 placeholder="At least 8 characters"
+                className="w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white focus:outline-none focus:border-primary"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="confirm-password" className="block text-[14px] font-medium text-ink mb-2">Confirm new password</label>
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="Type the new password again"
                 className="w-full h-12 border border-border rounded-button px-4 text-[15px] text-ink bg-white focus:outline-none focus:border-primary"
               />
             </div>
@@ -686,6 +825,17 @@ export default function PharmacySettings() {
           </div>
         </div>
       )}
+      <SpAuthorizationModal
+        open={settingsAuthorization !== null}
+        action="pharmacy_settings"
+        description={settingsAuthorization?.description ?? 'Authorise changing pharmacy settings'}
+        onAuthorized={async (token) => {
+          const request = settingsAuthorization;
+          if (request) await request.run(token);
+          setSettingsAuthorization(null);
+        }}
+        onClose={() => setSettingsAuthorization(null)}
+      />
     </div>
   );
 }

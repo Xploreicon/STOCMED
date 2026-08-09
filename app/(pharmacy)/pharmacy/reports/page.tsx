@@ -7,6 +7,15 @@ import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal'
+import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider'
+import {
+  clearCachedSpToken,
+  getCachedSpToken,
+  isSpAuthorizationRequired,
+  spAuthorizationRequiredError,
+  withSpAuthorizationHeader,
+} from '@/lib/sp-authorization-client'
 
 type Reports = {
   range: { from: string; to: string }
@@ -23,24 +32,107 @@ const label = (item: { generic_name: string; brand_name: string | null; strength
 const total = <T,>(rows: T[], field: keyof T) => rows.reduce((sum, row) => sum + Number(row[field] || 0), 0)
 
 export default function ReportsPage() {
+  const { isEnabled } = usePharmacyFeatures()
   const [from, setFrom] = useState(iso(new Date(Date.now() - 29 * 86_400_000)))
   const [to, setTo] = useState(iso(new Date()))
+  const [exportRequest, setExportRequest] = useState<{ format: 'csv' | 'xlsx'; dataset: string } | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
+  const [reportToken, setReportToken] = useState<string | null>(null)
   const query = useMemo(() => new URLSearchParams({ from, to }).toString(), [from, to])
-  const { data, isLoading, error } = useQuery<{ reports: Reports }>({
-    queryKey: ['pharmacy-reports', from, to],
+  const { data: spSettings, isLoading: spSettingsLoading } = useQuery<{ configured: boolean; requireFinancialReports: boolean }>({
+    queryKey: ['sp-authorization-settings'],
     queryFn: async () => {
-      const response = await fetch(`/api/pharmacy/reports?${query}`)
+      const response = await fetch('/api/pharmacy/sp-authorization')
+      if (!response.ok) throw new Error('Could not load report controls')
+      return response.json()
+    },
+  })
+  const reportAuthorizationRequired = Boolean(spSettings?.configured && spSettings.requireFinancialReports)
+  const { data, isLoading, error } = useQuery<{ reports: Reports }>({
+    queryKey: ['pharmacy-reports', from, to, reportToken],
+    queryFn: async () => {
+      const response = await fetch(`/api/pharmacy/reports?${query}`, {
+        headers: reportToken ? { 'x-sp-authorization': reportToken } : {},
+      })
       const result = await response.json()
+      if (response.status === 403 && (result.code === 'SP_AUTH_REQUIRED' || result.code === 'SP_REPORT_AUTH_REQUIRED')) {
+        clearCachedSpToken('financial_reports')
+        setReportToken(null)
+        throw spAuthorizationRequiredError(result.error || 'Superintendent authorization is required.')
+      }
       if (!response.ok) throw new Error(result.error || 'Could not load reports')
       return result
     },
+    enabled: !spSettingsLoading && (!reportAuthorizationRequired || Boolean(reportToken)),
   })
   const reports = data?.reports
 
-  if (isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+  if (spSettingsLoading || isLoading) return <div className="flex min-h-[60vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+  if (reportAuthorizationRequired && !reportToken) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-center"><h1 className="text-xl font-semibold text-ink">Financial reports are protected</h1><p className="mt-2 text-sm text-ink-muted">Ask the Superintendent Pharmacist to authorise access.</p></div>
+        <SpAuthorizationModal
+          open
+          action="financial_reports"
+          description="Authorise viewing the pharmacy's full financial reports"
+          onAuthorized={(token) => {
+            setReportToken(token)
+            return false
+          }}
+          onClose={() => history.back()}
+        />
+      </div>
+    )
+  }
   if (error || !reports) return <div className="p-6 text-danger">{error instanceof Error ? error.message : 'Reports are unavailable'}</div>
 
   const exportHref = (format: 'csv' | 'xlsx', dataset = 'sales') => `/api/pharmacy/reports/export?${query}&format=${format}&dataset=${dataset}`
+  const downloadExport = async (request: { format: 'csv' | 'xlsx'; dataset: string }, token: string | null) => {
+    setIsExporting(true)
+    try {
+      const headers = withSpAuthorizationHeader('data_export', token)
+      const currentReportToken = reportToken || getCachedSpToken('financial_reports')
+      if (currentReportToken) headers.set('x-sp-report-authorization', currentReportToken)
+      const response = await fetch(exportHref(request.format, request.dataset), {
+        headers,
+      })
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        if (response.status === 403 && payload?.code === 'SP_REPORT_AUTH_REQUIRED') {
+          clearCachedSpToken('financial_reports')
+          setReportToken(null)
+          setExportRequest(null)
+          return
+        }
+        if (response.status === 403 && payload?.code === 'SP_AUTH_REQUIRED') {
+          clearCachedSpToken('data_export')
+          setExportRequest(request)
+          throw spAuthorizationRequiredError(payload?.error || 'Superintendent authorization is required.')
+        }
+        throw new Error(payload?.error || 'Could not export this report')
+      }
+      const payload = await response.blob()
+      const url = URL.createObjectURL(payload)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `stocmed-${request.dataset}-${from}-to-${to}.${request.format}`
+      anchor.click()
+      URL.revokeObjectURL(url)
+      setExportRequest(null)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+  const requestExport = async (request: { format: 'csv' | 'xlsx'; dataset: string }) => {
+    try {
+      await downloadExport(request, getCachedSpToken('data_export'))
+    } catch (error) {
+      if (!isSpAuthorizationRequired(error)) {
+        alert(error instanceof Error ? error.message : 'Could not export this report')
+      }
+    }
+  }
   const expiry90 = total(reports.expiry_exposure, 'cost_value')
   const departmentTotal = <T extends { department: 'medicine' | 'store' }>(rows: T[], field: keyof T, department: T['department']) =>
     total(rows.filter(row => row.department === department), field)
@@ -52,8 +144,8 @@ export default function ReportsPage() {
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-xs text-ink-muted">From<Input className="mt-1" type="date" value={from} onChange={event => setFrom(event.target.value)} /></label>
           <label className="text-xs text-ink-muted">To<Input className="mt-1" type="date" value={to} onChange={event => setTo(event.target.value)} /></label>
-          <Button asChild={false} variant="outline" onClick={() => window.open(exportHref('csv'), '_blank')}><Download className="mr-2 h-4 w-4" />CSV</Button>
-          <Button onClick={() => window.open(exportHref('xlsx'), '_blank')}><FileSpreadsheet className="mr-2 h-4 w-4" />QuickBooks XLSX</Button>
+          <Button asChild={false} variant="outline" disabled={isExporting} onClick={() => void requestExport({ format: 'csv', dataset: 'sales' })}><Download className="mr-2 h-4 w-4" />CSV</Button>
+          {isEnabled('quickbooks_export') && <Button disabled={isExporting} onClick={() => void requestExport({ format: 'xlsx', dataset: 'sales' })}><FileSpreadsheet className="mr-2 h-4 w-4" />Accounting XLSX</Button>}
         </div>
       </header>
 
@@ -94,6 +186,16 @@ export default function ReportsPage() {
           {reports.expiry_exposure.map(row => <article key={`${row.days}-${row.department}`} className="border border-border p-5 rounded-card"><div className="flex items-center justify-between gap-2"><p className="text-sm font-medium text-ink">{row.days - 29}–{row.days} days</p><DepartmentBadge department={row.department} /></div><p className="mt-2 text-2xl font-semibold text-danger">{money(row.cost_value)}</p><p className="mt-1 text-sm text-ink-muted">{row.units} units · {money(row.retail_value)} retail</p></article>)}
         </TabsContent>
       </Tabs>
+      <SpAuthorizationModal
+        open={exportRequest !== null}
+        action="data_export"
+        description={`Authorise export of pharmacy data from ${from} to ${to}`}
+        onAuthorized={(token) => {
+          const request = exportRequest
+          return request ? downloadExport(request, token) : undefined
+        }}
+        onClose={() => setExportRequest(null)}
+      />
     </div>
   )
 }
