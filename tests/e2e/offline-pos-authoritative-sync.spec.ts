@@ -561,6 +561,47 @@ test.describe('tablet offline POS authoritative reconnect', () => {
     test.skip(!isLoopbackHttpUrl(baseURL), 'This destructive fixture is restricted to a loopback app URL.')
   })
 
+  test('online sale is authoritative before the receipt is shown', async ({ page, context }) => {
+    await loginThroughUi(page)
+    const fixture = await loadFixture(pool)
+    const initialStock = await authoritativeStock(pool)
+
+    try {
+      if (initialStock < 1) {
+        await adjustStockThroughApp(context.request, fixture, 1, 'Online POS hotfix E2E setup')
+      }
+      const workingStock = await authoritativeStock(pool)
+      const shift = await ensureOpenShift(page, pool)
+      const inventory = await openPos(page, shift.id)
+      const existingIds = new Set((await readLocalSales(page)).map((sale) => sale.id))
+      const label = itemLabel(inventory)
+
+      await page.getByPlaceholder('Scan barcode or type an item name...').fill(label)
+      await inventorySearchResult(page, label).click()
+      await page.getByRole('button', { name: /^Checkout/ }).click()
+      await page.getByRole('button', { name: /Transfer/ }).click()
+      await page.getByRole('button', { name: 'Complete Sale' }).click()
+
+      await expect(page.getByRole('heading', { name: 'Sale Complete!' })).toBeVisible()
+      await expect(page.getByText('Synced to cloud')).toBeVisible()
+      await expect(page.getByText('StocMed Pharmacy Receipt')).toBeVisible()
+      await expect(page.getByText('PAYMENT: BANK TRANSFER')).toBeVisible()
+
+      const sale = (await readLocalSales(page)).find((entry) => !existingIds.has(entry.id))
+      expect(sale).toMatchObject({
+        pharmacy_id: LOCAL_PHARMACY_ID,
+        cashier_id: LOCAL_CASHIER_ID,
+        shift_id: shift.id,
+        sync_status: 'synced',
+      })
+      await expectSaleExactlyOnce(pool, sale!, shift.id)
+      await expect.poll(() => authoritativeStock(pool), { timeout: 20_000 }).toBe(workingStock - 1)
+      await expectDisplayedStock(page, label, workingStock - 1)
+    } finally {
+      await restoreStockThroughApp(pool, context, fixture, initialStock, 'Online POS hotfix E2E cleanup')
+    }
+  })
+
   test('Test 1: queues three real Dexie sales offline and syncs each exactly once', async ({ page, context }) => {
     await loginThroughUi(page)
     const fixture = await loadFixture(pool)

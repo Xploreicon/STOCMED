@@ -2,14 +2,15 @@ import { z } from 'zod'
 
 const uuid = z.string().uuid()
 const money = z.coerce.number().finite().nonnegative()
+const isoTimestamp = z.string().datetime({ offset: true })
 
 export const localShiftSchema = z.object({
   id: uuid,
   pharmacy_id: uuid,
   cashier_id: uuid,
-  opened_at: z.string().datetime(),
+  opened_at: isoTimestamp,
   opening_float: money,
-  closed_at: z.string().datetime().optional(),
+  closed_at: isoTimestamp.optional(),
   counted_cash: money.optional(),
   expected_cash: z.number().finite().optional(),
   variance: z.number().finite().optional(),
