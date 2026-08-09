@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { createClient } from '@/lib/supabase/server'
 import { expiryCaptureSchema } from '@/lib/validation/reporting'
+import { getStructuredRpcFailure } from '@/lib/sp-authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,8 +37,17 @@ export async function POST(request: NextRequest) {
     p_staging_id: parsed.data.staging_id,
     p_batch_number: parsed.data.batch_number,
     p_expiry_date: parsed.data.expiry_date,
+    p_sp_token: request.headers.get('x-sp-authorization'),
   })
-  return error
-    ? NextResponse.json({ error: error.message }, { status: 409 })
-    : NextResponse.json(data, { status: 201 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+
+  const rpcFailure = getStructuredRpcFailure(data, 'Expiry capture was rejected')
+  if (rpcFailure) {
+    return NextResponse.json(
+      { error: rpcFailure.error, ...(rpcFailure.code ? { code: rpcFailure.code } : {}) },
+      { status: rpcFailure.code === 'SP_AUTH_REQUIRED' ? 403 : 409 },
+    )
+  }
+
+  return NextResponse.json(data, { status: 201 })
 }

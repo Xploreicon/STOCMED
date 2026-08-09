@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { createClient } from '@/lib/supabase/server'
 import { posSyncSchema } from '@/lib/validation/pos'
+import { getStructuredRpcFailure } from '@/lib/sp-authorization'
 
 type RpcResult = PromiseLike<{ data: unknown; error: { message: string } | null }>
 
@@ -30,7 +31,6 @@ export async function POST(request: NextRequest) {
       console.error('POS Sync Error: Pharmacy profile not found for user:', user.id)
       return NextResponse.json({ error: 'Pharmacy profile not found' }, { status: 404 })
     }
-
     const bodyText = await request.text()
     let rawBody: unknown
     try {
@@ -92,15 +92,28 @@ export async function POST(request: NextRequest) {
         failedIds.push({ id: sale.id, error: 'The sale shift has not synced yet' })
         continue
       }
-      const { error } = await shiftRpc(supabase, 'sync_pos_sale_with_shift', {
+      const { data, error } = await shiftRpc(supabase, 'sync_pos_sale_with_shift', {
         p_pharmacy_id: pharmacy.id,
         p_sale: sale,
       })
       if (error) {
         console.error(`POS Sync Error in sync_pos_sale_with_shift (sale ${sale.id}):`, error)
         failedIds.push({ id: sale.id, error: error.message || 'Sale sync failed' })
-      } else {
+        continue
+      }
+
+      const rpcFailure = getStructuredRpcFailure(data, 'Sale sync failed')
+      if (rpcFailure) {
+        failedIds.push({
+          id: sale.id,
+          error: rpcFailure.code
+            ? `${rpcFailure.code}: ${rpcFailure.error}`
+            : rpcFailure.error,
+        })
+      } else if ((data as { success?: unknown } | null)?.success === true) {
         syncedIds.push(sale.id)
+      } else {
+        failedIds.push({ id: sale.id, error: 'Sale sync did not return authoritative confirmation' })
       }
     }
 

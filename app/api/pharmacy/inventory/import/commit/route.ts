@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { validateRows, type ImportRow } from '@/lib/validation/import-rows'
 import { quickBooksImportSchema } from '@/lib/validation/reporting'
 import { normalizeImportDosageForm, normalizeImportStrength } from '@/lib/inventory-import'
+import { getStructuredRpcFailure } from '@/lib/sp-authorization'
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest) {
       const parsed = quickBooksImportSchema.safeParse(body)
       if (!parsed.success) {
         return NextResponse.json({
-          error: 'QuickBooks rows require a catalogue match, quantity, cost, and price',
+          error: 'Accounting rows require a catalogue match, quantity, cost, and price',
           issues: parsed.error.issues,
         }, { status: 422 })
       }
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
         p_pharmacy_id: pharmacy.id,
         p_rows: parsed.data.matchedRows,
       })
-      if (error) return NextResponse.json({ error: `QuickBooks import rolled back: ${error.message}` }, { status: 409 })
+      if (error) return NextResponse.json({ error: `Accounting import rolled back: ${error.message}` }, { status: 409 })
       return NextResponse.json({ imported: data.staged, total: data.staged, expiry_capture_required: true }, { status: 201 })
     }
     if (!Array.isArray(body.matchedRows) || body.matchedRows.length === 0) {
@@ -126,6 +127,7 @@ export async function POST(request: NextRequest) {
       p_user_id: user.id,
       p_rows: body.matchedRows,
       p_import_id: importBatchId,
+      p_sp_token: request.headers.get('x-sp-authorization'),
     })
 
     if (error) {
@@ -133,6 +135,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: `Import rolled back: ${error.message}`, rowErrors: [] },
         { status: 409 }
+      )
+    }
+
+    const rpcFailure = getStructuredRpcFailure(data, 'Import was rejected')
+    if (rpcFailure) {
+      return NextResponse.json(
+        {
+          error: rpcFailure.error,
+          ...(rpcFailure.code ? { code: rpcFailure.code } : {}),
+          rowErrors: [],
+        },
+        { status: rpcFailure.code === 'SP_AUTH_REQUIRED' ? 403 : 409 },
       )
     }
 

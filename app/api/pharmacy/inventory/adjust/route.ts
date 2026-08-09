@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { MOVEMENT_TYPE_MAP, type MovementUiType } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
+import { SP_AUTH_REQUIRED_RESPONSE } from '@/lib/sp-authorization'
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
 
     // Parse body
     const body = await request.json()
-    const { inventory_id, batch_id, batch_number, expiry_date, quantity, type, reason } = body
+    const { inventory_id, batch_id, batch_number, expiry_date, cost_price, quantity, type, reason } = body
 
     if (!inventory_id || !type || quantity === undefined || quantity === null) {
       return NextResponse.json(
@@ -82,48 +83,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let finalBatchId = batch_id
-
-    // If restocking with a new batch
-    if (!finalBatchId && batch_number && expiry_date) {
-      const { data: newBatch, error: batchErr } = await (supabase as any)
-        .from('batches')
-        .insert({
-          inventory_id,
-          batch_number,
-          expiry_date,
-          quantity_received: Math.max(0, signedQuantity),
-          cost_price: null
-        })
-        .select()
-        .single()
-
-      if (batchErr || !newBatch) {
-        console.error('Error creating batch for adjustment:', batchErr)
-        return NextResponse.json(
-          { error: 'Failed to create new batch for restocking' },
-          { status: 500 }
-        )
-      }
-      finalBatchId = newBatch.id
-    }
-
-    if (!finalBatchId) {
-      return NextResponse.json(
-        { error: 'A batch selection or new batch details are required.' },
-        { status: 400 }
-      )
-    }
-
     const { data: movement, error: moveError } = await (supabase.rpc as any)(
-      'create_guarded_stock_adjustment',
+      'record_guarded_stock_adjustment',
       {
-        p_pharmacy_id: pharmacy.id,
         p_inventory_id: inventory_id,
-        p_batch_id: finalBatchId,
         p_type: movementDef.db,
         p_quantity: signedQuantity,
         p_reason: movementReason,
+        p_batch_id: batch_id || null,
+        p_new_batch_number: batch_id ? null : batch_number || null,
+        p_new_batch_expiry_date: batch_id ? null : expiry_date || null,
+        p_new_batch_cost_price: cost_price == null || cost_price === '' ? null : Number(cost_price),
+        p_sp_token: request.headers.get('x-sp-authorization'),
       }
     )
 
@@ -131,8 +102,17 @@ export async function POST(request: NextRequest) {
       console.error('Error inserting adjustment movement:', moveError)
       return NextResponse.json({ error: moveError.message || 'Failed to log stock adjustment' }, { status: 409 })
     }
+    if (movement?.success === false) {
+      if (movement.code === 'SP_AUTH_REQUIRED') {
+        return NextResponse.json(SP_AUTH_REQUIRED_RESPONSE, { status: 403 })
+      }
+      return NextResponse.json(
+        { error: movement.error || 'Failed to log stock adjustment', code: movement.code },
+        { status: movement.code === 'NOT_FOUND' ? 404 : 409 },
+      )
+    }
 
-    return NextResponse.json(movement, { status: 201 })
+    return NextResponse.json(movement?.movement ?? movement, { status: 201 })
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(

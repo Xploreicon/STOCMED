@@ -3,6 +3,8 @@ import * as XLSX from 'xlsx'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { createClient } from '@/lib/supabase/server'
 import { exportQuerySchema } from '@/lib/validation/reporting'
+import { getSpActionGate, getStructuredRpcFailure, hasSpAuthorization } from '@/lib/sp-authorization'
+import { requirePharmacyFeature } from '@/lib/pharmacy-features'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,22 +36,65 @@ export async function GET(request: NextRequest) {
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const pharmacy = await ensurePharmacyRecord(supabase, user)
   if (!pharmacy) return NextResponse.json({ error: 'Pharmacy profile not found' }, { status: 404 })
+  if (parsed.data.format === 'xlsx') {
+    const featureError = await requirePharmacyFeature(supabase, pharmacy.id, 'quickbooks_export')
+    if (featureError) return NextResponse.json(featureError, { status: 403 })
+  }
+  const exportGate = await getSpActionGate(supabase, pharmacy.id, 'data_export')
+  if (exportGate.error) {
+    return NextResponse.json({ error: 'Export authorization is temporarily unavailable' }, { status: 503 })
+  }
+  if (exportGate.isGated) {
+    const authorized = await hasSpAuthorization(
+      supabase,
+      pharmacy.id,
+      request.headers.get('x-sp-authorization'),
+      'data_export',
+    )
+    if (!authorized) {
+      return NextResponse.json(
+        { error: 'Superintendent authorization is required to export data', code: 'SP_AUTH_REQUIRED' },
+        { status: 403 },
+      )
+    }
+  }
 
   const to = parsed.data.to ?? new Date().toISOString().slice(0, 10)
   const from = parsed.data.from ?? new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10)
-  const [salesResult, reportsResult] = await Promise.all([
-    supabase.from('sales').select(`
+  const reportsResult = await supabase.rpc('get_pharmacy_reports', {
+    p_pharmacy_id: pharmacy.id,
+    p_from: from,
+    p_to: to,
+    p_sp_token: request.headers.get('x-sp-report-authorization'),
+  })
+  if (reportsResult.error) {
+    return NextResponse.json({ error: reportsResult.error.message }, { status: 500 })
+  }
+  const reportsFailure = getStructuredRpcFailure(reportsResult.data, 'Reports are unavailable for export')
+  if (reportsFailure) {
+    const reportAuthorizationExpired = reportsFailure.code === 'SP_AUTH_REQUIRED'
+    return NextResponse.json(
+      {
+        error: reportsFailure.error,
+        ...(reportsFailure.code ? {
+          code: reportAuthorizationExpired ? 'SP_REPORT_AUTH_REQUIRED' : reportsFailure.code,
+        } : {}),
+        ...(reportAuthorizationExpired ? { action: 'financial_reports' } : {}),
+      },
+      { status: reportAuthorizationExpired ? 403 : 409 },
+    )
+  }
+
+  const salesResult = await supabase.from('sales').select(`
       id,created_at,payment_method,total,
       sale_items(quantity,unit_price,line_total,batches(batch_number,cost_price),
         pharmacy_inventory(item_type,item_name,brand,barcode,unit_description,store_category,unit_cost,
           products(generic_name,brand_name,strength,dosage_form,barcode)))
     `).eq('pharmacy_id', pharmacy.id).eq('status', 'completed')
       .gte('created_at', `${from}T00:00:00.000Z`).lt('created_at', `${to}T23:59:59.999Z`)
-      .order('created_at'),
-    supabase.rpc('get_pharmacy_reports', { p_pharmacy_id: pharmacy.id, p_from: from, p_to: to }),
-  ])
-  if (salesResult.error || reportsResult.error) {
-    return NextResponse.json({ error: salesResult.error?.message || reportsResult.error?.message }, { status: 500 })
+      .order('created_at')
+  if (salesResult.error) {
+    return NextResponse.json({ error: salesResult.error.message }, { status: 500 })
   }
 
   const salesRows = ((salesResult.data ?? []) as ExportSale[]).flatMap(sale => sale.sale_items.map(item => {
@@ -92,7 +137,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(new Uint8Array(bytes), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="stocmed-quickbooks-bridge-${from}-to-${to}.xlsx"`,
+      'Content-Disposition': `attachment; filename="stocmed-accounting-export-${from}-to-${to}.xlsx"`,
     },
   })
 }

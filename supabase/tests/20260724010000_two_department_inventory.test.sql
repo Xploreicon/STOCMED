@@ -216,7 +216,9 @@ SELECT lives_ok(
           'batch_number', 'MED-IMPORT', 'expiry_date', CURRENT_DATE + 500
         )
       )
-    )
+    ),
+    '85000000-0000-4000-8000-000000000001',
+    NULL
   )$$,
   'one import atomically accepts medicine and Store rows'
 );
@@ -249,7 +251,9 @@ SELECT throws_ok(
           'price', 100, 'quantity', 1
         )
       )
-    )
+    ),
+    '85000000-0000-4000-8000-000000000002',
+    NULL
   )$$,
   'P0001',
   NULL,
@@ -267,7 +271,8 @@ SELECT is(
       public.get_pharmacy_reports(
         '30000000-0000-4000-8000-000000000001',
         CURRENT_DATE,
-        CURRENT_DATE
+        CURRENT_DATE,
+        NULL
       )->'daily_sales'
     ) day
     LIMIT 1
@@ -278,7 +283,8 @@ SELECT is(
       public.get_pharmacy_reports(
         '30000000-0000-4000-8000-000000000001',
         CURRENT_DATE,
-        CURRENT_DATE
+        CURRENT_DATE,
+        NULL
       )->'daily_sales'
     ) day
     LIMIT 1
@@ -292,7 +298,8 @@ SELECT is(
       public.get_pharmacy_reports(
         '30000000-0000-4000-8000-000000000001',
         CURRENT_DATE,
-        CURRENT_DATE
+        CURRENT_DATE,
+        NULL
       )->'stock_valuation'
     ) row
     WHERE row->>'inventory_id' IN (

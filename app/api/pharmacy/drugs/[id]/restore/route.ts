@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
+import { SP_AUTH_REQUIRED_RESPONSE } from '@/lib/sp-authorization'
 
 export async function PATCH(
   request: NextRequest,
@@ -56,21 +57,28 @@ export async function PATCH(
       )
     }
 
-    // Restore: clear deleted_at and re-list
-    const { error: updateError } = await (supabase as any)
-      .from('pharmacy_inventory')
-      .update({
-        deleted_at: null,
-        is_listed: true,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
+    const { data: restoreResult, error: updateError } = await (supabase.rpc as any)(
+      'restore_pharmacy_inventory_item',
+      {
+        p_inventory_id: id,
+        p_sp_token: request.headers.get('x-sp-authorization'),
+      },
+    )
 
     if (updateError) {
       console.error('Error restoring drug:', updateError)
       return NextResponse.json(
-        { error: 'Failed to restore drug to inventory' },
-        { status: 500 }
+        { error: updateError.message || 'Failed to restore drug to inventory' },
+        { status: 409 }
+      )
+    }
+    if (restoreResult?.success === false) {
+      if (restoreResult.code === 'SP_AUTH_REQUIRED') {
+        return NextResponse.json(SP_AUTH_REQUIRED_RESPONSE, { status: 403 })
+      }
+      return NextResponse.json(
+        { error: restoreResult.error || 'Failed to restore drug to inventory', code: restoreResult.code },
+        { status: restoreResult.code === 'NOT_FOUND' ? 404 : 409 },
       )
     }
 

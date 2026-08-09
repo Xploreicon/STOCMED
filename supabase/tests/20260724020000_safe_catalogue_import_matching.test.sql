@@ -129,7 +129,9 @@ SELECT throws_ok(
         'price', 100, 'quantity', 1,
         'batch_number', 'UNSAFE-STRENGTH', 'expiry_date', CURRENT_DATE + 365
       )
-    ))
+    )),
+    '95000000-0000-4000-8000-000000000001',
+    NULL
   )$$,
   'P0001',
   NULL,
@@ -147,7 +149,9 @@ SELECT throws_ok(
         'price', 100, 'quantity', 1,
         'batch_number', 'UNSAFE-FORM', 'expiry_date', CURRENT_DATE + 365
       )
-    ))
+    )),
+    '95000000-0000-4000-8000-000000000002',
+    NULL
   )$$,
   'P0001',
   NULL,

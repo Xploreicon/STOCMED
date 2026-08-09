@@ -100,7 +100,12 @@ DO $$ BEGIN
 END $$;
 SET LOCAL ROLE authenticated;
 SELECT lives_ok(
-  $$SELECT public.set_pharmacy_reservations_enabled(TRUE)$$,
+  $$SELECT public.set_authenticated_pharmacy_features(
+      jsonb_build_array(jsonb_build_object(
+        'feature_key', 'reservations', 'is_enabled', TRUE
+      )),
+      NULL
+    )$$,
   'a FULL pharmacy can enable OTC reservations without a destination SP'
 );
 RESET ROLE;
@@ -117,49 +122,54 @@ DO $$ BEGIN
 END $$;
 SET LOCAL ROLE authenticated;
 SELECT lives_ok(
-  $$SELECT public.set_pharmacy_reservations_enabled(TRUE)$$,
+  $$SELECT public.set_authenticated_pharmacy_features(
+      jsonb_build_array(jsonb_build_object(
+        'feature_key', 'reservations', 'is_enabled', TRUE
+      )),
+      NULL
+    )$$,
   'verified licensed destination SP can enable reservations'
 );
 SELECT throws_ok(
-  $$SELECT public.create_guarded_stock_adjustment(
-      '30000000-0000-4000-8000-000000000001',
-      '40000000-0000-4000-8000-000000000001', NULL, 'sale', -1, 'spoofed sale'
+  $$SELECT public.record_guarded_stock_adjustment(
+      '40000000-0000-4000-8000-000000000001', 'sale', -1, 'spoofed sale',
+      NULL, NULL, NULL, NULL, NULL
     )$$,
   'P0001',
   'This stock movement type cannot be created as an adjustment',
   'adjustment RPC cannot forge a POS sale movement'
 );
 SELECT throws_ok(
-  $$SELECT public.create_guarded_stock_adjustment(
-      '30000000-0000-4000-8000-000000000001',
-      '40000000-0000-4000-8000-000000000001', NULL, 'restock', -1, 'wrong sign'
+  $$SELECT public.record_guarded_stock_adjustment(
+      '40000000-0000-4000-8000-000000000001', 'restock', -1, 'wrong sign',
+      NULL, NULL, NULL, NULL, NULL
     )$$,
   'P0001',
-  'Opening, restock, and return quantities must be positive',
+  'Restock and return quantities must be positive',
   'adjustment RPC enforces positive restock quantities'
 );
 SELECT throws_ok(
-  $$SELECT public.create_guarded_stock_adjustment(
-      '30000000-0000-4000-8000-000000000001',
-      '40000000-0000-4000-8000-000000000001', NULL, 'write_off', 1, 'wrong sign'
+  $$SELECT public.record_guarded_stock_adjustment(
+      '40000000-0000-4000-8000-000000000001', 'write_off', 1, 'wrong sign',
+      NULL, NULL, NULL, NULL, NULL
     )$$,
   'P0001',
   'Write-off and expiry quantities must be negative',
   'adjustment RPC enforces negative write-off quantities'
 );
 SELECT throws_ok(
-  $$SELECT public.create_guarded_stock_adjustment(
-      '30000000-0000-4000-8000-000000000001',
-      '40000000-0000-4000-8000-000000000001', NULL, 'adjustment', 0, 'zero'
+  $$SELECT public.record_guarded_stock_adjustment(
+      '40000000-0000-4000-8000-000000000001', 'adjustment', 0, 'zero',
+      NULL, NULL, NULL, NULL, NULL
     )$$,
   'P0001',
-  'Adjustment quantity must be non-zero',
+  'Adjustment quantity must be a non-zero whole number',
   'adjustment RPC rejects a zero quantity'
 );
 SELECT throws_ok(
-  $$SELECT public.create_guarded_stock_adjustment(
-      '30000000-0000-4000-8000-000000000001',
-      '40000000-0000-4000-8000-000000000001', NULL, 'adjustment', 1, '   '
+  $$SELECT public.record_guarded_stock_adjustment(
+      '40000000-0000-4000-8000-000000000001', 'adjustment', 1, '   ',
+      NULL, NULL, NULL, NULL, NULL
     )$$,
   'P0001',
   'A reason is required for every stock change',
@@ -195,7 +205,12 @@ DO $$ BEGIN
 END $$;
 SET LOCAL ROLE authenticated;
 SELECT throws_ok(
-  $$SELECT public.set_pharmacy_reservations_enabled(FALSE)$$,
+  $$SELECT public.set_authenticated_pharmacy_features(
+      jsonb_build_array(jsonb_build_object(
+        'feature_key', 'reservations', 'is_enabled', FALSE
+      )),
+      NULL
+    )$$,
   'P0001',
   'Resolve active holds and pending prescription reviews before turning reservations off',
   'pharmacy cannot opt out while an active hold exists'
@@ -380,7 +395,12 @@ SELECT is(
   'sticky summary includes pending prescription review'
 );
 SELECT throws_ok(
-  $$SELECT public.set_pharmacy_reservations_enabled(FALSE)$$,
+  $$SELECT public.set_authenticated_pharmacy_features(
+      jsonb_build_array(jsonb_build_object(
+        'feature_key', 'reservations', 'is_enabled', FALSE
+      )),
+      NULL
+    )$$,
   'P0001',
   'Resolve active holds and pending prescription reviews before turning reservations off',
   'pending Rx prevents unsafe opt-out'
@@ -623,7 +643,7 @@ INSERT INTO public.pharmacies (
     '32000000-0000-4000-8000-000000000002',
     '10000000-0000-4000-8000-000000000004',
     'Revoked Legacy Duplicate', '812345', '4 Test Street', 'Ikeja', 'Lagos',
-    '08000000004', FALSE, TRUE, FALSE
+    '08000000004', FALSE, FALSE, FALSE
   );
 SELECT is(
   (SELECT legacy_verification_bootstrap_eligible FROM public.pharmacies

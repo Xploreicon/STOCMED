@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { getEnrichedInventory } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
+import { SP_AUTH_REQUIRED_RESPONSE } from '@/lib/sp-authorization'
 
 export async function PATCH(
   request: NextRequest,
@@ -53,27 +54,40 @@ export async function PATCH(
 
     // Parse request body
     const body = await request.json()
-
     // Build inventory update payload
-    const inventoryUpdate: Record<string, any> = {
-      updated_at: new Date().toISOString(),
-    }
+    const inventoryUpdate: Record<string, any> = {}
     if (body.price !== undefined) inventoryUpdate.price = Number(body.price)
     if (body.low_stock_threshold !== undefined) inventoryUpdate.low_stock_threshold = Number(body.low_stock_threshold)
+    if (typeof body.whole_pack_only === 'boolean') inventoryUpdate.whole_pack_only = body.whole_pack_only
     // Pharmacy-level image override
     if (body.pharmacy_image_url !== undefined) inventoryUpdate.image_url = body.pharmacy_image_url
 
-    const { error: updateError } = await (supabase as any)
-      .from('pharmacy_inventory')
-      .update(inventoryUpdate)
-      .eq('id', id)
-
-    if (updateError) {
-      console.error('Error updating inventory:', updateError)
-      return NextResponse.json(
-        { error: 'Failed to update drug' },
-        { status: 500 }
+    if (Object.keys(inventoryUpdate).length > 0) {
+      const { data: updateResult, error: updateError } = await (supabase.rpc as any)(
+        'update_pharmacy_inventory_item',
+        {
+          p_inventory_id: id,
+          p_patch: inventoryUpdate,
+          p_sp_token: request.headers.get('x-sp-authorization'),
+        },
       )
+
+      if (updateError) {
+        console.error('Error updating inventory:', updateError)
+        return NextResponse.json(
+          { error: updateError.message || 'Failed to update drug' },
+          { status: 409 }
+        )
+      }
+      if (updateResult?.success === false) {
+        if (updateResult.code === 'SP_AUTH_REQUIRED') {
+          return NextResponse.json(SP_AUTH_REQUIRED_RESPONSE, { status: 403 })
+        }
+        return NextResponse.json(
+          { error: updateResult.error || 'Failed to update drug', code: updateResult.code },
+          { status: updateResult.code === 'NOT_FOUND' ? 404 : 409 },
+        )
+      }
     }
 
     // Update catalogue-level product image if provided
@@ -172,20 +186,28 @@ export async function DELETE(
 
     // Inventory is append-only for audit and reservation integrity. Removing an
     // item from the UI always delists it; ledger, batch, sale, and hold records stay.
-    const { error: delistError } = await (supabase as any)
-      .from('pharmacy_inventory')
-      .update({
-        deleted_at: new Date().toISOString(),
-        is_listed: false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id)
+    const { data: delistResult, error: delistError } = await (supabase.rpc as any)(
+      'delist_pharmacy_inventory_item',
+      {
+        p_inventory_id: id,
+        p_sp_token: request.headers.get('x-sp-authorization'),
+      },
+    )
 
     if (delistError) {
       console.error('Error delisting drug:', delistError)
       return NextResponse.json(
-        { error: 'Failed to remove drug from inventory. Please try again.' },
-        { status: 500 }
+        { error: delistError.message || 'Failed to remove drug from inventory. Please try again.' },
+        { status: 409 }
+      )
+    }
+    if (delistResult?.success === false) {
+      if (delistResult.code === 'SP_AUTH_REQUIRED') {
+        return NextResponse.json(SP_AUTH_REQUIRED_RESPONSE, { status: 403 })
+      }
+      return NextResponse.json(
+        { error: delistResult.error || 'Failed to remove drug from inventory', code: delistResult.code },
+        { status: delistResult.code === 'NOT_FOUND' ? 404 : 409 },
       )
     }
 

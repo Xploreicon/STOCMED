@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { MOVEMENT_TYPE_MAP, MovementUiType } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
+import { SP_AUTH_REQUIRED_RESPONSE } from '@/lib/sp-authorization'
 
 export async function POST(
   request: NextRequest,
@@ -52,7 +53,7 @@ export async function POST(
     }
 
     const movementDef = MOVEMENT_TYPE_MAP[type]
-    if (!movementDef) {
+    if (!movementDef || movementDef.db === 'sale') {
       return NextResponse.json(
         { error: 'Movement type must be one of Restock, Adjustment, Return, Write-off, Expiry' },
         { status: 400 }
@@ -64,8 +65,8 @@ export async function POST(
     }
 
     const rawQuantity = Number(quantity)
-    if (!Number.isFinite(rawQuantity) || rawQuantity === 0) {
-      return NextResponse.json({ error: 'Quantity must be a non-zero number' }, { status: 400 })
+    if (!Number.isInteger(rawQuantity) || rawQuantity === 0) {
+      return NextResponse.json({ error: 'Quantity must be a non-zero whole number' }, { status: 400 })
     }
 
     let signedQuantity: number
@@ -90,20 +91,32 @@ export async function POST(
     }
 
     const { data: movement, error: movementError } = await (supabase.rpc as any)(
-      'create_guarded_stock_adjustment',
+      'record_guarded_stock_adjustment',
       {
-        p_pharmacy_id: pharmacy.id,
         p_inventory_id: id,
-        p_batch_id: batch_id || null,
         p_type: movementDef.db,
         p_quantity: signedQuantity,
         p_reason: reason.trim(),
+        p_batch_id: batch_id || null,
+        p_new_batch_number: null,
+        p_new_batch_expiry_date: null,
+        p_new_batch_cost_price: null,
+        p_sp_token: request.headers.get('x-sp-authorization'),
       }
     )
 
     if (movementError) {
       console.error('Error recording stock movement:', movementError)
       return NextResponse.json({ error: movementError.message || 'Failed to record stock movement' }, { status: 409 })
+    }
+    if (movement?.success === false) {
+      if (movement.code === 'SP_AUTH_REQUIRED') {
+        return NextResponse.json(SP_AUTH_REQUIRED_RESPONSE, { status: 403 })
+      }
+      return NextResponse.json(
+        { error: movement.error || 'Failed to record stock movement', code: movement.code },
+        { status: movement.code === 'NOT_FOUND' ? 404 : 409 },
+      )
     }
 
     const { data: updatedInventory, error: refetchError } = await supabase
@@ -116,7 +129,7 @@ export async function POST(
       console.error('Error refetching inventory after adjustment:', refetchError)
     }
 
-    return NextResponse.json({ movement, inventory: updatedInventory ?? null }, { status: 201 })
+    return NextResponse.json({ movement: movement?.movement ?? movement, inventory: updatedInventory ?? null }, { status: 201 })
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

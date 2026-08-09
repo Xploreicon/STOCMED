@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { createClient } from '@/lib/supabase/server'
+import { requirePharmacyFeature } from '@/lib/pharmacy-features'
+import { getStructuredRpcFailure } from '@/lib/sp-authorization'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +12,8 @@ async function getContext() {
   if (error || !user) return { error: 'Unauthorized', status: 401 } as const
   const pharmacy = await ensurePharmacyRecord(supabase, user)
   if (!pharmacy) return { error: 'Pharmacy profile not found', status: 404 } as const
+  const featureError = await requirePharmacyFeature(supabase, pharmacy.id, 'purchase_orders_and_receiving')
+  if (featureError) return { error: featureError.error, code: featureError.code, status: 403 } as const
   return { supabase, user, pharmacy } as const
 }
 
@@ -180,7 +184,15 @@ export async function POST(request: NextRequest) {
         p_notes: body.notes || '',
         p_lines: body.lines,
       })
-      return error ? NextResponse.json({ error: error.message }, { status: 400 }) : NextResponse.json(data, { status: 201 })
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      const rpcFailure = getStructuredRpcFailure(data, 'Goods receiving was rejected')
+      if (rpcFailure) {
+        return NextResponse.json(
+          { error: rpcFailure.error, ...(rpcFailure.code ? { code: rpcFailure.code } : {}) },
+          { status: rpcFailure.code === 'SP_AUTH_REQUIRED' ? 403 : 409 },
+        )
+      }
+      return NextResponse.json(data, { status: 201 })
     }
 
     return NextResponse.json({ error: 'Unknown procurement action' }, { status: 400 })
