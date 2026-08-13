@@ -7,7 +7,10 @@ import {
   type ReactNode,
 } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import type { PharmacyFeatureKey } from '@/lib/pharmacy-features'
+import {
+  isPharmacyFeatureAvailable,
+  type PharmacyFeatureKey,
+} from '@/lib/pharmacy-features'
 
 type FeatureRecord = {
   feature_key: PharmacyFeatureKey
@@ -46,7 +49,7 @@ export function PharmacyFeaturesProvider({ children }: { children: ReactNode }) 
 
   const value = useMemo<PharmacyFeaturesContextValue>(() => ({
     features,
-    isEnabled: key => features[key]?.is_enabled === true,
+    isEnabled: key => isPharmacyFeatureAvailable(key) && features[key]?.is_enabled === true,
     isLoading,
   }), [features, isLoading])
 

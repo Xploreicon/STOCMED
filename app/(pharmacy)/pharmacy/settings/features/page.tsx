@@ -26,6 +26,8 @@ import { SettingsTabStrip } from '@/components/pharmacy/SettingsTabStrip'
 import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal'
 import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider'
 import {
+  getPharmacyFeatureStatus,
+  planPharmacyFeaturePreset,
   type PharmacyFeatureKey,
   type PharmacyFeaturePreset,
 } from '@/lib/pharmacy-features'
@@ -60,12 +62,18 @@ const FEATURES: Definition[] = [
   { key: 'loyalty', group: 'GROWTH', name: 'Customer loyalty', benefit: 'Reward repeat customers with a simple points balance.', change: 'Adds loyalty at checkout.', icon: HeartHandshake },
 ]
 
-const PRESETS: Array<{ key: PharmacyFeaturePreset; name: string; detail: string }> = [
-  { key: 'full_retail_shop', name: 'Full retail shop', detail: 'Staff, customers, credit sales, and owner updates.' },
-  { key: 'multi_branch_owner', name: 'Multi-branch owner', detail: 'Branches, staff, and owner updates.' },
-  { key: 'buying_and_stock', name: 'Buying & stock', detail: 'Procurement, smart reorder, and accounting export.' },
+const FEATURE_NAMES = Object.fromEntries(FEATURES.map(feature => [feature.key, feature.name])) as Record<PharmacyFeatureKey, string>
+
+const PRESETS: Array<{ key: PharmacyFeaturePreset; name: string; detail: string; hidden?: boolean }> = [
+  { key: 'full_retail_shop', name: 'Full retail shop', detail: 'This preset will unlock as the staff, customer, credit, and notification tools ship.' },
+  { key: 'multi_branch_owner', name: 'Multi-branch owner', detail: 'Branch controls will be added after the pilot.', hidden: true },
+  { key: 'buying_and_stock', name: 'Buying & stock', detail: 'Enables buying, receiving, and accounting export. Smart reorder is coming soon.' },
   { key: 'just_the_basics', name: 'Just the basics', detail: 'Turn off every optional feature. Your data stays safe.' },
 ]
+
+function featureNames(keys: PharmacyFeatureKey[]) {
+  return keys.map(key => FEATURE_NAMES[key]).join(', ')
+}
 
 type PendingChange = {
   body:
@@ -82,6 +90,7 @@ type FeaturesResponse = {
     settings: Record<string, unknown>
   }>
   changed: Array<{ feature_key: PharmacyFeatureKey; is_enabled: boolean }>
+  skipped: PharmacyFeatureKey[]
 }
 
 export default function FeaturesPage() {
@@ -89,6 +98,7 @@ export default function FeaturesPage() {
   const queryClient = useQueryClient()
   const [pending, setPending] = useState<PendingChange | null>(null)
   const [changed, setChanged] = useState<FeaturesResponse['changed']>([])
+  const [skipped, setSkipped] = useState<PharmacyFeatureKey[]>([])
 
   const {
     data: spSettings,
@@ -126,12 +136,15 @@ export default function FeaturesPage() {
     onSuccess: async result => {
       queryClient.setQueryData(['pharmacy-features'], { features: result.features })
       setChanged(result.changed ?? [])
+      setSkipped(result.skipped ?? [])
       setPending(null)
       await queryClient.invalidateQueries({ queryKey: ['pharmacy-profile'] })
     },
   })
 
   const requestChange = (change: PendingChange) => {
+    setChanged([])
+    setSkipped([])
     setPending(change)
     if (spSettings?.configured === false) {
       mutation.mutate({ currentCode: null, change })
@@ -162,32 +175,43 @@ export default function FeaturesPage() {
       <header className="mt-8">
         <h2 className="text-3xl font-semibold text-ink">Features</h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-muted">
-          Start simple. Turn on only what your pharmacy uses. Turning a feature off never deletes its data.
+          Available features can be turned on now. Coming-soon cards show what we are building next.
+          Turning a feature off never deletes its data.
         </p>
       </header>
 
       <section className="mt-7 rounded-feature border border-border bg-surface p-4 sm:p-6" aria-labelledby="presets-heading">
         <h2 id="presets-heading" className="text-lg font-semibold text-ink">Set up in one tap</h2>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {PRESETS.map(preset => (
-            <button
-              key={preset.key}
-              type="button"
-              disabled={mutation.isPending}
-              onClick={() => requestChange({
-                body: { preset: preset.key },
-                description: `Apply the ${preset.name} feature set`,
-              })}
-              className="min-h-28 rounded-card border border-border bg-card p-4 text-left text-card-foreground shadow-xs hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <span className="font-semibold">{preset.name}</span>
-              <span className="mt-1 block text-xs leading-5 text-ink-muted">{preset.detail}</span>
-            </button>
-          ))}
+          {PRESETS.filter(preset => !preset.hidden).map(preset => {
+            const plan = planPharmacyFeaturePreset(preset.key)
+            const nothingAvailable = preset.key !== 'just_the_basics' && plan.changes.length === 0
+            return (
+              <button
+                key={preset.key}
+                type="button"
+                disabled={nothingAvailable || mutation.isPending}
+                onClick={() => requestChange({
+                  body: { preset: preset.key },
+                  description: `Apply the ${preset.name} feature set`,
+                })}
+                className="min-h-28 rounded-card border border-border bg-card p-4 text-left text-card-foreground shadow-xs hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="font-semibold">{preset.name}</span>
+                <span className="mt-1 block text-xs leading-5 text-ink-muted">{preset.detail}</span>
+                {plan.skipped.length > 0 && (
+                  <span className="mt-2 block text-xs font-medium text-warning">
+                    Coming soon: {featureNames(plan.skipped)}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
-        {changed.length > 0 && (
+        {(changed.length > 0 || skipped.length > 0) && (
           <p className="mt-4 text-sm text-ink-muted" role="status">
-            Updated {changed.length} features. You can adjust any card below.
+            Updated {changed.length} {changed.length === 1 ? 'feature' : 'features'}.
+            {skipped.length > 0 && ` Coming soon and skipped: ${featureNames(skipped)}.`}
           </p>
         )}
       </section>
@@ -196,10 +220,12 @@ export default function FeaturesPage() {
         <section key={group} className="mt-9" aria-labelledby={`group-${group}`}>
           <h2 id={`group-${group}`} className="text-xs font-bold tracking-[0.16em] text-ink-muted">{group}</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {FEATURES.filter(feature => feature.group === group).map(feature => {
+            {FEATURES.filter(feature => (
+              feature.group === group && getPharmacyFeatureStatus(feature.key) !== 'hidden'
+            )).map(feature => {
               const Icon = feature.icon
               const enabled = isEnabled(feature.key)
-              const legallyBlocked = feature.key === 'stock_exchange'
+              const comingSoon = getPharmacyFeatureStatus(feature.key) === 'coming_soon'
 
               return (
                 <article key={feature.key} className="flex min-h-64 flex-col rounded-feature border border-border bg-card p-5 text-card-foreground shadow-xs">
@@ -210,7 +236,17 @@ export default function FeaturesPage() {
                   <p className="mt-2 text-sm leading-5 text-ink-muted">{feature.benefit}</p>
                   <p className="mt-2 text-xs leading-5 text-ink-light">{feature.change}</p>
                   <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">
-                    {enabled ? (
+                    {comingSoon ? (
+                      <>
+                        <span className="rounded-badge bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning">
+                          Coming soon
+                        </span>
+                        <span className="w-full text-xs leading-5 text-ink-muted">
+                          We&apos;re building this. It can&apos;t be turned on yet.
+                        </span>
+                        <Button disabled size="sm">Coming soon</Button>
+                      </>
+                    ) : enabled ? (
                       <>
                         <span className="rounded-badge bg-success/10 px-2.5 py-1 text-xs font-semibold text-success">On</span>
                         {feature.settingsHref && (
@@ -232,13 +268,13 @@ export default function FeaturesPage() {
                       </>
                     ) : (
                       <Button
-                        disabled={legallyBlocked || mutation.isPending}
+                        disabled={mutation.isPending}
                         onClick={() => requestChange({
                           body: { feature_key: feature.key, is_enabled: true },
                           description: `Enable ${feature.name}`,
                         })}
                       >
-                        {legallyBlocked ? 'Awaiting clearance' : 'Enable'}
+                        Enable
                       </Button>
                     )}
                   </div>

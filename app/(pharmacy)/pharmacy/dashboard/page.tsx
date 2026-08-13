@@ -94,28 +94,7 @@ export default function PharmacyDashboard() {
   const actions = [
     { icon: Upload, title: 'Update stock levels', sub: 'Bulk edit or CSV upload', href: '/pharmacy/inventory/import' },
     { icon: Tags, title: 'Update prices', sub: 'Manage margins and pricing', href: '/pharmacy/inventory' },
-    { icon: BarChart3, title: 'Demand near you', sub: 'What patients searched for', href: '/pharmacy/inventory' }, // links to inventory since insights isn't fully separate
-  ];
-
-  const activity = [
-    {
-      title: 'Low stock alert — Amoxicillin 500mg',
-      sub: '8 packs left, searched 22 times this week nearby',
-      time: '1 hour ago',
-      color: 'var(--warning)',
-    },
-    {
-      title: 'Out of stock — Ventolin inhaler 100mcg',
-      sub: '3 patients set restock alerts',
-      time: '3 hours ago',
-      color: 'var(--danger)',
-    },
-    {
-      title: 'Stock updated — 84 items via CSV',
-      sub: 'by Chidi (staff)',
-      time: 'Yesterday',
-      color: 'var(--success)',
-    },
+    { icon: BarChart3, title: 'View reports', sub: 'Sales, stock and expiry', href: '/pharmacy/reports' },
   ];
 
   return (
@@ -187,29 +166,6 @@ export default function PharmacyDashboard() {
         </div>
       </div>
 
-      {/* Recent activity */}
-      <div className="mt-10 mb-8">
-        <h2 className="text-[16px] font-medium text-ink mb-4">Recent activity</h2>
-        <div className="border border-border rounded-card bg-white shadow-xs overflow-hidden divide-y divide-border">
-          {activity.map((act, idx) => (
-            <div key={idx} className="flex items-center justify-between gap-4 p-4 hover:bg-surface transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <span
-                  style={{ backgroundColor: act.color }}
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                />
-                <div className="min-w-0">
-                  <div className="text-[15px] font-medium text-ink truncate">{act.title}</div>
-                  <div className="text-[13px] text-ink-light mt-0.5 truncate">{act.sub}</div>
-                </div>
-              </div>
-              <span className="text-[13px] text-ink-muted whitespace-nowrap flex-shrink-0">
-                {act.time}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

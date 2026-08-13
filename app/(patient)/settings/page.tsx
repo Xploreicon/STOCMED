@@ -26,18 +26,6 @@ export default function PatientSettingsPage() {
   const [savingConsent, setSavingConsent] = useState(false);
   const [deletingData, setDeletingData] = useState(false);
 
-  const [notifStock, setNotifStock] = useState(false);
-  const [notifPrice, setNotifPrice] = useState(false);
-  const [notifRefills, setNotifRefills] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setNotifStock(localStorage.getItem('stocmed:notif_stock') === 'true');
-      setNotifPrice(localStorage.getItem('stocmed:notif_price') === 'true');
-      setNotifRefills(localStorage.getItem('stocmed:notif_refills') === 'true');
-    }
-  }, []);
-
   useEffect(() => {
     const init = async () => {
       const {
@@ -125,7 +113,7 @@ export default function PatientSettingsPage() {
       <div>
         <h1 className="text-3xl font-display font-bold text-ink">Settings</h1>
         <p className="mt-1 text-sm text-ink-muted">
-          Manage account security, notifications, and account visibility.
+          Manage account security, privacy, and account visibility.
         </p>
       </div>
 
@@ -195,9 +183,14 @@ export default function PatientSettingsPage() {
             <Bell className="h-5 w-5 text-warning" />
           </div>
           <div>
-            <CardTitle>Notifications & Alerts</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <CardTitle>Notifications & Alerts</CardTitle>
+              <span className="rounded-full bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning">
+                Coming soon
+              </span>
+            </div>
             <p className="mt-1 text-sm text-ink-muted">
-              Choose how you would like to receive supply and pricing updates.
+              We&apos;re building reliable alerts. Nothing is being saved or sent yet.
             </p>
           </div>
         </CardHeader>
@@ -205,54 +198,42 @@ export default function PatientSettingsPage() {
           <div className="flex items-start gap-3">
             <Checkbox
               id="notify-stock"
-              checked={notifStock}
-              onCheckedChange={(checked) => {
-                setNotifStock(!!checked);
-                localStorage.setItem('stocmed:notif_stock', String(!!checked));
-                toast.success('Back-in-stock alerts preference updated');
-              }}
+              checked={false}
+              disabled
               className="mt-1"
             />
             <div>
               <Label htmlFor="notify-stock">Back-in-stock alerts</Label>
               <p className="text-sm text-ink-muted">
-                Get notified when pharmacies restock critical medications you search.
+                Planned: alerts when pharmacies restock medications you searched for.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <Checkbox
               id="notify-price"
-              checked={notifPrice}
-              onCheckedChange={(checked) => {
-                setNotifPrice(!!checked);
-                localStorage.setItem('stocmed:notif_price', String(!!checked));
-                toast.success('Price-drop alerts preference updated');
-              }}
+              checked={false}
+              disabled
               className="mt-1"
             />
             <div>
               <Label htmlFor="notify-price">Price-drop alerts</Label>
               <p className="text-sm text-ink-muted">
-                Receive notifications when the price of saved medications drops.
+                Planned: alerts when the price of a saved medication drops.
               </p>
             </div>
           </div>
           <div className="flex items-start gap-3">
             <Checkbox
               id="notify-refills"
-              checked={notifRefills}
-              onCheckedChange={(checked) => {
-                setNotifRefills(!!checked);
-                localStorage.setItem('stocmed:notif_refills', String(!!checked));
-                toast.success('Chronic med refill reminders preference updated');
-              }}
+              checked={false}
+              disabled
               className="mt-1"
             />
             <div>
               <Label htmlFor="notify-refills">Chronic med refill reminders</Label>
               <p className="text-sm text-ink-muted">
-                Get automated monthly reminders to refill your chronic prescriptions.
+                Planned: optional reminders for chronic prescription refills.
               </p>
             </div>
           </div>
