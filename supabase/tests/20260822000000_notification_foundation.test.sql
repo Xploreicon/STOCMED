@@ -103,6 +103,20 @@ SELECT ok(
   'notification creation RPC is not callable by authenticated users'
 );
 SELECT ok(
+  NOT has_function_privilege(
+    'authenticated', 'public.claim_notification_delivery(uuid)', 'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated', 'public.finish_notification_delivery(uuid,jsonb)', 'EXECUTE'
+  )
+  AND NOT has_function_privilege(
+    'authenticated',
+    'public.record_notification_provider_event(text,text,text,text,numeric)',
+    'EXECUTE'
+  ),
+  'provider delivery mutation RPCs are service-only'
+);
+SELECT ok(
   has_function_privilege(
     'authenticated', 'public.mark_notification_read(uuid)', 'EXECUTE'
   )
@@ -255,9 +269,14 @@ SELECT is(
   'mark-all is idempotent after the only notification was read'
 );
 
-INSERT INTO public.notification_preferences(user_id)
-VALUES (auth.uid())
-ON CONFLICT (user_id) DO UPDATE SET updated_at = NOW();
+SELECT public.set_authenticated_notification_preferences(jsonb_build_object(
+  'product_email_opt_in', FALSE,
+  'refill_email_opt_in', FALSE,
+  'reminder_sms_opt_in', FALSE,
+  'patient_email_consent', FALSE,
+  'patient_sms_consent', FALSE,
+  'patient_push_consent', FALSE
+));
 
 SELECT ok(
   (SELECT (type_channels #>> '{low_stock,in_app}')::BOOLEAN

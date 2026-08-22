@@ -17,7 +17,10 @@ import {
   Settings,
   Upload,
   User,
+  Users,
+  HandCoins,
   Wallet,
+  HeartHandshake,
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -52,6 +55,10 @@ const pharmacyNavItems: NavItem[] = [
   { label: 'Import', icon: Upload, href: '/pharmacy/inventory/import' },
   { label: 'Procurement', icon: ClipboardList, href: '/pharmacy/procurement', feature: 'purchase_orders_and_receiving' },
   { label: 'POS', icon: Calculator, href: '/pharmacy/pos' },
+  { label: 'Customers', icon: Users, href: '/pharmacy/customers', feature: 'customers' },
+  { label: 'Credit', icon: HandCoins, href: '/pharmacy/credit', feature: 'credit_sales' },
+  { label: 'Staff', icon: User, href: '/pharmacy/staff', feature: 'staff_accounts' },
+  { label: 'Loyalty', icon: HeartHandshake, href: '/pharmacy/loyalty', feature: 'loyalty' },
   { label: 'Reservations', icon: ClipboardCheck, href: '/pharmacy/reservations', feature: 'reservations' },
   { label: 'Shifts', icon: Wallet, href: '/pharmacy/shifts' },
   { label: 'Reports', icon: BarChart3, href: '/pharmacy/reports' },

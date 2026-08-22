@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { NextRequest, NextResponse } from 'next/server'
+import { requirePharmacyFeature } from '@/lib/pharmacy-features'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,6 +31,8 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       )
     }
+    const featureError = await requirePharmacyFeature(supabase as any, pharmacy.id, 'unmet_demand_widget')
+    if (featureError) return NextResponse.json(featureError, { status: 403 })
 
     const { data: inventoryRows } = await supabase
       .from('pharmacy_inventory')

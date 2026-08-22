@@ -3,6 +3,7 @@ import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { getEnrichedInventory } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
 import { SP_AUTH_REQUIRED_RESPONSE } from '@/lib/sp-authorization'
+import { checkStaffPermission } from '@/lib/staff-permissions'
 
 export async function PATCH(
   request: NextRequest,
@@ -54,6 +55,10 @@ export async function PATCH(
 
     // Parse request body
     const body = await request.json()
+    if (body.price !== undefined) {
+      const staffAccess = await checkStaffPermission(supabase as any, pharmacy.id, request, 'can_change_prices')
+      if (!staffAccess.allowed) return NextResponse.json({ error: staffAccess.error, code: staffAccess.code }, { status: 403 })
+    }
     // Build inventory update payload
     const inventoryUpdate: Record<string, any> = {}
     if (body.price !== undefined) inventoryUpdate.price = Number(body.price)

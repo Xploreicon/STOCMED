@@ -8,6 +8,7 @@ import { AlertTriangle, BarChart3, Boxes, CheckCircle2, Loader2, Tags, Upload, X
 import Link from 'next/link';
 import { ReorderSuggestions } from '@/components/pharmacy/ReorderSuggestions';
 import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider';
+import UnmetDemandWidget from '@/components/pharmacy/UnmetDemandWidget';
 
 interface PharmacyStats {
   total: number;
@@ -140,6 +141,7 @@ export default function PharmacyDashboard() {
       </div>
 
       {isEnabled('smart_reorder') && <ReorderSuggestions />}
+      {isEnabled('unmet_demand_widget') && <div className="mt-10"><UnmetDemandWidget /></div>}
 
       {/* Quick actions */}
       <div className="mt-10">

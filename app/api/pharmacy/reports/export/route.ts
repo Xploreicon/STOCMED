@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { exportQuerySchema } from '@/lib/validation/reporting'
 import { getSpActionGate, getStructuredRpcFailure, hasSpAuthorization } from '@/lib/sp-authorization'
 import { requirePharmacyFeature } from '@/lib/pharmacy-features'
+import { checkStaffPermission } from '@/lib/staff-permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,6 +37,8 @@ export async function GET(request: NextRequest) {
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const pharmacy = await ensurePharmacyRecord(supabase, user)
   if (!pharmacy) return NextResponse.json({ error: 'Pharmacy profile not found' }, { status: 404 })
+  const staffAccess = await checkStaffPermission(supabase, pharmacy.id, request, 'can_view_reports')
+  if (!staffAccess.allowed) return NextResponse.json({ error: staffAccess.error, code: staffAccess.code }, { status: 403 })
   if (parsed.data.format === 'xlsx') {
     const featureError = await requirePharmacyFeature(supabase, pharmacy.id, 'quickbooks_export')
     if (featureError) return NextResponse.json(featureError, { status: 403 })

@@ -24,19 +24,19 @@ export type PharmacyFeatureStatus = 'available' | 'coming_soon' | 'hidden'
 
 export const PHARMACY_FEATURE_STATUS = {
   packs_and_units: 'available',
-  staff_accounts: 'coming_soon',
-  customers: 'coming_soon',
-  credit_sales: 'coming_soon',
+  staff_accounts: 'available',
+  customers: 'available',
+  credit_sales: 'available',
   purchase_orders_and_receiving: 'available',
   multi_branch: 'hidden',
-  notifications: 'coming_soon',
+  notifications: 'available',
   reservations: 'available',
   stock_exchange: 'hidden',
-  price_benchmark: 'coming_soon',
-  whatsapp_receipts: 'coming_soon',
-  loyalty: 'coming_soon',
-  unmet_demand_widget: 'coming_soon',
-  smart_reorder: 'coming_soon',
+  price_benchmark: 'available',
+  whatsapp_receipts: 'available',
+  loyalty: 'available',
+  unmet_demand_widget: 'available',
+  smart_reorder: 'available',
   quickbooks_export: 'available',
 } as const satisfies Record<PharmacyFeatureKey, PharmacyFeatureStatus>
 

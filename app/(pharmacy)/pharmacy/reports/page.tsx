@@ -16,6 +16,7 @@ import {
   spAuthorizationRequiredError,
   withSpAuthorizationHeader,
 } from '@/lib/sp-authorization-client'
+import { withStaffSessionHeader } from '@/lib/staff-session-client'
 
 type Reports = {
   range: { from: string; to: string }
@@ -52,7 +53,7 @@ export default function ReportsPage() {
     queryKey: ['pharmacy-reports', from, to, reportToken],
     queryFn: async () => {
       const response = await fetch(`/api/pharmacy/reports?${query}`, {
-        headers: reportToken ? { 'x-sp-authorization': reportToken } : {},
+        headers: withStaffSessionHeader(reportToken ? { 'x-sp-authorization': reportToken } : {}),
       })
       const result = await response.json()
       if (response.status === 403 && (result.code === 'SP_AUTH_REQUIRED' || result.code === 'SP_REPORT_AUTH_REQUIRED')) {
@@ -91,7 +92,7 @@ export default function ReportsPage() {
   const downloadExport = async (request: { format: 'csv' | 'xlsx'; dataset: string }, token: string | null) => {
     setIsExporting(true)
     try {
-      const headers = withSpAuthorizationHeader('data_export', token)
+      const headers = withStaffSessionHeader(withSpAuthorizationHeader('data_export', token))
       const currentReportToken = reportToken || getCachedSpToken('financial_reports')
       if (currentReportToken) headers.set('x-sp-report-authorization', currentReportToken)
       const response = await fetch(exportHref(request.format, request.dataset), {

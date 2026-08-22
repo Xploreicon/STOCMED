@@ -134,6 +134,9 @@ async function loginThroughUi(page: Page) {
   await page.getByLabel('Password').fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   await expect(page).toHaveURL(/\/pharmacy\/dashboard/, { timeout: 30_000 })
+  await expect(page.getByText("Here's how your inventory looks today")).toBeVisible({
+    timeout: 30_000,
+  })
 }
 
 async function readLocalSales(page: Page): Promise<QueuedSale[]> {

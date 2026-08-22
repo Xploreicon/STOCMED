@@ -3,12 +3,15 @@
 import { Button } from '@/components/ui/button'
 
 import React, { useState } from 'react'
-import { CheckCircle, Loader2, Printer, RotateCcw, Share2 } from 'lucide-react'
+import { CheckCircle, Loader2, MessageCircle, Printer, RotateCcw, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { LocalSale } from '@/lib/db/pos-local-db'
 import { formatExpShort } from '@/lib/pos/fefo'
 import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal'
 import { clearCachedSpToken, getCachedSpToken, withSpAuthorizationHeader } from '@/lib/sp-authorization-client'
+import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider'
+import { buildWhatsAppReceiptLink } from '@/lib/receipts/whatsapp'
+import { withStaffSessionHeader } from '@/lib/staff-session-client'
 
 interface ReceiptModalProps {
   sale: LocalSale
@@ -20,6 +23,7 @@ interface ReceiptModalProps {
 }
 
 export default function ReceiptModal({ sale, pharmacyName, pharmacyLogoUrl, cashierName, isOnline, onClose }: ReceiptModalProps) {
+  const { isEnabled } = usePharmacyFeatures()
   const [reversalReason, setReversalReason] = useState('')
   const [pendingReversal, setPendingReversal] = useState<'void' | 'refund' | null>(null)
   const [isReversing, setIsReversing] = useState(false)
@@ -41,16 +45,34 @@ export default function ReceiptModal({ sale, pharmacyName, pharmacyLogoUrl, cash
     }
   }
 
+  const handleWhatsApp = () => {
+    if (!sale.customer_phone) return
+    const receiptText = buildReceiptText(sale, pharmacyName, cashierName)
+    let link: string
+    try {
+      link = buildWhatsAppReceiptLink(sale.customer_phone, receiptText)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not open WhatsApp')
+      return
+    }
+    window.open(link, '_blank', 'noopener,noreferrer')
+    void fetch('/api/pharmacy/whatsapp-receipts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sale_id: sale.id }),
+    }).catch(() => undefined)
+  }
+
   const reverseSale = async (kind: 'void' | 'refund', token: string | null) => {
     setIsReversing(true)
     try {
       const response = await fetch(`/api/pharmacy/sales/${sale.id}/reverse`, {
         method: 'POST',
-        headers: withSpAuthorizationHeader(
+        headers: withStaffSessionHeader(withSpAuthorizationHeader(
           'void_or_refund',
           token,
           { 'Content-Type': 'application/json' },
-        ),
+        )),
         body: JSON.stringify({ kind, reason: reversalReason.trim() }),
       })
       const body = await response.json().catch(() => null)
@@ -105,6 +127,7 @@ export default function ReceiptModal({ sale, pharmacyName, pharmacyLogoUrl, cash
             <div>DATE: {new Date(sale.created_at).toLocaleString()}</div>
             <div>RECEIPT: {sale.id.substring(0, 8).toUpperCase()}</div>
             <div>CASHIER: {cashierName}</div>
+            {sale.customer_name && <div>CUSTOMER: {sale.customer_name}</div>}
             <div>PAYMENT: {sale.payment_method.replace(/_/g, ' ').toUpperCase()}</div>
           </div>
           <div className="border-t border-b border-dashed border-border py-1.5 my-1">
@@ -136,13 +159,15 @@ export default function ReceiptModal({ sale, pharmacyName, pharmacyLogoUrl, cash
           </div>
           <div className="space-y-0.5 text-right">
             <div>SUBTOTAL: ₦{sale.subtotal.toLocaleString()}</div>
-            {sale.discount > 0 && <div>DISCOUNT: -₦{sale.discount.toLocaleString()}</div>}
+            {Number(sale.manual_discount ?? sale.discount - (sale.loyalty_discount ?? 0)) > 0 && <div>DISCOUNT: -₦{Number(sale.manual_discount ?? sale.discount - (sale.loyalty_discount ?? 0)).toLocaleString()}</div>}
+            {Boolean(sale.loyalty_discount) && <div>POINTS USED: {sale.loyalty_points_redeemed} (-₦{sale.loyalty_discount?.toLocaleString()})</div>}
             <div className="font-bold text-[10px]">TOTAL: ₦{sale.total.toLocaleString()}</div>
             {sale.amount_tendered && <div>TENDERED: ₦{sale.amount_tendered.toLocaleString()}</div>}
             {sale.change_due && sale.change_due > 0 && <div>CHANGE: ₦{sale.change_due.toLocaleString()}</div>}
           </div>
           <div className="border-t border-dashed border-border mt-2 pt-1.5 text-center text-[7px] text-ink-light">
             Thank you for your patronage!
+            {Boolean(sale.loyalty_points_earned) && <div>{sale.loyalty_points_earned} loyalty points earned</div>}
           </div>
         </div>
 
@@ -153,6 +178,11 @@ export default function ReceiptModal({ sale, pharmacyName, pharmacyLogoUrl, cash
           <Button onClick={handleShare} className="py-2 px-3 bg-[var(--pos-control)] hover:bg-white/5 text-white rounded-lg text-xs font-semibold flex items-center justify-center border border-white/10 transition">
             <Share2 className="h-3.5 w-3.5" />
           </Button>
+          {isEnabled('whatsapp_receipts') && sale.customer_phone && sale.customer_consent_whatsapp && (
+            <Button onClick={handleWhatsApp} className="flex-1 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30">
+              <MessageCircle className="mr-1.5 h-3.5 w-3.5" />WhatsApp
+            </Button>
+          )}
         </div>
 
         {isOnline && sale.sync_status === 'synced' && !reversedAs && (
@@ -203,20 +233,24 @@ export default function ReceiptModal({ sale, pharmacyName, pharmacyLogoUrl, cash
   )
 }
 
-function buildReceiptText(sale: LocalSale, pharmacy: string, cashier: string): string {
+export function buildReceiptText(sale: LocalSale, pharmacy: string, cashier: string): string {
   const lines = [
     'STOCMED PHARMACY RECEIPT',
     pharmacy,
     `Date: ${new Date(sale.created_at).toLocaleString()}`,
     `Receipt: ${sale.id.substring(0, 8).toUpperCase()}`,
     `Cashier: ${cashier}`,
+    ...(sale.customer_name ? [`Customer: ${sale.customer_name}`] : []),
     '---',
     ...sale.items.map(i =>
       `${i.brand_name || i.generic_name} (${i.strength}) x${i.quantity} = ₦${i.line_total.toLocaleString()}`
     ),
     '---',
+    ...(Number(sale.manual_discount ?? sale.discount - (sale.loyalty_discount ?? 0)) > 0 ? [`Discount: -₦${Number(sale.manual_discount ?? sale.discount - (sale.loyalty_discount ?? 0)).toLocaleString()}`] : []),
+    ...(sale.loyalty_discount ? [`Points used: ${sale.loyalty_points_redeemed} (-₦${sale.loyalty_discount.toLocaleString()})`] : []),
     `TOTAL: ₦${sale.total.toLocaleString()}`,
     `Payment: ${sale.payment_method.replace(/_/g, ' ')}`,
+    ...(sale.loyalty_points_earned ? [`Points earned: ${sale.loyalty_points_earned}`] : []),
   ]
   if (sale.amount_tendered) lines.push(`Tendered: ₦${sale.amount_tendered.toLocaleString()}`)
   if (sale.change_due && sale.change_due > 0) lines.push(`Change: ₦${sale.change_due.toLocaleString()}`)

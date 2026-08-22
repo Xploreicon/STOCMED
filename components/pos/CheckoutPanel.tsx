@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button'
 import React, { useState } from 'react'
 import { Coins, CreditCard, Building2, MoreHorizontal, ArrowRight, Calculator } from 'lucide-react'
 
-type PaymentMethod = 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'other'
+type PaymentMethod = 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'credit' | 'other'
 
 interface CheckoutPanelProps {
   total: number
   cartEmpty: boolean
   isOnline: boolean
+  allowCredit?: boolean
   onCheckout: (method: PaymentMethod, amountTendered: number | null) => void
 }
 
@@ -18,10 +19,11 @@ const METHODS: { key: PaymentMethod; label: string; icon: React.ReactNode }[] = 
   { key: 'cash', label: 'Cash', icon: <Coins className="h-4 w-4" /> },
   { key: 'bank_transfer', label: 'Transfer', icon: <Building2 className="h-4 w-4" /> },
   { key: 'pharmacy_pos_terminal', label: 'POS Terminal', icon: <CreditCard className="h-4 w-4" /> },
+  { key: 'credit', label: 'Credit', icon: <CreditCard className="h-4 w-4" /> },
   { key: 'other', label: 'Other', icon: <MoreHorizontal className="h-4 w-4" /> },
 ]
 
-export default function CheckoutPanel({ total, cartEmpty, isOnline, onCheckout }: CheckoutPanelProps) {
+export default function CheckoutPanel({ total, cartEmpty, isOnline, allowCredit = false, onCheckout }: CheckoutPanelProps) {
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [showCheckout, setShowCheckout] = useState(false)
   const [amountTendered, setAmountTendered] = useState<string>('')
@@ -52,7 +54,7 @@ export default function CheckoutPanel({ total, cartEmpty, isOnline, onCheckout }
     <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
       {/* Payment method selector */}
       <div className="grid grid-cols-2 gap-1.5">
-        {METHODS.map(m => (
+        {METHODS.filter(m => m.key !== 'credit' || allowCredit).map(m => (
           <Button
             key={m.key} type="button" onClick={() => setMethod(m.key)}
             className={`py-2 px-2 rounded-lg border text-[11px] font-medium transition flex items-center justify-center gap-1.5 ${

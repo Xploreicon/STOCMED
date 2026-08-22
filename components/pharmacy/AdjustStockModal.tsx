@@ -11,6 +11,7 @@ import type { MovementUiType } from '@/lib/pharmacyInventory';
 import { formatExpiry } from '@/lib/inventoryUi';
 import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal';
 import { clearCachedSpToken, getCachedSpToken, withSpAuthorizationHeader } from '@/lib/sp-authorization-client';
+import { withStaffSessionHeader } from '@/lib/staff-session-client';
 
 interface AdjustStockModalProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ export default function AdjustStockModal({ isOpen, onClose, row, onSuccess }: Ad
     mutationFn: async (token: string | null) => {
       const response = await fetch(`/api/pharmacy/drugs/${row.id}/adjust`, {
         method: 'POST',
-        headers: withSpAuthorizationHeader('stock_adjustment', token, { 'Content-Type': 'application/json' }),
+        headers: withStaffSessionHeader(withSpAuthorizationHeader('stock_adjustment', token, { 'Content-Type': 'application/json' })),
         body: JSON.stringify({
           type,
           batch_id: batchId || null,

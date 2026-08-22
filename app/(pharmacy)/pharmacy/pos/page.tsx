@@ -7,6 +7,7 @@ import { Search, User, Banknote, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { posLocalDb, LocalInventoryItem, LocalSale, LocalSaleItem, HeldSale, LocalShift } from '@/lib/db/pos-local-db'
 import { allocateInventory } from '@/lib/pos/fefo'
+import { applyPendingSaleDeductions } from '@/lib/pos/inventory-cache'
 import { syncPendingSales, forceRetryAll } from '@/lib/pos/sync-engine'
 import CartPanel from '@/components/pos/CartPanel'
 import CheckoutPanel from '@/components/pos/CheckoutPanel'
@@ -15,9 +16,12 @@ import SyncPill from '@/components/pos/SyncPill'
 import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal'
 import { clearCachedSpToken, getCachedSpToken } from '@/lib/sp-authorization-client'
 import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider'
+import { CustomerPicker, type PosCustomer } from '@/components/pos/CustomerPicker'
+import { StaffSwitcher } from '@/components/pos/StaffSwitcher'
+import type { StaffSession } from '@/lib/staff-session-client'
 
 type CartItem = LocalSaleItem & { id: string }
-type PaymentMethod = 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'other'
+type PaymentMethod = 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'credit' | 'other'
 type LoadedReservation = {
   id: string
   inventory_id: string
@@ -25,6 +29,10 @@ type LoadedReservation = {
   quantity: number
 }
 type SellingUnit = LocalInventoryItem['selling_units'][number]
+type LoyaltyInfo = {
+  balance: number
+  config: { points_per_naira: number; redemption_naira_per_point: number; minimum_redemption_points: number }
+}
 
 export default function PosPage() {
   const router = useRouter()
@@ -38,6 +46,10 @@ export default function PosPage() {
   const [cart, setCart] = useState<CartItem[]>([])
   const [discount, setDiscount] = useState(0)
   const [cashier, setCashier] = useState<{id:string;name:string}|null>(null)
+  const [customer, setCustomer] = useState<PosCustomer | null>(null)
+  const [staffSession, setStaffSession] = useState<StaffSession | null>(null)
+  const [loyaltyInfo, setLoyaltyInfo] = useState<LoyaltyInfo | null>(null)
+  const [loyaltyPoints, setLoyaltyPoints] = useState('')
   const [pharmacy, setPharmacy] = useState<{id:string;name:string;logoUrl:string|null}|null>(null)
   const [showReceipt, setShowReceipt] = useState(false)
   const [lastSale, setLastSale] = useState<LocalSale|null>(null)
@@ -48,9 +60,15 @@ export default function PosPage() {
   const [loadedReservation, setLoadedReservation] = useState<LoadedReservation | null>(null)
   const [discountThreshold, setDiscountThreshold] = useState(10)
   const [largeDiscountGated, setLargeDiscountGated] = useState<boolean | null>(null)
+  const [creditSalesGated, setCreditSalesGated] = useState<boolean | null>(null)
   const [pendingDiscountCheckout, setPendingDiscountCheckout] = useState<{
     method: PaymentMethod
     amountTendered: number | null
+  } | null>(null)
+  const [pendingCreditCheckout, setPendingCreditCheckout] = useState<{
+    method: PaymentMethod
+    amountTendered: number | null
+    discountToken?: string
   } | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const syncIntervalRef = useRef<NodeJS.Timeout|null>(null)
@@ -60,6 +78,16 @@ export default function PosPage() {
   useEffect(() => {
     pharmacyRef.current = pharmacy
   }, [pharmacy])
+
+  useEffect(() => {
+    setLoyaltyPoints('')
+    setLoyaltyInfo(null)
+    if (!customer?.id || !isEnabled('loyalty') || !navigator.onLine) return
+    void fetch(`/api/pharmacy/loyalty?customer_id=${customer.id}`)
+      .then(response => response.ok ? response.json() : null)
+      .then(body => { if (body?.loyalty) setLoyaltyInfo(body.loyalty) })
+      .catch(() => undefined)
+  }, [customer?.id, isEnabled])
 
   // Keep search focused
   useEffect(() => { searchRef.current?.focus() }, [cart.length, showReceipt])
@@ -119,6 +147,10 @@ export default function PosPage() {
               ? controls.gates.find((gate: { action_key?: string }) => gate.action_key === 'large_discount')
               : null
             setLargeDiscountGated(largeDiscountGate ? largeDiscountGate.is_gated === true : null)
+            const creditGate = Array.isArray(controls.gates)
+              ? controls.gates.find((gate: { action_key?: string }) => gate.action_key === 'credit_controls')
+              : null
+            setCreditSalesGated(creditGate ? creditGate.is_gated === true : null)
           }
         }
         updatePendingCount()
@@ -142,6 +174,7 @@ export default function PosPage() {
 
   const syncInventoryCache = async (pharmacyId: string) => {
     if (!posLocalDb) return
+    const db = posLocalDb
     try {
       const res = await fetch('/api/pharmacy/drugs')
       const data = await res.json()
@@ -161,9 +194,22 @@ export default function PosPage() {
           is_expired: b.is_expired ?? false, is_expiring_soon: b.is_expiring_soon ?? false,
         })),
       }))
-      await posLocalDb.local_inventory_cache.clear()
-      await posLocalDb.local_inventory_cache.bulkAdd(items)
-      setInventory(items)
+      const reconciled = await db.transaction(
+        'rw',
+        db.local_sales,
+        db.local_inventory_cache,
+        async () => {
+          const pendingSales = await db.local_sales
+            .where('sync_status')
+            .anyOf(['pending', 'error'])
+            .toArray()
+          const nextItems = applyPendingSaleDeductions(items, pendingSales)
+          await db.local_inventory_cache.clear()
+          await db.local_inventory_cache.bulkAdd(nextItems)
+          return nextItems
+        },
+      )
+      setInventory(reconciled)
     } catch (err) { console.error('Cache sync error:', err) }
   }
 
@@ -448,8 +494,13 @@ export default function PosPage() {
     method: PaymentMethod,
     amountTendered: number | null,
     authorizedToken?: string,
+    creditAuthorizedToken?: string,
   ) => {
     if (cart.length === 0 || !pharmacy || !cashier) return
+    if (isEnabled('staff_accounts') && !staffSession) {
+      toast.error('Choose a staff member before completing this sale')
+      return
+    }
     if (!currentShift) {
       toast.error('Open a shift before completing a sale')
       router.push('/pharmacy/shifts')
@@ -459,6 +510,40 @@ export default function PosPage() {
     if (!db) {
       toast.error('POS storage is unavailable. Reload the page before completing this sale.')
       return
+    }
+    if (method === 'credit' && !customer) {
+      toast.error('Choose a customer before making a credit sale')
+      return
+    }
+    if (method === 'credit' && !isOnline) {
+      toast.error('Credit limits must be checked online. Choose another payment method.')
+      return
+    }
+    const requestedLoyaltyPoints = Math.max(0, Math.floor(Number(loyaltyPoints) || 0))
+    let loyaltyDiscount = 0
+    if (requestedLoyaltyPoints > 0) {
+      if (!isOnline || !customer || !loyaltyInfo) {
+        toast.error('Refresh this customer’s points before redeeming them')
+        return
+      }
+      if (method === 'credit') {
+        toast.error('Points cannot be redeemed on a credit sale')
+        return
+      }
+      if (requestedLoyaltyPoints < loyaltyInfo.config.minimum_redemption_points) {
+        toast.error(`Redeem at least ${loyaltyInfo.config.minimum_redemption_points} points`)
+        return
+      }
+      if (requestedLoyaltyPoints > loyaltyInfo.balance) {
+        toast.error('This customer does not have that many points')
+        return
+      }
+      loyaltyDiscount = requestedLoyaltyPoints * loyaltyInfo.config.redemption_naira_per_point
+      const amountBeforeLoyalty = cart.reduce((sum, item) => sum + item.line_total, 0) - discount
+      if (loyaltyDiscount > amountBeforeLoyalty) {
+        toast.error('Use fewer points so the discount does not exceed the amount due')
+        return
+      }
     }
     if (loadedReservation) {
       const reservedLine = cart.find((item) =>
@@ -499,30 +584,71 @@ export default function PosPage() {
       }
       spAuthorizationToken = cachedToken
     }
-    const total = Math.max(0, subtotal - discount)
+    let creditAuthorizationToken = creditAuthorizedToken
+    if (method === 'credit' && creditSalesGated !== false && !creditAuthorizationToken) {
+      const cachedToken = getCachedSpToken('credit_controls')
+      if (!cachedToken) {
+        setPendingCreditCheckout({ method, amountTendered, discountToken: spAuthorizationToken })
+        return
+      }
+      const validationResponse = await fetch('/api/pharmacy/sp-authorization/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'credit_controls', token: cachedToken }),
+      })
+      if (!validationResponse.ok) {
+        clearCachedSpToken('credit_controls')
+        setPendingCreditCheckout({ method, amountTendered, discountToken: spAuthorizationToken })
+        return
+      }
+      creditAuthorizationToken = cachedToken
+    }
+    const total = Math.max(0, subtotal - discount - loyaltyDiscount)
     const reservationForSale = loadedReservation
+    const saleItems = cart.map(item => ({
+      ...item,
+      deducts_local_stock: !(reservationForSale &&
+        item.inventory_id === reservationForSale.inventory_id &&
+        item.batch_id === reservationForSale.batch_id &&
+        item.quantity === reservationForSale.quantity),
+    }))
     const sale: LocalSale = {
       id: crypto.randomUUID(), pharmacy_id: pharmacy.id, cashier_id: cashier.id, shift_id: currentShift.id,
-      subtotal, discount, total, payment_method: method,
+      customer_id: customer?.id,
+      customer_name: customer?.name,
+      customer_phone: customer?.phone,
+      customer_consent_whatsapp: customer?.consent_whatsapp,
+      staff_id: staffSession?.staff.id,
+      staff_name: staffSession?.staff.name,
+      staff_session_token: staffSession?.token,
+      subtotal, discount: discount + loyaltyDiscount, manual_discount: discount,
+      loyalty_points_redeemed: requestedLoyaltyPoints,
+      loyalty_points_earned: customer && loyaltyInfo ? Math.floor(total * loyaltyInfo.config.points_per_naira) : 0,
+      loyalty_discount: loyaltyDiscount,
+      total, payment_method: method,
       amount_tendered: amountTendered, change_due: amountTendered ? Math.max(0, amountTendered - total) : null,
-      status: 'completed', created_at: new Date().toISOString(), items: cart,
+      status: 'completed', created_at: new Date().toISOString(), items: saleItems,
       reservation_id: reservationForSale?.id,
       sp_authorization_token: needsDiscountAuthorization ? spAuthorizationToken : undefined,
+      credit_authorization_token: method === 'credit' ? creditAuthorizationToken : undefined,
       sync_status: 'pending', retry_count: 0,
     }
     try {
       await db.transaction('rw', db.local_sales, db.local_inventory_cache, async () => {
         await db.local_sales.add(sale)
-        for (const ci of cart) {
-          const isReservedLine = reservationForSale &&
-            ci.inventory_id === reservationForSale.inventory_id &&
-            ci.batch_id === reservationForSale.batch_id &&
-            ci.quantity === reservationForSale.quantity
+        for (const ci of sale.items) {
           // Sellable stock already excludes this hold. Collection deducts ledger stock
           // and releases the hold, so its net sellable quantity does not change.
-          if (isReservedLine) continue
+          if (ci.deducts_local_stock === false) continue
           const inv = await db.local_inventory_cache.get(ci.inventory_id)
-          if (inv) await db.local_inventory_cache.update(ci.inventory_id, { quantity_in_stock: Math.max(0, inv.quantity_in_stock - ci.quantity) })
+          if (inv) {
+            await db.local_inventory_cache.update(ci.inventory_id, {
+              quantity_in_stock: Math.max(0, inv.quantity_in_stock - ci.quantity),
+              batches: inv.batches.map(batch => batch.id === ci.batch_id
+                ? { ...batch, remaining_qty: Math.max(0, batch.remaining_qty - ci.quantity) }
+                : batch),
+            })
+          }
         }
       })
       const cached = await db.local_inventory_cache.toArray()
@@ -538,6 +664,9 @@ export default function PosPage() {
     setCart([])
     setDiscount(0)
     setLoadedReservation(null)
+    setCustomer(null)
+    setLoyaltyInfo(null)
+    setLoyaltyPoints('')
 
     if (isOnline) {
       await triggerSync(false)
@@ -575,7 +704,11 @@ export default function PosPage() {
 
   const quickTap = popularItems.length > 0 ? popularItems.slice(0, 12) : inventory.filter(i => i.quantity_in_stock > 0).slice(0, 12)
   const subtotal = cart.reduce((s, i) => s + i.line_total, 0)
-  const total = Math.max(0, subtotal - discount)
+  const requestedLoyaltyPoints = Math.max(0, Math.floor(Number(loyaltyPoints) || 0))
+  const previewLoyaltyDiscount = loyaltyInfo && requestedLoyaltyPoints >= loyaltyInfo.config.minimum_redemption_points && requestedLoyaltyPoints <= loyaltyInfo.balance
+    ? Math.min(requestedLoyaltyPoints * loyaltyInfo.config.redemption_naira_per_point, Math.max(0, subtotal - discount))
+    : 0
+  const total = Math.max(0, subtotal - discount - previewLoyaltyDiscount)
 
   return (
     <div className="flex min-h-[calc(100vh-10rem)] flex-col overflow-hidden bg-[var(--pos-bg)] text-white lg:h-full lg:min-h-0">
@@ -590,12 +723,13 @@ export default function PosPage() {
         </div>
         <div className="flex items-center gap-3">
           <SyncPill isOnline={isOnline} syncStatus={syncStatus} pendingCount={pendingCount} onRetry={handleRetry} />
+          {isEnabled('staff_accounts') && <StaffSwitcher value={staffSession} onChange={setStaffSession} />}
           <Button onClick={() => router.push('/pharmacy/shifts')} className="px-2.5 py-1.5 bg-[var(--pos-control)] hover:bg-white/5 rounded text-white/60 text-[11px] flex items-center gap-1 border border-white/10 transition">
             <Banknote className="h-3 w-3" /> {currentShift ? 'Shift open' : 'Open shift'}
           </Button>
-          <div className="text-white/40 text-[11px] hidden md:flex items-center gap-1">
+          {!isEnabled('staff_accounts') && <div className="text-white/40 text-[11px] hidden md:flex items-center gap-1">
             <User className="h-3.5 w-3.5" /> {cashier?.name || 'Cashier'}
-          </div>
+          </div>}
         </div>
       </header>
 
@@ -685,15 +819,24 @@ export default function PosPage() {
               onResumeHeld={() => setShowHeldList(true)} />
           </div>
           <div className="p-3 border-t border-white/10 bg-[var(--pos-bg)]/80 flex-shrink-0">
+            {isEnabled('customers') && <div className="mb-2"><CustomerPicker value={customer} onChange={setCustomer} /></div>}
+            {isEnabled('loyalty') && customer && loyaltyInfo && <div className="mb-2 rounded-lg border border-violet-300/15 bg-violet-300/10 p-2.5">
+              <div className="flex items-center justify-between text-[11px]"><span className="font-semibold text-violet-100">{loyaltyInfo.balance.toLocaleString()} points available</span>{previewLoyaltyDiscount > 0 && <span className="text-violet-200">−₦{previewLoyaltyDiscount.toLocaleString()}</span>}</div>
+              <div className="mt-2 flex gap-2">
+                <input type="number" min="0" max={loyaltyInfo.balance} step="1" value={loyaltyPoints} onChange={event => setLoyaltyPoints(event.target.value)} placeholder={`Min ${loyaltyInfo.config.minimum_redemption_points}`} className="h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-black/20 px-3 text-xs text-white outline-none" />
+                <Button type="button" onClick={() => setLoyaltyPoints(String(Math.min(loyaltyInfo.balance, Math.floor(Math.max(0, subtotal - discount) / loyaltyInfo.config.redemption_naira_per_point))))} className="h-9 bg-white/5 px-3 text-xs text-white hover:bg-white/10">Use max</Button>
+              </div>
+            </div>}
+            {isEnabled('staff_accounts') && !staffSession && <p className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-center text-xs text-amber-100">Choose staff at the top before checkout.</p>}
             {!currentShift && <Button onClick={() => router.push('/pharmacy/shifts')} className="mb-2 w-full rounded-lg border border-white/20 bg-[var(--pos-control)] px-3 py-2 text-xs font-semibold text-white">Open shift to sell</Button>}
-            <CheckoutPanel total={total} cartEmpty={cart.length === 0 || !currentShift} isOnline={isOnline} onCheckout={handleCheckout} />
+            <CheckoutPanel total={total} cartEmpty={cart.length === 0 || !currentShift || (isEnabled('staff_accounts') && !staffSession)} isOnline={isOnline} allowCredit={isEnabled('credit_sales') && Boolean(customer) && isOnline} onCheckout={handleCheckout} />
           </div>
         </div>
       </div>
 
       {/* Receipt modal */}
       {showReceipt && lastSale && (
-        <ReceiptModal sale={lastSale} pharmacyName={pharmacy?.name || ''} pharmacyLogoUrl={pharmacy?.logoUrl} cashierName={cashier?.name || ''} isOnline={isOnline} onClose={() => setShowReceipt(false)} />
+        <ReceiptModal sale={lastSale} pharmacyName={pharmacy?.name || ''} pharmacyLogoUrl={pharmacy?.logoUrl} cashierName={lastSale.staff_name || cashier?.name || ''} isOnline={isOnline} onClose={() => setShowReceipt(false)} />
       )}
       <SpAuthorizationModal
         open={pendingDiscountCheckout !== null}
@@ -705,6 +848,17 @@ export default function PosPage() {
           if (checkout) void handleCheckout(checkout.method, checkout.amountTendered, token)
         }}
         onClose={() => setPendingDiscountCheckout(null)}
+      />
+      <SpAuthorizationModal
+        open={pendingCreditCheckout !== null}
+        action="credit_controls"
+        description={`Authorise this ₦${total.toLocaleString()} credit sale`}
+        onAuthorized={(token) => {
+          const checkout = pendingCreditCheckout
+          setPendingCreditCheckout(null)
+          if (checkout) void handleCheckout(checkout.method, checkout.amountTendered, checkout.discountToken, token)
+        }}
+        onClose={() => setPendingCreditCheckout(null)}
       />
 
       {/* Held sales list */}

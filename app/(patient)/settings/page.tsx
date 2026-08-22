@@ -8,8 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, ShieldCheck, Bell, Trash2 } from 'lucide-react';
+import { Loader2, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { NotificationPreferencesCard } from '@/components/patient/NotificationPreferencesCard';
 
 export default function PatientSettingsPage() {
   const router = useRouter();
@@ -177,68 +178,7 @@ export default function PatientSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-card text-left">
-        <CardHeader className="flex flex-row items-start gap-3">
-          <div className="h-9 w-9 rounded-lg bg-warning/10 flex items-center justify-center mt-0.5">
-            <Bell className="h-5 w-5 text-warning" />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle>Notifications & Alerts</CardTitle>
-              <span className="rounded-full bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning">
-                Coming soon
-              </span>
-            </div>
-            <p className="mt-1 text-sm text-ink-muted">
-              We&apos;re building reliable alerts. Nothing is being saved or sent yet.
-            </p>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="notify-stock"
-              checked={false}
-              disabled
-              className="mt-1"
-            />
-            <div>
-              <Label htmlFor="notify-stock">Back-in-stock alerts</Label>
-              <p className="text-sm text-ink-muted">
-                Planned: alerts when pharmacies restock medications you searched for.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="notify-price"
-              checked={false}
-              disabled
-              className="mt-1"
-            />
-            <div>
-              <Label htmlFor="notify-price">Price-drop alerts</Label>
-              <p className="text-sm text-ink-muted">
-                Planned: alerts when the price of a saved medication drops.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-start gap-3">
-            <Checkbox
-              id="notify-refills"
-              checked={false}
-              disabled
-              className="mt-1"
-            />
-            <div>
-              <Label htmlFor="notify-refills">Chronic med refill reminders</Label>
-              <p className="text-sm text-ink-muted">
-                Planned: optional reminders for chronic prescription refills.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <NotificationPreferencesCard />
 
       <Card className="shadow-card">
         <CardHeader className="flex flex-row items-start gap-3">

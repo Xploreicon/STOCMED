@@ -16,6 +16,7 @@ const SP_GATE_ACTIONS = [
   'financial_reports',
   'data_export',
   'staff_accounts',
+  'credit_controls',
 ] as const
 
 const authorizeSchema = z.object({
@@ -130,6 +131,21 @@ export async function PUT(request: NextRequest) {
   const parsed = configureSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid SP configuration.' }, { status: 400 })
+  }
+
+  if (
+    parsed.data.operation === 'set_gates'
+    && Object.keys(parsed.data.gates).length === 1
+    && 'credit_controls' in parsed.data.gates
+  ) {
+    const { data, error } = await supabase.rpc('set_authenticated_feature_sp_gate', {
+      p_action_key: 'credit_controls',
+      p_is_gated: parsed.data.gates.credit_controls,
+      p_current_code: parsed.data.currentCode ?? null,
+    })
+    if (error) return NextResponse.json({ error: error.message }, { status: 403 })
+    const failure = rpcFailure(data, 'Could not update superintendent configuration.')
+    return failure ?? NextResponse.json(data)
   }
 
   const rpcArgs = parsed.data.operation === 'set_gates'

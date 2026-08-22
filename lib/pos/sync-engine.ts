@@ -92,6 +92,8 @@ export async function syncPendingSales(
         // A grant is needed only for the server write. Do not retain the
         // short-lived credential in the completed local receipt.
         sp_authorization_token: undefined,
+        credit_authorization_token: undefined,
+        staff_session_token: undefined,
       })
       synced++
     }

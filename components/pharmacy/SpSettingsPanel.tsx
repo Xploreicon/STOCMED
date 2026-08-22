@@ -19,6 +19,7 @@ const ACTION_GATES = [
   { key: 'pharmacy_settings', label: 'Pharmacy profile settings', detail: 'Protect profile, hours, location, and logo changes.' },
   { key: 'data_export', label: 'Data exports', detail: 'Protect downloads of pharmacy and accounting data.' },
   { key: 'staff_accounts', label: 'Staff accounts', detail: 'Protect staff access changes when staff accounts are enabled.' },
+  { key: 'credit_controls', label: 'Credit sales', detail: 'Protect credit sales, limit changes, and balance write-offs.' },
 ] as const
 
 type GateAction = (typeof ACTION_GATES)[number]['key']

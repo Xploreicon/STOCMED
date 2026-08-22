@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
+import { requirePharmacyFeature } from '@/lib/pharmacy-features'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,6 +27,8 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       )
     }
+    const featureError = await requirePharmacyFeature(supabase as any, pharmacy.id, 'unmet_demand_widget')
+    if (featureError) return NextResponse.json(featureError, { status: 403 })
 
     // Run query using direct pg client or RPC or raw query.
     // Wait, since supabase-js does not support raw SQL easily unless we define an RPC function,

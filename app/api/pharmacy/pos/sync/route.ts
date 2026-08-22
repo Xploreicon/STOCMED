@@ -3,6 +3,7 @@ import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { createClient } from '@/lib/supabase/server'
 import { posSyncSchema } from '@/lib/validation/pos'
 import { getStructuredRpcFailure } from '@/lib/sp-authorization'
+import { isPharmacyFeatureEnabled } from '@/lib/pharmacy-features'
 
 type RpcResult = PromiseLike<{ data: unknown; error: { message: string } | null }>
 
@@ -51,6 +52,8 @@ export async function POST(request: NextRequest) {
     const failedIds: Array<{ id: string; error: string }> = []
     const failedShiftIds: Array<{ id: string; error: string }> = []
     const failedShiftSet = new Set<string>()
+    const staffAccountsEnabled = await isPharmacyFeatureEnabled(supabase as any, pharmacy.id, 'staff_accounts')
+    const loyaltyEnabled = await isPharmacyFeatureEnabled(supabase as any, pharmacy.id, 'loyalty')
 
     console.log(`Starting POS Sync for pharmacy ${pharmacy.id} (user ${user.id}): shifts=${parsed.data.shifts.length}, sales=${parsed.data.sales.length}`)
 
@@ -92,7 +95,14 @@ export async function POST(request: NextRequest) {
         failedIds.push({ id: sale.id, error: 'The sale shift has not synced yet' })
         continue
       }
-      const { data, error } = await shiftRpc(supabase, 'sync_pos_sale_with_shift', {
+      const saleRpc = loyaltyEnabled
+        ? 'sync_pos_featured_sale_with_shift'
+        : staffAccountsEnabled
+        ? 'sync_pos_staff_sale_with_shift'
+        : sale.payment_method === 'credit'
+          ? 'sync_pos_credit_sale_with_shift'
+          : 'sync_pos_sale_with_shift'
+      const { data, error } = await shiftRpc(supabase, saleRpc, {
         p_pharmacy_id: pharmacy.id,
         p_sale: sale,
       })
@@ -111,6 +121,16 @@ export async function POST(request: NextRequest) {
             : rpcFailure.error,
         })
       } else if ((data as { success?: unknown } | null)?.success === true) {
+        if (sale.customer_id && await isPharmacyFeatureEnabled(supabase as any, pharmacy.id, 'customers')) {
+          const attachment = await shiftRpc(supabase, 'attach_authenticated_sale_customer', {
+            p_sale_id: sale.id,
+            p_customer_id: sale.customer_id,
+          })
+          if (attachment.error || attachment.data !== true) {
+            failedIds.push({ id: sale.id, error: attachment.error?.message || 'Customer could not be attached' })
+            continue
+          }
+        }
         syncedIds.push(sale.id)
       } else {
         failedIds.push({ id: sale.id, error: 'Sale sync did not return authoritative confirmation' })

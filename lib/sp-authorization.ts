@@ -12,6 +12,7 @@ export const SP_ACTIONS = [
   'pharmacy_settings',
   'staff_accounts',
   'financial_reports',
+  'credit_controls',
 ] as const
 
 export type SpAction = (typeof SP_ACTIONS)[number]

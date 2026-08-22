@@ -52,23 +52,37 @@ export interface LocalSaleItem {
   selling_unit_id?: string | null;
   selling_unit_name?: string;
   selling_units_per?: number;
+  /** False when a reservation hold already removed this line from sellable stock. */
+  deducts_local_stock?: boolean;
 }
 
 export interface LocalSale {
   id: string; // client-generated UUID
   pharmacy_id: string;
   cashier_id: string;
+  customer_id?: string;
+  customer_name?: string;
+  customer_phone?: string | null;
+  customer_consent_whatsapp?: boolean;
+  manual_discount?: number;
+  loyalty_points_redeemed?: number;
+  loyalty_points_earned?: number;
+  loyalty_discount?: number;
+  staff_id?: string;
+  staff_name?: string;
+  staff_session_token?: string;
   shift_id: string;
   subtotal: number;
   discount: number;
   total: number;
-  payment_method: 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'other';
+  payment_method: 'cash' | 'bank_transfer' | 'pharmacy_pos_terminal' | 'credit' | 'other';
   amount_tendered: number | null;
   change_due: number | null;
   status: 'pending' | 'completed' | 'cancelled';
   created_at: string;
   reservation_id?: string;
   sp_authorization_token?: string;
+  credit_authorization_token?: string;
   items: LocalSaleItem[];
   // Sync metadata
   sync_status: 'pending' | 'synced' | 'error';

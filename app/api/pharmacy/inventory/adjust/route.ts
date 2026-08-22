@@ -3,6 +3,7 @@ import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { MOVEMENT_TYPE_MAP, type MovementUiType } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
 import { SP_AUTH_REQUIRED_RESPONSE } from '@/lib/sp-authorization'
+import { checkStaffPermission } from '@/lib/staff-permissions'
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,6 +27,9 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       )
     }
+
+    const staffAccess = await checkStaffPermission(supabase as any, pharmacy.id, request, 'can_adjust_stock')
+    if (!staffAccess.allowed) return NextResponse.json({ error: staffAccess.error, code: staffAccess.code }, { status: 403 })
 
     // Parse body
     const body = await request.json()

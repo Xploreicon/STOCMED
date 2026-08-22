@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { checkStaffPermission } from '@/lib/staff-permissions'
 
 const schema = z.object({
   kind: z.enum(['void', 'refund']),
@@ -17,6 +18,8 @@ export async function POST(
   if (authError || !user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const pharmacy = await ensurePharmacyRecord(supabase, user)
   if (!pharmacy) return NextResponse.json({ error: 'Pharmacy not found' }, { status: 404 })
+  const staffAccess = await checkStaffPermission(supabase, pharmacy.id, request, 'can_refund')
+  if (!staffAccess.allowed) return NextResponse.json({ error: staffAccess.error, code: staffAccess.code }, { status: 403 })
   const parsed = schema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 })
   const { id } = await params

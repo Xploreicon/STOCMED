@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { checkRateLimit } from '@/lib/rate-limit'
+import { sendReservationNotifications } from '@/lib/notifications/reservations'
 
 const createReservationSchema = z.object({
   inventory_id: z.string().uuid(),
@@ -41,6 +42,15 @@ export async function POST(request: NextRequest) {
     p_patient_phone: payload.data.patient_phone ?? null,
   })
   if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+
+  // The hold is authoritative. Notification setup or provider failure must not
+  // roll it back; the durable outbox will retry any queued delivery.
+  try {
+    const reservation = Array.isArray(data) ? data[0] : data
+    if (reservation?.id) await sendReservationNotifications(reservation.id)
+  } catch (notificationError) {
+    console.error('Non-fatal reservation notification failure:', notificationError)
+  }
   return NextResponse.json({ reservation: data }, { status: 201 })
 }
 

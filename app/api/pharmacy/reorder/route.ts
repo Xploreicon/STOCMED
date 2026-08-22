@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { createClient } from '@/lib/supabase/server'
 import { draftReorderSchema } from '@/lib/validation/reporting'
+import { requirePharmacyFeature } from '@/lib/pharmacy-features'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,8 @@ async function context() {
   if (error || !user) return { error: 'Unauthorized', status: 401 } as const
   const pharmacy = await ensurePharmacyRecord(supabase, user)
   if (!pharmacy) return { error: 'Pharmacy profile not found', status: 404 } as const
+  const featureError = await requirePharmacyFeature(supabase, pharmacy.id, 'smart_reorder')
+  if (featureError) return { error: featureError.error, status: 403 } as const
   return { supabase, pharmacy } as const
 }
 
@@ -37,6 +40,8 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const current = await context()
   if ('error' in current) return NextResponse.json({ error: current.error }, { status: current.status })
+  const procurementError = await requirePharmacyFeature(current.supabase, current.pharmacy.id, 'purchase_orders_and_receiving')
+  if (procurementError) return NextResponse.json(procurementError, { status: 403 })
 
   const parsed = draftReorderSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: 'A valid product is required' }, { status: 400 })

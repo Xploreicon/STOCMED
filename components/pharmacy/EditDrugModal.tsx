@@ -22,6 +22,8 @@ import {
   withSpAuthorizationHeader,
 } from '@/lib/sp-authorization-client';
 import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider';
+import { withStaffSessionHeader } from '@/lib/staff-session-client';
+import { PriceBenchmarkGuidance } from '@/components/pharmacy/PriceBenchmarkGuidance';
 
 interface EditDrugModalProps {
   isOpen: boolean;
@@ -148,7 +150,7 @@ export default function EditDrugModal({
     mutationFn: async ({ data, token }: { data: any; token?: string | null }) => {
       const response = await fetch(`/api/pharmacy/drugs/${drug.id}`, {
         method: 'PATCH',
-        headers: withSpAuthorizationHeader('price_change', token ?? null, { 'Content-Type': 'application/json' }),
+        headers: withStaffSessionHeader(withSpAuthorizationHeader('price_change', token ?? null, { 'Content-Type': 'application/json' })),
         body: JSON.stringify(data),
       });
       if (!response.ok) {
@@ -469,6 +471,8 @@ export default function EditDrugModal({
                   disabled={editDrugMutation.isPending || isUploading}
                 />
               </div>
+
+              {isEnabled('price_benchmark') && <PriceBenchmarkGuidance inventoryId={drug.id} />}
 
               <div>
                 <label className="block text-sm font-medium text-ink-muted mb-1.5">

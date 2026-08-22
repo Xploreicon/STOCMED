@@ -3,6 +3,7 @@ import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { createClient } from '@/lib/supabase/server'
 import { reportQuerySchema } from '@/lib/validation/reporting'
 import { getStructuredRpcFailure } from '@/lib/sp-authorization'
+import { checkStaffPermission } from '@/lib/staff-permissions'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +17,11 @@ export async function GET(request: NextRequest) {
   const pharmacy = await ensurePharmacyRecord(supabase, user)
   if (!pharmacy) return NextResponse.json({ error: 'Pharmacy profile not found' }, { status: 404 })
   const isDashboardSummary = request.nextUrl.searchParams.get('summary') === 'true'
+
+  if (!isDashboardSummary) {
+    const staffAccess = await checkStaffPermission(supabase, pharmacy.id, request, 'can_view_reports')
+    if (!staffAccess.allowed) return NextResponse.json({ error: staffAccess.error, code: staffAccess.code }, { status: 403 })
+  }
 
   const to = parsed.data.to ?? new Date().toISOString().slice(0, 10)
   const from = parsed.data.from ?? new Date(Date.now() - 29 * 86_400_000).toISOString().slice(0, 10)
