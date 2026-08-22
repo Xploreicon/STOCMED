@@ -74,6 +74,124 @@ export interface Database {
           stocmed_sp_authorization_basis?: string | null
         }
       }
+      notifications: {
+        Row: {
+          id: string
+          recipient_type: 'patient' | 'pharmacist'
+          recipient_id: string
+          pharmacy_id: string | null
+          type: 'low_stock' | 'expiry' | 'daily_summary' | `reservation_${string}` | 'broadcast' | 'order'
+          title: string
+          body: string
+          data: Json
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          recipient_type: 'patient' | 'pharmacist'
+          recipient_id: string
+          pharmacy_id?: string | null
+          type: 'low_stock' | 'expiry' | 'daily_summary' | `reservation_${string}` | 'broadcast' | 'order'
+          title: string
+          body: string
+          data?: Json
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          recipient_type?: 'patient' | 'pharmacist'
+          recipient_id?: string
+          pharmacy_id?: string | null
+          type?: 'low_stock' | 'expiry' | 'daily_summary' | `reservation_${string}` | 'broadcast' | 'order'
+          title?: string
+          body?: string
+          data?: Json
+          read_at?: string | null
+          created_at?: string
+        }
+      }
+      notification_deliveries: {
+        Row: {
+          id: string
+          notification_id: string | null
+          channel: 'email' | 'sms' | 'push'
+          notification_type: string
+          provider: 'resend' | 'termii' | 'web_push'
+          pharmacy_id: string | null
+          user_id: string | null
+          recipient: string | null
+          recipient_hash: string
+          idempotency_key: string
+          status: 'pending' | 'queued' | 'sending' | 'sent' | 'delivered' | 'retry' | 'failed' | 'skipped'
+          provider_message_id: string | null
+          provider_status: string | null
+          cost: number | null
+          attempts: number
+          payload: Json
+          last_error: string | null
+          send_after: string
+          sent_at: string | null
+          delivered_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          notification_id?: string | null
+          channel: 'email' | 'sms' | 'push'
+          notification_type: string
+          provider: 'resend' | 'termii' | 'web_push'
+          pharmacy_id?: string | null
+          user_id?: string | null
+          recipient?: string | null
+          recipient_hash: string
+          idempotency_key: string
+          status?: 'pending' | 'queued' | 'sending' | 'sent' | 'delivered' | 'retry' | 'failed' | 'skipped'
+          provider_message_id?: string | null
+          provider_status?: string | null
+          cost?: number | null
+          attempts?: number
+          payload?: Json
+          last_error?: string | null
+          send_after?: string
+          sent_at?: string | null
+          delivered_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['notification_deliveries']['Insert']>
+      }
+      notification_preferences: {
+        Row: {
+          user_id: string
+          pharmacy_id: string | null
+          product_email_opt_in: boolean
+          refill_email_opt_in: boolean
+          reminder_sms_opt_in: boolean
+          type_channels: Json
+          patient_email_consent: boolean
+          patient_sms_consent: boolean
+          patient_push_consent: boolean
+          unsubscribed_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          pharmacy_id?: string | null
+          product_email_opt_in?: boolean
+          refill_email_opt_in?: boolean
+          reminder_sms_opt_in?: boolean
+          type_channels?: Json
+          patient_email_consent?: boolean
+          patient_sms_consent?: boolean
+          patient_push_consent?: boolean
+          unsubscribed_at?: string | null
+          updated_at?: string
+        }
+        Update: Partial<Database['public']['Tables']['notification_preferences']['Insert']>
+      }
       pharmacies: {
         Row: {
           id: string
@@ -828,6 +946,37 @@ export interface Database {
       [_ in never]: never
     }
     Functions: {
+      create_notification: {
+        Args: {
+          p_recipient_type: string
+          p_recipient_id: string
+          p_type: string
+          p_title: string
+          p_body: string
+          p_pharmacy_id?: string | null
+          p_data?: Json
+          p_deliveries?: Json
+        }
+        Returns: string
+      }
+      enqueue_notification_delivery: {
+        Args: {
+          p_notification_id: string | null
+          p_channel: string
+          p_provider: string
+          p_idempotency_key: string
+          p_legacy?: Json
+        }
+        Returns: Json
+      }
+      mark_notification_read: {
+        Args: { p_notification_id: string }
+        Returns: boolean
+      }
+      mark_all_notifications_read: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
       match_catalogue_product: {
         Args: { search_query: string }
         Returns: {

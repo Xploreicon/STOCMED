@@ -16,6 +16,7 @@ import {
 import { useUser } from '@/hooks/useUser';
 import { createClient } from '@/lib/supabase/client';
 import { Logo } from '@/components/brand/Logo';
+import { NotificationInbox } from '@/components/notifications/NotificationInbox';
 
 interface NavbarProps {
   pharmacyName?: string;
@@ -60,6 +61,7 @@ export const Navbar: React.FC<NavbarProps> = ({ pharmacyName, pharmacyLogoUrl, u
             {isPharmacyUI && pharmacyName && (
               <span className="hidden sm:block text-[14px] font-medium text-ink">{pharmacyName}</span>
             )}
+            {user && <NotificationInbox userId={user.id} />}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
