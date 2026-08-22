@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { LogoMark } from '@/components/brand/Logo';
 import { FaqSection } from '@/components/landing/FaqSection';
 import { PatientFaqSection } from '@/components/landing/PatientFaqSection';
+import { NativeOAuthBridge } from '@/components/auth/NativeOAuthBridge';
 import { getLandingRedirect, isStocMedAppUserAgent } from '@/lib/native-app';
 import { ArrowRight, Banknote, MapPin, MessageCircle, PackageCheck, Search, type LucideIcon } from 'lucide-react';
 
@@ -32,6 +33,7 @@ export default async function Landing() {
 
   return (
     <div className="w-full bg-white text-ink overflow-x-hidden">
+      {isNativeApp && <NativeOAuthBridge />}
 
       {/* NAV */}
       <header className="sticky top-0 z-50 border-b border-border bg-white/[0.92] backdrop-blur-md">

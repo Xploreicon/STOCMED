@@ -17,3 +17,16 @@ export function decideGoogleOAuthDestination(
   }
   return { kind: 'onboard_patient' }
 }
+
+const OAUTH_IDENTITY_COMPLETION_ROUTES = new Set([
+  '/auth-callback',
+  '/auth/native/start',
+  '/complete-profile',
+  '/update-password',
+])
+
+export function shouldCompleteOAuthProfile(role: unknown, pathname: string) {
+  return role !== 'patient'
+    && role !== 'pharmacy'
+    && !OAUTH_IDENTITY_COMPLETION_ROUTES.has(pathname)
+}

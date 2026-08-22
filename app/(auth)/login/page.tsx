@@ -11,17 +11,29 @@ import { GoogleOAuthButton } from '@/components/auth/GoogleOAuthButton';
 
 export const dynamic = 'force-dynamic'
 
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  native_oauth_start_failed: 'Google sign-in could not be started. Please try again.',
+  native_oauth_callback_failed: 'Google sign-in did not complete. Please try again.',
+  native_oauth_session_failed: 'Your secure session could not be restored in the app. Please try again.',
+  oauth_role_sync_failed: 'Your account role could not be verified. Please try again.',
+  profile_lookup_failed: 'Your StocMed profile could not be verified. Please try again.',
+  pharmacy_oauth_signup_not_allowed: 'New pharmacy accounts must register with email and password.',
+}
+
 export default function Login() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || null;
   const passwordResetComplete = searchParams.get('password-reset') === 'success';
+  const oauthError = searchParams.get('error');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
     password?: string;
     general?: string;
-  }>({});
+  }>(oauthError && OAUTH_ERROR_MESSAGES[oauthError]
+    ? { general: OAUTH_ERROR_MESSAGES[oauthError] }
+    : {});
 
   const [formData, setFormData] = useState({
     email: '',

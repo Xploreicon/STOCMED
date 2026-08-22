@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import { getNativeRestrictedRedirect, isStocMedAppUserAgent } from '@/lib/native-app'
 import { handleNativePatientRequest } from '@/lib/native-patient-middleware'
+import { shouldCompleteOAuthProfile } from '@/lib/auth/google-oauth-policy'
 
 export async function middleware(request: NextRequest) {
   const session = await updateSession(request)
@@ -43,7 +44,16 @@ export async function middleware(request: NextRequest) {
   const isAuthRoute = authRoutes.some(route => path.startsWith(route))
 
   // Get user role if authenticated
-  const role = user?.user_metadata?.role || 'patient'
+  const role = user?.user_metadata?.role
+
+  // OAuth identities are deliberately role-less until the authoritative
+  // onboarding transaction completes.
+  if (
+    user
+    && shouldCompleteOAuthProfile(role, path)
+  ) {
+    return NextResponse.redirect(new URL('/complete-profile', request.url))
+  }
 
   // Redirect authenticated users away from auth pages
   if (user && isAuthRoute) {

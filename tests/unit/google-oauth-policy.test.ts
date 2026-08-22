@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { decideGoogleOAuthDestination } from '@/lib/auth/google-oauth-policy'
+import {
+  decideGoogleOAuthDestination,
+  shouldCompleteOAuthProfile,
+} from '@/lib/auth/google-oauth-policy'
 
 describe('Google OAuth role policy', () => {
   it('honors an existing patient profile', () => {
@@ -26,5 +29,19 @@ describe('Google OAuth role policy', () => {
     expect(decideGoogleOAuthDestination(undefined, 'pharmacy')).toEqual({
       kind: 'reject_pharmacy_signup',
     })
+  })
+
+  it('keeps role-less OAuth identities inside the completion boundary', () => {
+    expect(shouldCompleteOAuthProfile(undefined, '/dashboard')).toBe(true)
+    expect(shouldCompleteOAuthProfile(undefined, '/login')).toBe(true)
+    expect(shouldCompleteOAuthProfile(undefined, '/complete-profile')).toBe(false)
+    expect(shouldCompleteOAuthProfile(undefined, '/auth-callback')).toBe(false)
+    expect(shouldCompleteOAuthProfile(undefined, '/auth/native/start')).toBe(false)
+    expect(shouldCompleteOAuthProfile(undefined, '/update-password')).toBe(false)
+  })
+
+  it('does not disturb persisted patient or pharmacy navigation', () => {
+    expect(shouldCompleteOAuthProfile('patient', '/dashboard')).toBe(false)
+    expect(shouldCompleteOAuthProfile('pharmacy', '/pharmacy/dashboard')).toBe(false)
   })
 })

@@ -30,6 +30,7 @@
 - The OAuth callback must enforce this server-side from persisted `public.users.role`, never client metadata.
 - Native OAuth changes only the transport: system browser to server callback to native deep link.
 - Google OAuth must not run inside the WebView. Use the system browser and return through `com.askstocmed.patient://auth-callback`.
+- Native Google OAuth starts at `/auth/native/start`, completes PKCE and persisted-role enforcement at `/auth-callback`, then returns a flow-correlated session through the custom-scheme fragment. The WebView accepts only the flow it initiated.
 
 ## Play Store path
 
@@ -50,10 +51,10 @@
 - Before any production database change: take a `pg_dump`, run a Migra diff, and use explicit file staging.
 - Stop and obtain confirmation if native work implies a database, core-identity, or privileged-boundary change.
 
-## Explicit open items
+## Tracked implementation items
 
-- **Deferred middleware hunk (Prompt 3):** keep the global role-less OAuth redirect in `middleware.ts` out of the patient-shell commit. Land it with the native OAuth callback/deep-link flow, after its normal-browser login, signup, callback, and password-recovery paths have dedicated regression coverage.
-- **Pending device check:** run the Android build on a physical device (or a Play-equivalent emulator), verify the `StocMedApp/1.0` patient presentation, confirm `/pharmacy/*` returns to `/` without a redirect loop, and exercise the system-browser OAuth return through `com.askstocmed.patient://auth-callback` before release promotion.
+- **Deferred middleware hunk — resolved in Prompt 3:** the global role-less OAuth redirect is now coupled to explicit callback, native-start, profile-completion, and password-recovery exceptions, with regression coverage in `google-oauth-policy.test.ts`.
+- **Pending device check — open:** run the Android build on a physical device (or a Play-equivalent emulator), verify the `StocMedApp/1.0` patient presentation, confirm `/pharmacy/*` returns to `/` without a redirect loop, and exercise the system-browser OAuth return through `com.askstocmed.patient://auth-callback` before release promotion. The current host has no Java runtime, so `assembleDebug` could not run here.
 
 ## Deferred pre-iOS work
 
