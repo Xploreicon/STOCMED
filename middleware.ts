@@ -1,10 +1,35 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
+import { getNativeRestrictedRedirect, isStocMedAppUserAgent } from '@/lib/native-app'
+import { handleNativePatientRequest } from '@/lib/native-patient-middleware'
 
 export async function middleware(request: NextRequest) {
-  const { supabaseResponse, user } = await updateSession(request)
+  const session = await updateSession(request)
+  const { supabaseResponse, user, supabase, getSupabaseResponse } = session
 
   const path = request.nextUrl.pathname
+  const isNativeApp = isStocMedAppUserAgent(request.headers.get('user-agent'))
+  const isNativeOnlyRoute = path.startsWith('/native/')
+  const nativeRestrictedRedirect = getNativeRestrictedRedirect(path, isNativeApp)
+
+  if (nativeRestrictedRedirect) {
+    return NextResponse.redirect(new URL(nativeRestrictedRedirect, request.url))
+  }
+
+  if (isNativeOnlyRoute) {
+    const publicPath = path === '/native/complete-profile' ? '/complete-profile' : '/signup'
+    return NextResponse.redirect(new URL(publicPath, request.url))
+  }
+
+  if (isNativeApp) {
+    const nativeResponse = await handleNativePatientRequest(path, {
+      request,
+      user,
+      supabase,
+      getSupabaseResponse,
+    })
+    if (nativeResponse) return nativeResponse
+  }
 
   // Protected patient routes
   const patientRoutes = ['/dashboard', '/chat', '/history']

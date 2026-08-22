@@ -1,8 +1,11 @@
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { LogoMark } from '@/components/brand/Logo';
 import { FaqSection } from '@/components/landing/FaqSection';
+import { PatientFaqSection } from '@/components/landing/PatientFaqSection';
+import { getLandingRedirect, isStocMedAppUserAgent } from '@/lib/native-app';
 import { ArrowRight, Banknote, MapPin, MessageCircle, PackageCheck, Search, type LucideIcon } from 'lucide-react';
 
 const VALUE_PROPS = [
@@ -18,16 +21,13 @@ const HOW_IT_WORKS = [
 ] satisfies Array<{ n: string; icon: LucideIcon; title: string; body: string }>;
 
 export default async function Landing() {
+  const isNativeApp = isStocMedAppUserAgent(headers().get('user-agent'));
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (user) {
-    const role = user.user_metadata?.role;
-    if (role === 'pharmacy') {
-      redirect('/pharmacy/dashboard');
-    } else {
-      redirect('/dashboard');
-    }
+    const landingRedirect = getLandingRedirect(user.user_metadata?.role, isNativeApp);
+    if (landingRedirect) redirect(landingRedirect);
   }
 
   return (
@@ -42,7 +42,7 @@ export default async function Landing() {
           </Link>
           <nav className="hidden lg:flex items-center gap-8">
             <a href="#find" className="text-[15px] text-ink-muted hover:text-ink">Find medication</a>
-            <a href="#pharmacy" className="text-[15px] text-ink-muted hover:text-ink">For pharmacies</a>
+            {!isNativeApp && <a href="#pharmacy" className="text-[15px] text-ink-muted hover:text-ink">For pharmacies</a>}
             <a href="#how" className="text-[15px] text-ink-muted hover:text-ink">How it works</a>
             <a href="#faq" className="text-[15px] text-ink-muted hover:text-ink">FAQ</a>
             <Link href="/about" className="text-[15px] text-ink-muted hover:text-ink">About</Link>
@@ -77,9 +77,11 @@ export default async function Landing() {
               <Link href="/signup?role=patient" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button hover:bg-[var(--primary-hover)]">
                 Find medication
               </Link>
-              <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-white text-primary border-[1.5px] border-primary text-[16px] font-medium rounded-button hover:bg-surface">
-                I&apos;m a pharmacy
-              </Link>
+              {!isNativeApp && (
+                <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-white text-primary border-[1.5px] border-primary text-[16px] font-medium rounded-button hover:bg-surface">
+                  I&apos;m a pharmacy
+                </Link>
+              )}
             </div>
             <div className="flex gap-8 mt-12">
               {[['1,200+', 'Pharmacies connected'], ['40,000+', 'Medications tracked'], ['<2 min', 'Average search time']].map(([n, l]) => (
@@ -204,33 +206,37 @@ export default async function Landing() {
         </div>
       </section>
 
-      {/* PHARMACY CTA BAND */}
-      <section id="pharmacy" className="bg-navy px-6 py-20">
-        <div className="mx-auto max-w-[1200px] flex flex-wrap items-center justify-between gap-12">
-          <div className="max-w-[560px]">
-            <div className="flex items-center gap-2 mb-6">
-              <LogoMark size={28} onDark />
-              <span className="text-[16px] font-medium text-white tracking-[-0.2px]">StocMed</span>
+      {!isNativeApp && (
+        <>
+          {/* PHARMACY CTA BAND */}
+          <section id="pharmacy" className="bg-navy px-6 py-20">
+            <div className="mx-auto max-w-[1200px] flex flex-wrap items-center justify-between gap-12">
+              <div className="max-w-[560px]">
+                <div className="flex items-center gap-2 mb-6">
+                  <LogoMark size={28} onDark />
+                  <span className="text-[16px] font-medium text-white tracking-[-0.2px]">StocMed</span>
+                </div>
+                <span className="text-[13px] font-medium uppercase tracking-[0.04em]" style={{ color: 'var(--primary-light)' }}>For pharmacies</span>
+                <h2 className="font-display font-medium text-[28px] lg:text-[34px] leading-[1.25] text-white mt-3">List your inventory. Reach patients searching for stock right now.</h2>
+                <p className="text-[16px] leading-[1.6] mt-4" style={{ color: 'var(--receipt-border)' }}>
+                  Join 1,200+ pharmacies already using StocMed to manage inventory and get discovered by nearby patients.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-4">
+                <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button whitespace-nowrap hover:bg-[var(--primary-hover)]">
+                  Register your pharmacy
+                </Link>
+                <a href="#find" className="h-12 flex items-center justify-center px-7 bg-transparent text-white text-[16px] font-medium rounded-button whitespace-nowrap" style={{ border: '1.5px solid var(--muted-blue)' }}>
+                  Learn more
+                </a>
+              </div>
             </div>
-            <span className="text-[13px] font-medium uppercase tracking-[0.04em]" style={{ color: 'var(--primary-light)' }}>For pharmacies</span>
-            <h2 className="font-display font-medium text-[28px] lg:text-[34px] leading-[1.25] text-white mt-3">List your inventory. Reach patients searching for stock right now.</h2>
-            <p className="text-[16px] leading-[1.6] mt-4" style={{ color: 'var(--receipt-border)' }}>
-              Join 1,200+ pharmacies already using StocMed to manage inventory and get discovered by nearby patients.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-4">
-            <Link href="/signup?role=pharmacy" className="h-12 flex items-center justify-center px-7 bg-primary text-white text-[16px] font-medium rounded-button whitespace-nowrap hover:bg-[var(--primary-hover)]">
-              Register your pharmacy
-            </Link>
-            <a href="#find" className="h-12 flex items-center justify-center px-7 bg-transparent text-white text-[16px] font-medium rounded-button whitespace-nowrap" style={{ border: '1.5px solid var(--muted-blue)' }}>
-              Learn more
-            </a>
-          </div>
-        </div>
-      </section>
+          </section>
+        </>
+      )}
 
       {/* FAQ SECTION */}
-      <FaqSection />
+      {isNativeApp ? <PatientFaqSection /> : <FaqSection />}
 
       {/* FOOTER */}
       <footer className="bg-white px-6 pt-16 pb-8 border-t border-border">
@@ -271,7 +277,7 @@ export default async function Landing() {
                   ['Terms of service', '/terms'],
                 ],
               },
-            ].map((col) => (
+            ].filter((col) => !isNativeApp || col.h !== 'Pharmacies').map((col) => (
               <div key={col.h}>
                 <div className="text-[13px] font-medium text-ink mb-4">{col.h}</div>
                 <div className="flex flex-col gap-3">

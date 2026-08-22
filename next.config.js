@@ -48,7 +48,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline';",
               "font-src 'self' data:;",
               "img-src 'self' data: blob: https:;",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://ingest.sentry.io;",
+              "connect-src 'self' https://auth.askstocmed.com wss://auth.askstocmed.com https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://ingest.sentry.io;",
               "worker-src 'self' blob:;",
               "frame-ancestors 'none';",
             ].join(' '),
