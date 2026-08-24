@@ -27,8 +27,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:scheme="@string/custom_url_scheme"
-                    android:host="auth-callback" />
+                    android:scheme="@string/custom_url_scheme" />
             </intent-filter>
 
         </activity>

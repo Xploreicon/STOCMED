@@ -7,6 +7,7 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://askstocmed.com',
     androidScheme: 'https',
+    allowNavigation: ['askstocmed.com', '*.askstocmed.com'],
   },
   android: {
     appendUserAgent: 'StocMedApp/1.0',
