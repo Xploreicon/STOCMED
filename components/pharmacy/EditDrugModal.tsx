@@ -301,8 +301,8 @@ export default function EditDrugModal({
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md p-0 border border-border rounded-xl shadow-2xl overflow-hidden">
-        <DialogHeader className="p-6 border-b bg-surface/50">
+      <DialogContent className="flex max-h-[calc(100dvh-1rem)] max-w-md flex-col overflow-hidden rounded-xl border border-border p-0 shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
+        <DialogHeader className="shrink-0 border-b bg-surface/50 p-6">
           <DialogTitle className="text-xl font-semibold text-ink">
             Edit Inventory Details
           </DialogTitle>
@@ -315,8 +315,8 @@ export default function EditDrugModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-6">
             {/* Product info header with display image */}
             <div className="bg-surface border border-border rounded-lg p-4 flex gap-4">
               {displayImage ? (
@@ -551,7 +551,7 @@ export default function EditDrugModal({
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-3 p-6 border-t bg-surface/50">
+          <div className="flex shrink-0 justify-end gap-3 border-t bg-surface/50 p-6">
             <Button
               type="button"
               variant="outline"
