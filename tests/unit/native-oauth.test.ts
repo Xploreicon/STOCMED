@@ -1,15 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildNativeOAuthPending,
   buildNativeOAuthErrorUrl,
   buildNativeOAuthSessionUrl,
+  getNativeGoogleOAuthOptions,
   getSafeNativeOAuthDestination,
   isNativeOAuthFlow,
   parseNativeOAuthCallback,
+  parseNativeOAuthPending,
 } from '@/lib/auth/native-oauth'
 
 const FLOW = '6f9d53a4-7dfa-4d7c-9189-236d8213694f'
 
 describe('native OAuth deep links', () => {
+  it('starts native Google OAuth with an exact custom-scheme PKCE redirect', () => {
+    expect(getNativeGoogleOAuthOptions()).toEqual({
+      redirectTo: 'com.askstocmed.patient://auth-callback',
+      skipBrowserRedirect: true,
+      scopes: 'openid email profile',
+      queryParams: { prompt: 'select_account' },
+    })
+  })
+
+  it('parses the PKCE code Supabase returns to the native scheme', () => {
+    expect(parseNativeOAuthCallback(
+      'com.askstocmed.patient://auth-callback?code=pkce-auth-code',
+    )).toEqual({ kind: 'code', code: 'pkce-auth-code' })
+  })
+
+  it('parses a token callback for a pending native hand-off', () => {
+    expect(parseNativeOAuthCallback(
+      'com.askstocmed.patient://auth-callback#access_token=access&refresh_token=refresh',
+    )).toEqual({
+      kind: 'session',
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      destination: '/dashboard',
+    })
+  })
+
   it('keeps session credentials in the fragment and parses the expected callback', () => {
     const callback = buildNativeOAuthSessionUrl({
       accessToken: 'access-token',
@@ -42,6 +71,21 @@ describe('native OAuth deep links', () => {
   it('requires a version-4 flow correlator', () => {
     expect(isNativeOAuthFlow(FLOW)).toBe(true)
     expect(isNativeOAuthFlow('not-a-flow')).toBe(false)
+  })
+
+  it('retains a short-lived safe destination while OAuth is in progress', () => {
+    const startedAt = 2_000_000
+    const pending = buildNativeOAuthPending('/history?from=oauth', startedAt)
+
+    expect(parseNativeOAuthPending(pending, startedAt + 60_000)).toEqual({
+      destination: '/history?from=oauth',
+      startedAt,
+    })
+    expect(parseNativeOAuthPending(pending, startedAt + 16 * 60_000)).toBeNull()
+    expect(parseNativeOAuthPending(
+      buildNativeOAuthPending('/pharmacy/dashboard', startedAt),
+      startedAt,
+    )?.destination).toBe('/')
   })
 
   it('keeps destinations same-origin and out of privileged surfaces', () => {

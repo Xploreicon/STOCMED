@@ -6,8 +6,9 @@ import { Capacitor } from '@capacitor/core'
 import { createClient } from '@/lib/supabase/client'
 import { NativeOAuthBridge } from '@/components/auth/NativeOAuthBridge'
 import {
-  getSafeNativeOAuthDestination,
-  NATIVE_OAUTH_FLOW_STORAGE_KEY,
+  buildNativeOAuthPending,
+  getNativeGoogleOAuthOptions,
+  NATIVE_OAUTH_PENDING_STORAGE_KEY,
 } from '@/lib/auth/native-oauth'
 
 type GoogleOAuthButtonProps = {
@@ -32,19 +33,27 @@ export function GoogleOAuthButton({
     if (Capacitor.isNativePlatform()) {
       let browserFinished: Awaited<ReturnType<typeof Browser.addListener>> | undefined
       try {
-        const flow = crypto.randomUUID()
-        window.localStorage.setItem(NATIVE_OAUTH_FLOW_STORAGE_KEY, flow)
-        const start = new URL('/auth/native/start', window.location.origin)
-        start.searchParams.set('flow', flow)
-        if (next) start.searchParams.set('next', getSafeNativeOAuthDestination(next))
+        window.localStorage.setItem(
+          NATIVE_OAUTH_PENDING_STORAGE_KEY,
+          buildNativeOAuthPending(next),
+        )
         browserFinished = await Browser.addListener('browserFinished', () => {
           setLoading(false)
           if (browserFinished) void browserFinished.remove()
         })
-        await Browser.open({ url: start.toString(), toolbarColor: '#0066CC' })
+
+        const { data, error } = await createClient().auth.signInWithOAuth({
+          provider: 'google',
+          options: getNativeGoogleOAuthOptions(),
+        })
+        if (error || !data.url) {
+          throw error ?? new Error('Google sign-in did not return an authorization URL.')
+        }
+
+        await Browser.open({ url: data.url, toolbarColor: '#0066CC' })
       } catch (error) {
         if (browserFinished) void browserFinished.remove()
-        window.localStorage.removeItem(NATIVE_OAUTH_FLOW_STORAGE_KEY)
+        window.localStorage.removeItem(NATIVE_OAUTH_PENDING_STORAGE_KEY)
         setLoading(false)
         onError?.(error instanceof Error ? error.message : 'Google sign-in could not be started.')
       }

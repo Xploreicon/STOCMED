@@ -15,6 +15,8 @@ const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   native_oauth_start_failed: 'Google sign-in could not be started. Please try again.',
   native_oauth_callback_failed: 'Google sign-in did not complete. Please try again.',
   native_oauth_session_failed: 'Your secure session could not be restored in the app. Please try again.',
+  native_oauth_session_missing: 'Your secure session could not be found in the app. Please try again.',
+  native_oauth_role_check_failed: 'Your account role could not be verified. Please try again.',
   oauth_role_sync_failed: 'Your account role could not be verified. Please try again.',
   profile_lookup_failed: 'Your StocMed profile could not be verified. Please try again.',
   pharmacy_oauth_signup_not_allowed: 'New pharmacy accounts must register with email and password.',

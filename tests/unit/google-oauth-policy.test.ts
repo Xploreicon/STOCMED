@@ -36,6 +36,7 @@ describe('Google OAuth role policy', () => {
     expect(shouldCompleteOAuthProfile(undefined, '/login')).toBe(true)
     expect(shouldCompleteOAuthProfile(undefined, '/complete-profile')).toBe(false)
     expect(shouldCompleteOAuthProfile(undefined, '/auth-callback')).toBe(false)
+    expect(shouldCompleteOAuthProfile(undefined, '/auth/native/complete')).toBe(false)
     expect(shouldCompleteOAuthProfile(undefined, '/auth/native/start')).toBe(false)
     expect(shouldCompleteOAuthProfile(undefined, '/update-password')).toBe(false)
   })

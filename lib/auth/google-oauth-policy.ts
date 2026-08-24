@@ -20,6 +20,7 @@ export function decideGoogleOAuthDestination(
 
 const OAUTH_IDENTITY_COMPLETION_ROUTES = new Set([
   '/auth-callback',
+  '/auth/native/complete',
   '/auth/native/start',
   '/complete-profile',
   '/update-password',

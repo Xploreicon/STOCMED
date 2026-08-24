@@ -30,7 +30,8 @@
 - The OAuth callback must enforce this server-side from persisted `public.users.role`, never client metadata.
 - Native OAuth changes only the transport: system browser to server callback to native deep link.
 - Google OAuth must not run inside the WebView. Use the system browser and return through `com.askstocmed.patient://auth-callback`.
-- Native Google OAuth starts at `/auth/native/start`, completes PKCE and persisted-role enforcement at `/auth-callback`, then returns a flow-correlated session through the custom-scheme fragment. The WebView accepts only the flow it initiated.
+- Native Google OAuth starts PKCE in the WebView with `skipBrowserRedirect`, opens the returned provider URL in the system browser, exchanges the custom-scheme callback code back inside the WebView, and then completes an authoritative persisted-role check at `/auth/native/complete`. Web OAuth continues through `/auth-callback` unchanged.
+- Option C deploy invariant: the native shell loads the remote `https://askstocmed.com` bundle, so every native-facing web change must be deployed to production before emulator/device verification and before signing or distributing an APK/AAB. The required order is web commit/push → confirmed production deploy → production-backed device test → native signing/release.
 
 ## Play Store path
 
@@ -54,7 +55,7 @@
 ## Tracked implementation items
 
 - **Deferred middleware hunk — resolved in Prompt 3:** the global role-less OAuth redirect is now coupled to explicit callback, native-start, profile-completion, and password-recovery exceptions, with regression coverage in `google-oauth-policy.test.ts`.
-- **Pending device check — open:** run the Android build on a physical device (or a Play-equivalent emulator), verify the `StocMedApp/1.0` patient presentation, confirm `/pharmacy/*` returns to `/` without a redirect loop, and exercise the system-browser OAuth return through `com.askstocmed.patient://auth-callback` before release promotion. The current host has no Java runtime, so `assembleDebug` could not run here.
+- **Physical-device release check — open:** emulator validation does not replace a final physical-device pass. Before release promotion, verify the `StocMedApp/1.0` patient presentation, confirm `/pharmacy/*` returns to `/` without a redirect loop, and exercise the system-browser OAuth return through `com.askstocmed.patient://auth-callback` on representative hardware.
 
 ## Deferred pre-iOS work
 
