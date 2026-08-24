@@ -5,7 +5,9 @@ const config: CapacitorConfig = {
   appName: 'StocMed',
   webDir: 'public',
   server: {
-    url: 'https://askstocmed.com',
+    // Capacitor injects its native bridge only into the exact server.url origin.
+    // Use the canonical host so the apex -> www redirect cannot drop the bridge.
+    url: 'https://www.askstocmed.com',
     androidScheme: 'https',
     allowNavigation: ['askstocmed.com', '*.askstocmed.com'],
   },
