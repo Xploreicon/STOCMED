@@ -18,7 +18,7 @@
 ## Architecture: Option C
 
 - Android uses Capacitor as a server-backed WebView shell.
-- `server.url` points to the live patient surface at `https://askstocmed.com`.
+- `server.url` points directly to the canonical live patient surface at `https://www.askstocmed.com`; do not use the redirecting apex host because Capacitor scopes document-start bridge injection to the exact configured origin.
 - The deployed Next.js server stays in place. Data, authentication, AI, prescription, and notification behavior remains server-enforced.
 - Native traffic is identified with the custom user-agent marker `StocMedApp/1.0`.
 - The isolated patient static-export refactor (Option B) is deferred until the pre-iOS workstream.
@@ -31,7 +31,8 @@
 - Native OAuth changes only the transport: system browser to server callback to native deep link.
 - Google OAuth must not run inside the WebView. Use the system browser and return through `com.askstocmed.patient://auth-callback`.
 - Native Google OAuth starts PKCE in the WebView with `skipBrowserRedirect`, opens the returned provider URL in the system browser, exchanges the custom-scheme callback code back inside the WebView, and then completes an authoritative persisted-role check at `/auth/native/complete`. Web OAuth continues through `/auth-callback` unchanged.
-- Option C deploy invariant: the native shell loads the remote `https://askstocmed.com` bundle, so every native-facing web change must be deployed to production before emulator/device verification and before signing or distributing an APK/AAB. The required order is web commit/push → confirmed production deploy → production-backed device test → native signing/release.
+- Android must keep `CapacitorCookies.enabled` so Supabase SSR cookie writes are flushed through the native cookie manager and the authenticated session survives process death and app restart.
+- Option C deploy invariant: the native shell loads the remote `https://www.askstocmed.com` bundle, so every native-facing web change must be deployed to production before emulator/device verification and before signing or distributing an APK/AAB. The required order is web commit/push → confirmed production deploy → production-backed device test → native signing/release.
 
 ## Play Store path
 

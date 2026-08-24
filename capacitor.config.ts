@@ -15,6 +15,11 @@ const config: CapacitorConfig = {
     appendUserAgent: 'StocMedApp/1.0',
   },
   plugins: {
+    // Flush Supabase's SSR auth cookies through Android's CookieManager so a
+    // completed native OAuth session survives process death and app restart.
+    CapacitorCookies: {
+      enabled: true,
+    },
     SplashScreen: {
       launchShowDuration: 1500,
       backgroundColor: '#ffffff',
