@@ -211,12 +211,18 @@ SELECT is(
   0::BIGINT,
   'unsubscribed pharmacy is excluded from subsequent broadcasts'
 );
+RESET ROLE;
 SELECT is(
   (SELECT delivery_status FROM public.broadcast_recipients
    WHERE broadcast_id = 'b2400000-0000-4000-8000-000000000050'),
   'skipped',
   'unsubscribe cancels a queued recipient before dispatch'
 );
+DO $$ BEGIN
+  PERFORM set_config('request.jwt.claim.role', 'service_role', TRUE);
+  PERFORM set_config('request.jwt.claim.sub', '', TRUE);
+END $$;
+SET LOCAL ROLE service_role;
 SELECT ok(
   public.suppress_email_category('b2400000-0000-4000-8000-000000000002', 'search_digest'),
   'search-demand unsubscribe records its independent category'
@@ -260,10 +266,16 @@ SELECT is(
   '42501',
   'direct authenticated broadcast insert is denied'
 );
-SELECT is((SELECT count(*) FROM public.broadcasts), 0::BIGINT,
-  'non-admin cannot read broadcast history through RLS');
-SELECT is((SELECT count(*) FROM public.broadcast_recipients), 0::BIGINT,
-  'non-admin cannot read per-recipient delivery history through RLS');
+SELECT is(
+  pg_temp.sqlstate_for('SELECT count(*) FROM public.broadcasts'),
+  '42501',
+  'non-admin cannot read broadcast history directly'
+);
+SELECT is(
+  pg_temp.sqlstate_for('SELECT count(*) FROM public.broadcast_recipients'),
+  '42501',
+  'non-admin cannot read per-recipient delivery history directly'
+);
 
 RESET ROLE;
 DO $$ BEGIN
@@ -271,10 +283,16 @@ DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.sub', 'b2400000-0000-4000-8000-000000000001', TRUE);
 END $$;
 SET LOCAL ROLE authenticated;
-SELECT is((SELECT count(*) FROM public.broadcasts), 1::BIGINT,
-  'provenance-authorized admin can read broadcast history');
-SELECT is((SELECT count(*) FROM public.broadcast_recipients), 1::BIGINT,
-  'provenance-authorized admin can read per-recipient history');
+SELECT is(
+  pg_temp.sqlstate_for('SELECT count(*) FROM public.broadcasts'),
+  '42501',
+  'authorized admin still uses the server boundary for broadcast history'
+);
+SELECT is(
+  pg_temp.sqlstate_for('SELECT count(*) FROM public.broadcast_recipients'),
+  '42501',
+  'authorized admin still uses the server boundary for recipient history'
+);
 
 SELECT * FROM finish();
 ROLLBACK;
