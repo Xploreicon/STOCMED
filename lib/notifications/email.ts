@@ -19,6 +19,12 @@ type SendEmailInput = {
   subject?: string
 }
 
+function usesVerifiedStocMedDomain(from: string) {
+  const bracketed = from.match(/<([^>]+)>/)?.[1]
+  const email = (bracketed || from).trim().toLowerCase()
+  return email.endsWith('@askstocmed.com')
+}
+
 export async function deliverQueuedEmail(delivery: any) {
   const claimed = await claimDelivery(delivery.id)
   if (!claimed) return { status: delivery.status, duplicate: true }
@@ -28,6 +34,13 @@ export async function deliverQueuedEmail(delivery: any) {
     await finishDelivery(claimed.id, {
       status: 'skipped',
       error: 'Resend is not configured',
+    })
+    return { status: 'skipped' as const }
+  }
+  if (!usesVerifiedStocMedDomain(from)) {
+    await finishDelivery(claimed.id, {
+      status: 'skipped',
+      error: 'RESEND_FROM_EMAIL must use the verified askstocmed.com domain',
     })
     return { status: 'skipped' as const }
   }

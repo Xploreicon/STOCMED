@@ -21,6 +21,7 @@ type Preferences = {
   expiry_sms_opt_in: boolean
   daily_summary_email_opt_in: boolean
   daily_summary_sms_opt_in: boolean
+  search_digest_email_opt_in: boolean
   daily_email_cap: number
 }
 
@@ -105,6 +106,13 @@ export default function PharmacyNotificationSettingsPage() {
           sms={preferences.daily_summary_sms_opt_in}
           onEmail={checked => setPreferences({ ...preferences, daily_summary_email_opt_in: checked })}
           onSms={checked => setPreferences({ ...preferences, daily_summary_sms_opt_in: checked })}
+        />
+        <Choice
+          id="search-demand-email"
+          checked={preferences.search_digest_email_opt_in}
+          onChange={checked => setPreferences({ ...preferences, search_digest_email_opt_in: checked })}
+          label="Daily local medication-demand email"
+          detail="One email each day when patients near your pharmacy searched for catalogue medications. Includes both stocked and unmet demand."
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">

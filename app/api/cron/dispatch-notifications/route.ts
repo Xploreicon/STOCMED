@@ -16,14 +16,25 @@ export async function GET(request: NextRequest) {
     .in('status', ['queued', 'retry'])
     .lte('send_after', new Date().toISOString())
     .order('created_at')
-    .limit(50)
+    .limit(25)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const results = await Promise.allSettled((data || []).map((delivery: any) =>
-    delivery.channel === 'email'
-      ? deliverQueuedEmail(delivery)
-      : deliverQueuedSms(delivery),
-  ))
+  const results: PromiseSettledResult<unknown>[] = []
+  const deliveries = data || []
+  // Resend currently documents a shared five-request-per-second rate limit.
+  // Dispatch two at a time with a small gap so broadcasts cannot starve other
+  // notification traffic or create a sudden provider burst.
+  for (let index = 0; index < deliveries.length; index += 2) {
+    const batch = deliveries.slice(index, index + 2)
+    results.push(...await Promise.allSettled(batch.map((delivery: any) =>
+      delivery.channel === 'email'
+        ? deliverQueuedEmail(delivery)
+        : deliverQueuedSms(delivery),
+    )))
+    if (index + 2 < deliveries.length) {
+      await new Promise(resolve => setTimeout(resolve, 550))
+    }
+  }
   return NextResponse.json({
     processed: results.length,
     rejected: results.filter(result => result.status === 'rejected').length,

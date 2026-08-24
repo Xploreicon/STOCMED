@@ -17,6 +17,7 @@ const schema = z.object({
   expiry_sms_opt_in: z.boolean(),
   daily_summary_email_opt_in: z.boolean(),
   daily_summary_sms_opt_in: z.boolean(),
+  search_digest_email_opt_in: z.boolean(),
   daily_email_cap: z.number().int().min(1).max(100),
 })
 
@@ -35,7 +36,7 @@ export async function GET() {
   if (featureError) return NextResponse.json(featureError, { status: 403 })
   const { data, error } = await current.supabase
     .from('pharmacy_notification_preferences')
-    .select('owner_phone,owner_email,reservation_sms_opt_in,stock_digest_sms_opt_in,daily_sms_cap,low_stock_email_opt_in,low_stock_sms_opt_in,expiry_email_opt_in,expiry_sms_opt_in,daily_summary_email_opt_in,daily_summary_sms_opt_in,daily_email_cap')
+    .select('owner_phone,owner_email,reservation_sms_opt_in,stock_digest_sms_opt_in,daily_sms_cap,low_stock_email_opt_in,low_stock_sms_opt_in,expiry_email_opt_in,expiry_sms_opt_in,daily_summary_email_opt_in,daily_summary_sms_opt_in,search_digest_email_opt_in,daily_email_cap')
     .eq('pharmacy_id', current.pharmacy.id)
     .maybeSingle()
   if (error) return NextResponse.json({ error: 'Could not load notification settings' }, { status: 500 })
@@ -52,6 +53,7 @@ export async function GET() {
       expiry_sms_opt_in: false,
       daily_summary_email_opt_in: false,
       daily_summary_sms_opt_in: false,
+      search_digest_email_opt_in: false,
       daily_email_cap: 20,
     },
   })
