@@ -19,6 +19,10 @@ export async function GET(request: Request) {
     const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code)
     
     if (!error && session) {
+      if (type === 'recovery') {
+        return NextResponse.redirect(`${origin}/reset-password?verified=1`)
+      }
+
       // public.users is authoritative. User metadata is client-writable and
       // must never decide whether an OAuth identity is a pharmacy.
       const { data: dbUser, error: profileError } = await (supabase
@@ -34,10 +38,6 @@ export async function GET(request: Request) {
         (dbUser as any)?.role,
         requestedOnboardingRole,
       )
-
-      if (type === 'recovery') {
-        return NextResponse.redirect(`${origin}/update-password`)
-      }
 
       if (decision.kind !== 'existing_profile') {
         // A crafted pharmacy hint is rejected before any public profile or
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
   }
 
   if (type === 'recovery') {
-    return NextResponse.redirect(`${origin}/update-password`)
+    return NextResponse.redirect(`${origin}/reset-password?error=invalid_or_expired`)
   }
 
   // Fallback URL if no session is established

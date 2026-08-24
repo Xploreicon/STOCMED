@@ -15,6 +15,7 @@ export default function Login() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get('redirectTo') || null;
+  const passwordResetComplete = searchParams.get('password-reset') === 'success';
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{
     email?: string;
@@ -112,6 +113,11 @@ export default function Login() {
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {passwordResetComplete && (
+              <div role="status" className="rounded-button border border-success/20 bg-success/5 px-4 py-3 text-sm font-medium text-success">
+                Your password has been updated. Sign in with your new password.
+              </div>
+            )}
             {errors.general && (
               <div className="rounded-button border border-danger/20 bg-danger/5 px-4 py-3 text-sm text-danger font-medium">
                 {errors.general}

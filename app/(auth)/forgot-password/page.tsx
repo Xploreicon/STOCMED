@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ShieldCheck, KeyRound } from 'lucide-react';
+import { buildRecoveryRedirectUrl, RECOVERY_EMAIL_STORAGE_KEY } from '@/lib/auth/password-recovery';
 
 export default function ForgotPassword() {
   const router = useRouter();
@@ -15,7 +16,6 @@ export default function ForgotPassword() {
 
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -31,12 +31,12 @@ export default function ForgotPassword() {
     try {
       setSubmitting(true);
       setError(null);
-      setMessage(null);
 
+      const normalizedRecoveryEmail = normalizedEmail.toLowerCase();
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
-        normalizedEmail,
+        normalizedRecoveryEmail,
         {
-          redirectTo: `${window.location.origin}/auth-callback`,
+          redirectTo: buildRecoveryRedirectUrl(window.location.origin),
         }
       );
 
@@ -48,9 +48,8 @@ export default function ForgotPassword() {
         return;
       }
 
-      setMessage(
-        'If that email is registered, a reset link is on its way. Check your inbox and follow the instructions.'
-      );
+      window.sessionStorage.setItem(RECOVERY_EMAIL_STORAGE_KEY, normalizedRecoveryEmail);
+      router.push('/reset-password?sent=1');
     } catch (unknownError) {
       console.error('Unexpected reset error:', unknownError);
       setError('Something went wrong. Please try again in a moment.');
@@ -85,7 +84,7 @@ export default function ForgotPassword() {
             Secure account recovery.
           </h1>
           <p className="text-sm opacity-80 leading-relaxed">
-            We&apos;ll send a secure, time-limited link to your registered email address. Your account data remains protected throughout the process.
+            We&apos;ll send a secure, time-limited code to your registered email address. Your account data remains protected throughout the process.
           </p>
           <div className="flex items-center gap-2 text-sm opacity-70">
             <ShieldCheck className="h-4 w-4" />
@@ -118,7 +117,7 @@ export default function ForgotPassword() {
             <div>
               <h2 className="font-display text-2xl font-bold text-ink">Reset password</h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Enter the email address linked to your account and we&apos;ll send you a secure link to set a new password.
+                Enter the email address linked to your account and we&apos;ll send you a secure code to set a new password.
               </p>
             </div>
 
@@ -140,12 +139,6 @@ export default function ForgotPassword() {
                 />
               </div>
 
-              {message && (
-                <div className="rounded-md border border-success/20 bg-success/5 px-4 py-3 text-sm text-success shadow-sm">
-                  {message}
-                </div>
-              )}
-
               {error && (
                 <div className="rounded-md border border-danger bg-danger/5 px-4 py-3 text-sm text-danger shadow-sm">
                   {error}
@@ -158,7 +151,7 @@ export default function ForgotPassword() {
                 size="lg"
                 disabled={submitting}
               >
-                {submitting ? 'Sending reset link…' : 'Send reset link'}
+                {submitting ? 'Sending reset code…' : 'Send reset code'}
               </Button>
             </form>
 
