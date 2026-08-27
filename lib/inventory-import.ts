@@ -255,10 +255,13 @@ function validIsoDate(year: string, month: string, day: string): string {
 export function isSafeAutoMatch(match: Record<string, unknown> | null | undefined): boolean {
   if (!match) return false
   if (match.match_status && match.match_status !== 'matched') return false
-  return Number(match.confidence) >= 0.7
-    && match.strength_match === true
-    && match.form_match === true
-    && (!Array.isArray(match.mismatch_reasons) || match.mismatch_reasons.length === 0)
+  const mismatchReasons = Array.isArray(match.mismatch_reasons)
+    ? match.mismatch_reasons.filter((reason): reason is string => typeof reason === 'string')
+    : []
+  return Number(match.confidence) >= 0.9
+    && match.strength_match !== false
+    && match.form_match !== false
+    && !mismatchReasons.some((reason) => reason.includes('differs'))
 }
 
 export function matchConflictLabels(match: Record<string, unknown> | null | undefined): string[] {
@@ -297,7 +300,7 @@ export type ImportRouting = {
  *   A. Confident catalogue match → Medicine (linked to existing product)
  *   B. No confident match BUT the row looks like a medicine (has strength
  *      and/or dosage form, or CSV "type" column says medicine/drug/rx) →
- *      Medicine with `selected_product_id = 'create_new'` (self-enrichment)
+ *      Medicine with no catalogue selection, held for review/admin candidate
  *   C. No match AND no medicine signals → Store
  *
  * When the CSV explicitly says type=medicine, the row is NEVER routed to
@@ -321,7 +324,7 @@ export function determineImportRouting(
   if (['medicine', 'drug', 'rx'].includes(suppliedType)) {
     return {
       itemType: 'medicine',
-      selectedProductId: safeMatch ? String(bestMatch!.id) : 'create_new',
+      selectedProductId: safeMatch ? String(bestMatch!.id) : '',
     }
   }
 
@@ -330,9 +333,10 @@ export function determineImportRouting(
     return { itemType: 'medicine', selectedProductId: String(bestMatch!.id) }
   }
 
-  // Heuristic: row has strength or dosage-form → medicine (self-enrichment)
+  // Heuristic: row has strength or dosage-form → medicine review. Pharmacies
+  // never create shared catalogue identity from this route.
   if (hasMedicineSignals(mapped)) {
-    return { itemType: 'medicine', selectedProductId: 'create_new' }
+    return { itemType: 'medicine', selectedProductId: '' }
   }
 
   // Fall-through: no match, no signals → Store

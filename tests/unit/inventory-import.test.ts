@@ -179,22 +179,22 @@ describe('determineImportRouting', () => {
     expect(result.selectedProductId).toBe(safeMatch.id)
   })
 
-  it('routes unmatched row with strength/form to medicine with create_new', () => {
+  it('holds an unmatched medicine-signalled row without creating catalogue identity', () => {
     const result = determineImportRouting({ strength: '250mg', dosage_form: 'capsule' }, null)
     expect(result.itemType).toBe('medicine')
-    expect(result.selectedProductId).toBe('create_new')
+    expect(result.selectedProductId).toBe('')
   })
 
   it('routes unmatched row with only strength to medicine with create_new', () => {
     const result = determineImportRouting({ strength: '500mg' }, null)
     expect(result.itemType).toBe('medicine')
-    expect(result.selectedProductId).toBe('create_new')
+    expect(result.selectedProductId).toBe('')
   })
 
   it('routes unmatched row with only dosage_form to medicine with create_new', () => {
     const result = determineImportRouting({ dosage_form: 'syrup' }, null)
     expect(result.itemType).toBe('medicine')
-    expect(result.selectedProductId).toBe('create_new')
+    expect(result.selectedProductId).toBe('')
   })
 
   it('routes row with no match and no signals to store', () => {
@@ -206,7 +206,7 @@ describe('determineImportRouting', () => {
   it('NEVER routes explicit type=medicine to store, even without a match', () => {
     const result = determineImportRouting({ item_type: 'medicine' }, null)
     expect(result.itemType).toBe('medicine')
-    expect(result.selectedProductId).toBe('create_new')
+    expect(result.selectedProductId).toBe('')
   })
 
   it('routes explicit type=medicine with safe match to medicine with product ID', () => {
@@ -215,10 +215,10 @@ describe('determineImportRouting', () => {
     expect(result.selectedProductId).toBe(safeMatch.id)
   })
 
-  it('routes explicit type=medicine with unsafe match to create_new', () => {
+  it('holds explicit type=medicine with an unsafe match for review', () => {
     const result = determineImportRouting({ item_type: 'medicine' }, unsafeMatch)
     expect(result.itemType).toBe('medicine')
-    expect(result.selectedProductId).toBe('create_new')
+    expect(result.selectedProductId).toBe('')
   })
 
   it('routes explicit type=store to store regardless of match quality', () => {
@@ -233,12 +233,12 @@ describe('determineImportRouting', () => {
     expect(result.selectedProductId).toBe('')
   })
 
-  it('routes medicine signals with unsafe match to create_new', () => {
+  it('holds medicine signals with an unsafe match for review', () => {
     const result = determineImportRouting(
       { strength: '500mg', dosage_form: 'tablet' },
       unsafeMatch,
     )
     expect(result.itemType).toBe('medicine')
-    expect(result.selectedProductId).toBe('create_new')
+    expect(result.selectedProductId).toBe('')
   })
 })

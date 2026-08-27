@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
@@ -31,7 +31,6 @@ import {
   autoMapImportHeaders,
   hasMedicineSignals,
   INVENTORY_IMPORT_FIELDS,
-  isSafeAutoMatch,
   matchConflictLabels,
   parseImportDate,
 } from '@/lib/inventory-import';
@@ -47,7 +46,35 @@ type MatchProgress = {
   unmatched: number;
   review: number;
   errors: number;
+  aiStatus: string;
+  aiTotal: number;
+  aiProcessed: number;
+  aiResolved: number;
+  aiCandidates: number;
+  aiFailed: number;
+  aiInputTokens: number;
+  aiOutputTokens: number;
 };
+
+function progressFromJob(job: any): MatchProgress {
+  return {
+    jobId: job.id,
+    status: job.status,
+    total: Number(job.total_rows || 0),
+    matched: Number(job.matched_rows || 0),
+    unmatched: Number(job.unmatched_rows || 0),
+    review: Number(job.review_rows || 0),
+    errors: Number(job.error_rows || 0),
+    aiStatus: String(job.ai_status || 'idle'),
+    aiTotal: Number(job.ai_total_rows || 0),
+    aiProcessed: Number(job.ai_processed_rows || 0),
+    aiResolved: Number(job.ai_resolved_rows || 0),
+    aiCandidates: Number(job.ai_candidate_rows || 0),
+    aiFailed: Number(job.ai_failed_rows || 0),
+    aiInputTokens: Number(job.ai_input_tokens || 0),
+    aiOutputTokens: Number(job.ai_output_tokens || 0),
+  }
+}
 
 const CANONICAL_FIELDS = INVENTORY_IMPORT_FIELDS;
 
@@ -56,6 +83,9 @@ function previewValidation(row: any, source: ImportSource, dosageForms: string[]
   const warnings: string[] = []
   const isMedicine = source === 'quickbooks' || row.mapped.item_type === 'medicine'
   const tracksExpiry = isMedicine || row.mapped.tracks_expiry === true
+  if ((row.review_required || row.match_status === 'review') && row.review_resolved !== true) {
+    errors.push('Review this row before import')
+  }
   if (row.parse_error) {
     const rowLabel = row.source_row_number ? `Source row ${row.source_row_number}: ` : ''
     errors.push(`${rowLabel}spreadsheet columns are malformed (${row.parse_error})`)
@@ -65,15 +95,12 @@ function previewValidation(row: any, source: ImportSource, dosageForms: string[]
   if (!Number.isInteger(Number(row.mapped.quantity)) || Number(row.mapped.quantity) < 0) {
     errors.push('Stock quantity must be a non-negative whole number')
   }
-  // 'create_new' is a valid selection — it triggers self-enrichment
   if (isMedicine && !row.selected_product_id) errors.push('Select a catalogue match for medicine')
+  if (isMedicine && row.selected_product_id === 'create_new') errors.push('New catalogue products require admin approval')
   if (isMedicine && !row.mapped.strength) errors.push('Strength is missing or not mapped')
   if (isMedicine && !row.mapped.dosage_form) errors.push('Dosage form is missing or not mapped')
   else if (isMedicine && dosageForms.length && !dosageForms.includes(row.mapped.dosage_form)) {
     errors.push(`Dosage form "${row.mapped.dosage_form}" is not recognised. Select a valid form.`)
-  }
-  if (isMedicine && row.selected_product_id === 'create_new' && categories.length && !categories.includes(row.mapped.category)) {
-    errors.push(`Category "${row.mapped.category || ''}" is not recognised. Select a valid category.`)
   }
   if (!isMedicine && row.selected_product_id && row.selected_product_id !== 'create_new') errors.push('Store rows cannot use a catalogue product')
   // Warn when a medicine-looking item is routed to Store
@@ -81,17 +108,32 @@ function previewValidation(row: any, source: ImportSource, dosageForms: string[]
     warnings.push('This looks like a medicine. Store items do NOT appear in patient search.')
   }
   if (tracksExpiry) {
-    if (!row.mapped.batch_number) errors.push('Batch number is missing or not mapped')
-    if (!row.mapped.expiry_date) {
-      errors.push('Expiry date is missing, invalid, or not mapped')
-    } else {
+    const hasBatch = Boolean(String(row.mapped.batch_number || '').trim())
+    const hasExpiry = Boolean(row.mapped.expiry_date)
+    if (hasBatch !== hasExpiry) {
+      errors.push('Batch number and expiry date must be supplied together')
+    } else if (hasExpiry) {
       const parsedExpiry = parseImportDate(row.mapped.expiry_date)
       const expiry = parsedExpiry ? new Date(`${parsedExpiry}T23:59:59.999Z`) : null
       if (!expiry || expiry.getTime() <= Date.now()) errors.push(`Expiry date must be in the future (received "${row.mapped.expiry_date}")`)
       else if (expiry.getTime() < Date.now() + 90 * 24 * 60 * 60 * 1000) warnings.push('Expiry date is within 90 days')
+    } else {
+      warnings.push('Batch and expiry must be captured before dispensing')
     }
   }
   return { errors, warnings }
+}
+
+function initializeReviewRows(
+  results: any[],
+  source: ImportSource,
+  validDosageForms: string[],
+  validCategories: string[],
+) {
+  return results.map((row: any) => ({
+    ...row,
+    validation: previewValidation(row, source, validDosageForms, validCategories),
+  }))
 }
 
 export default function BulkImportWizard() {
@@ -124,6 +166,14 @@ export default function BulkImportWizard() {
     unmatched: 0,
     review: 0,
     errors: 0,
+    aiStatus: 'idle',
+    aiTotal: 0,
+    aiProcessed: 0,
+    aiResolved: 0,
+    aiCandidates: 0,
+    aiFailed: 0,
+    aiInputTokens: 0,
+    aiOutputTokens: 0,
   });
   
   // Progress state
@@ -136,6 +186,56 @@ export default function BulkImportWizard() {
   });
   const [isImporting, setIsImporting] = useState(false);
   const [showPriceAuthorization, setShowPriceAuthorization] = useState(false);
+
+  useEffect(() => {
+    const jobId = matchProgress.jobId
+    if (!jobId || !['queued', 'processing'].includes(matchProgress.aiStatus)) return
+
+    let cancelled = false
+    let refreshing = false
+    const refresh = async () => {
+      if (refreshing || cancelled) return
+      refreshing = true
+      try {
+        const progressResponse = await fetch(`/api/pharmacy/inventory/import/match?job_id=${encodeURIComponent(jobId)}`)
+        if (!progressResponse.ok || cancelled) return
+        const progressPayload = await progressResponse.json()
+        const nextProgress = progressFromJob(progressPayload.job)
+        setMatchProgress(nextProgress)
+
+        if (['completed', 'partial', 'failed'].includes(nextProgress.aiStatus)) {
+          const rowsResponse = await fetch(`/api/pharmacy/inventory/import/match?job_id=${encodeURIComponent(jobId)}&include_rows=true`)
+          if (!rowsResponse.ok || cancelled) return
+          const rowsPayload = await rowsResponse.json()
+          const validForms = rowsPayload.dosageForms || []
+          const validCategories = rowsPayload.categories || []
+          setDosageForms(validForms)
+          setCategories(validCategories)
+          const refreshedRows = initializeReviewRows(rowsPayload.matchedRows || [], source, validForms, validCategories)
+          setMatchedRows((currentRows) => {
+            const editedBySourceRow = new Map(
+              currentRows
+                .filter((row) => row.user_edited === true)
+                .map((row) => [row.source_row_number, row]),
+            )
+            return refreshedRows.map((row) => editedBySourceRow.get(row.source_row_number) || row)
+          })
+          setReviewFilter(Number(rowsPayload.job?.review_rows || 0) > 0 ? 'review' : 'all')
+        }
+      } catch (error) {
+        console.error('Could not refresh import structuring progress', error)
+      } finally {
+        refreshing = false
+      }
+    }
+    void refresh()
+    const timer = window.setInterval(() => void refresh(), 2_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [matchProgress.jobId, matchProgress.aiStatus, source])
 
   // File Upload Handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,6 +300,14 @@ export default function BulkImportWizard() {
       unmatched: 0,
       review: 0,
       errors: 0,
+      aiStatus: 'idle',
+      aiTotal: 0,
+      aiProcessed: 0,
+      aiResolved: 0,
+      aiCandidates: 0,
+      aiFailed: 0,
+      aiInputTokens: 0,
+      aiOutputTokens: 0,
     });
     setStep('matching');
 
@@ -218,33 +326,15 @@ export default function BulkImportWizard() {
       }
 
       const { job, matchedRows: results, dosageForms: validDosageForms, categories: validCategories } = await res.json();
-      setMatchProgress({
-        jobId: job.id,
-        status: job.status,
-        total: Number(job.total_rows || 0),
-        matched: Number(job.matched_rows || 0),
-        unmatched: Number(job.unmatched_rows || 0),
-        review: Number(job.review_rows || 0),
-        errors: Number(job.error_rows || 0),
-      });
+      setMatchProgress(progressFromJob(job));
       setDosageForms(validDosageForms || []);
       setCategories(validCategories || []);
-      // High-confidence catalogue matches are medicines; everything else is
-      // tenant-owned Store stock unless the spreadsheet supplied a type.
-      const initializedResults = results.map((row: any) => {
-        const bestMatch = row.matches && row.matches[0];
-        const itemType = source === 'quickbooks' ? 'medicine' : (row.mapped.item_type || (row.selected_product_id ? 'medicine' : 'store'));
-        // Use server-determined selected_product_id (which may be 'create_new')
-        const selectedId = source === 'quickbooks'
-          ? (isSafeAutoMatch(bestMatch) ? bestMatch.id : '')
-          : (row.selected_product_id || (itemType === 'medicine' && isSafeAutoMatch(bestMatch) ? bestMatch.id : row.selected_product_id || ''));
-        const initialized = {
-          ...row,
-          mapped: { ...row.mapped, item_type: itemType, tracks_expiry: itemType === 'medicine' || row.mapped.tracks_expiry },
-          selected_product_id: selectedId,
-        };
-        return { ...initialized, validation: previewValidation(initialized, source, validDosageForms, validCategories) };
-      });
+      const initializedResults = initializeReviewRows(
+        results,
+        source,
+        validDosageForms || [],
+        validCategories || [],
+      );
 
       setMatchedRows(initializedResults);
       setSelectedRows(new Set());
@@ -264,11 +354,13 @@ export default function BulkImportWizard() {
     setMatchedRows((rows) => rows.map((row, index) => {
       if (!indexes.includes(index)) return row
       const selectedProductId = itemType === 'medicine'
-        ? row.selected_product_id || (isSafeAutoMatch(row.matches?.[0]) ? row.matches[0].id : 'create_new')
+        ? row.selected_product_id || row.matches?.[0]?.id || ''
         : ''
       const updated = {
         ...row,
+        user_edited: true,
         selected_product_id: selectedProductId,
+        review_resolved: row.review_required ? true : row.review_resolved,
         mapped: {
           ...row.mapped,
           item_type: itemType,
@@ -286,10 +378,9 @@ export default function BulkImportWizard() {
     setIsImporting(true)
     const token = authorizedToken ?? getCachedSpToken('price_change')
 
-    // Check if any row has validation errors
-    const errorCount = matchedRows.filter(r => r.validation.errors.length > 0).length;
-    if (errorCount > 0) {
-      alert(`Resolve the validation errors in ${errorCount} row(s) before importing. No rows have been committed.`);
+    const committableCount = matchedRows.filter(row => row.validation.errors.length === 0).length
+    if (committableCount === 0) {
+      alert('No rows are ready to import yet. Resolve at least one review or validation flag.');
       commitLockRef.current = false
       setIsImporting(false)
       return;
@@ -301,7 +392,12 @@ export default function BulkImportWizard() {
       if (!importBatchIdRef.current) importBatchIdRef.current = crypto.randomUUID()
       const payloadRows = matchedRows.map(r => ({
         mapped: r.mapped,
-        selected_product_id: r.selected_product_id
+        selected_product_id: r.selected_product_id,
+        parse_error: r.parse_error,
+        source_row_number: r.source_row_number,
+        match_status: r.match_status,
+        review_required: r.review_required,
+        review_resolved: r.review_resolved,
       }));
       const requestBody = {
         matchedRows: payloadRows,
@@ -557,12 +653,47 @@ export default function BulkImportWizard() {
               </div>
               <Button
                 onClick={() => void handleCommitImport()}
-                disabled={isImporting || isValidating || matchedRows.some(row => row.validation.errors.length > 0) || (source === 'quickbooks' && matchedRows.some(row => !row.selected_product_id))}
+                disabled={isImporting || isValidating || matchedRows.every(row => row.validation.errors.length > 0)}
                 className="shadow-lg"
               >
-                {isImporting ? 'Importing…' : `Import ${matchProgress.matched.toLocaleString()} Items`}
+                {isImporting
+                  ? 'Importing…'
+                  : `Import ${matchedRows.filter(row => row.validation.errors.length === 0).length.toLocaleString()} Items`}
               </Button>
             </div>
+
+            {matchProgress.aiTotal > 0 && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4" aria-label="AI structuring progress">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    {['queued', 'processing'].includes(matchProgress.aiStatus)
+                      ? <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      : <Sparkles className="h-4 w-4 text-primary" />}
+                    <div>
+                      <div className="text-sm font-semibold text-ink">Residual drug-name structuring</div>
+                      <div className="text-xs text-ink-muted">
+                        Only review and strongly drug-like unmatched rows are sent; catalogue matching remains deterministic.
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-ink-muted">
+                    <div>{matchProgress.aiProcessed.toLocaleString()} / {matchProgress.aiTotal.toLocaleString()} rows</div>
+                    <div>{(matchProgress.aiInputTokens + matchProgress.aiOutputTokens).toLocaleString()} tokens</div>
+                  </div>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                  <div
+                    className="h-full bg-primary transition-all"
+                    style={{ width: `${matchProgress.aiTotal ? Math.round((matchProgress.aiProcessed / matchProgress.aiTotal) * 100) : 0}%` }}
+                  />
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-3 text-center text-xs">
+                  <div><strong className="block text-base text-success">{matchProgress.aiResolved.toLocaleString()}</strong>deterministic lift</div>
+                  <div><strong className="block text-base text-warning">{matchProgress.aiCandidates.toLocaleString()}</strong>admin candidates</div>
+                  <div><strong className="block text-base text-danger">{matchProgress.aiFailed.toLocaleString()}</strong>failed rows</div>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Import job results">
               {([
@@ -688,7 +819,7 @@ export default function BulkImportWizard() {
                                     value={dosageForms.includes(row.mapped.dosage_form) ? row.mapped.dosage_form : ''}
                                     onChange={(e) => setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
                                       if (candidateIndex !== index) return candidate
-                                      const updated = { ...candidate, mapped: { ...candidate.mapped, dosage_form: e.target.value } }
+                                      const updated = { ...candidate, user_edited: true, mapped: { ...candidate.mapped, dosage_form: e.target.value } }
                                       return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
                                     }))}
                                     className="w-[180px] rounded-md border border-border bg-white px-2 py-1.5 text-xs capitalize"
@@ -696,21 +827,6 @@ export default function BulkImportWizard() {
                                     <option value="">Select valid form</option>
                                     {dosageForms.map((form) => <option key={form} value={form}>{form}</option>)}
                                   </select>
-                                  {row.selected_product_id === 'create_new' && (
-                                    <select
-                                      aria-label={`Category for row ${index + 1}`}
-                                      value={categories.includes(row.mapped.category) ? row.mapped.category : ''}
-                                      onChange={(e) => setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
-                                        if (candidateIndex !== index) return candidate
-                                        const updated = { ...candidate, mapped: { ...candidate.mapped, category: e.target.value } }
-                                        return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
-                                      }))}
-                                      className="w-[180px] rounded-md border border-border bg-white px-2 py-1.5 text-xs"
-                                    >
-                                      <option value="">Select valid category</option>
-                                      {categories.map((category) => <option key={category} value={category}>{category}</option>)}
-                                    </select>
-                                  )}
                                 </div>
                               ) : (
                                 <div className="text-xs text-ink-muted capitalize">{row.mapped.dosage_form}</div>
@@ -750,7 +866,7 @@ export default function BulkImportWizard() {
                                     onChange={(e) => {
                                       setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
                                         if (candidateIndex !== index) return candidate
-                                        const updated = { ...candidate, mapped: { ...candidate.mapped, tracks_expiry: e.target.checked } }
+                                        const updated = { ...candidate, user_edited: true, mapped: { ...candidate.mapped, tracks_expiry: e.target.checked } }
                                         return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
                                       }))
                                     }}
@@ -767,7 +883,22 @@ export default function BulkImportWizard() {
                                   const val = e.target.value;
                                   setMatchedRows(prev => prev.map((r, i) => {
                                     if (i !== index) return r
-                                    const updated = { ...r, selected_product_id: val }
+                                    const selectedMatch = r.matches?.find((match: any) => match.id === val)
+                                    const updated = {
+                                      ...r,
+                                      user_edited: true,
+                                      selected_product_id: val,
+                                      review_resolved: r.review_required ? Boolean(val) : r.review_resolved,
+                                      mapped: selectedMatch ? {
+                                        ...r.mapped,
+                                        item_type: 'medicine',
+                                        tracks_expiry: true,
+                                        strength: selectedMatch.strength || r.mapped.strength,
+                                        dosage_form: selectedMatch.dosage_form || r.mapped.dosage_form,
+                                        brand_name: selectedMatch.brand_name || r.mapped.brand_name,
+                                        pack_size: selectedMatch.pack_size || r.mapped.pack_size,
+                                      } : r.mapped,
+                                    }
                                     return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
                                   }));
                                 }}
@@ -775,17 +906,16 @@ export default function BulkImportWizard() {
                                 className="w-[220px] px-2 py-1.5 border border-border rounded-md focus:ring-1 focus:ring-primary text-xs bg-white"
                               >
                                 <option value="">{row.mapped.item_type === 'store' ? 'Not added to catalogue' : 'Select a catalogue match'}</option>
-                                <option value="create_new">⚠️ MEDICINE — new catalogue product</option>
                                 {row.matches && row.matches.map((m: any) => (
                                   <option key={m.id} value={m.id} disabled={m.strength_match === false || m.form_match === false}>
                                     {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}, {m.dosage_form}) - {Math.round(m.confidence * 100)}%{matchConflictLabels(m).length ? ` - ${matchConflictLabels(m).join(', ')}` : ''}
                                   </option>
                                 ))}
                               </select>
-                              {row.selected_product_id === 'create_new' && (
+                              {row.tier === 'ai_candidate' && (
                                 <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-warning bg-warning/10 px-1.5 py-0.5 rounded">
                                   <Sparkles className="h-3 w-3" />
-                                  Creates unverified catalogue product
+                                  Candidate awaiting admin approval
                                 </div>
                               )}
                             </td>

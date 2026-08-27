@@ -110,22 +110,34 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    if (rowErrors.length) {
-      console.error('Import validation failed:', JSON.stringify(rowErrors))
-      return NextResponse.json(
-        { error: `Import validation failed on ${rowErrors.length} row(s); no rows were committed`, rowErrors },
-        { status: 422 }
-      )
-    }
+    const blockedIndexes = new Set(rowErrors.map((entry) => entry.row - 1))
+    const committableRows = body.matchedRows.filter((_: ImportRow, index: number) => !blockedIndexes.has(index))
+    const batchCaptureRequired = committableRows.filter((row: ImportRow) =>
+      row.mapped?.item_type !== 'store'
+      && !String(row.mapped?.batch_number || '').trim()
+    ).length
 
     if (body.validate_only === true) {
-      return NextResponse.json({ valid: true, rowErrors: [] })
+      return NextResponse.json({
+        valid: committableRows.length > 0,
+        committable_rows: committableRows.length,
+        blocked_rows: rowErrors.length,
+        batch_capture_required: batchCaptureRequired,
+        rowErrors,
+      }, { status: committableRows.length > 0 ? 200 : 422 })
+    }
+
+    if (committableRows.length === 0) {
+      return NextResponse.json(
+        { error: 'No rows are ready to import; resolve the review flags first', rowErrors },
+        { status: 422 },
+      )
     }
 
     const { data, error } = await supabase.rpc('import_inventory_file', {
       p_pharmacy_id: pharmacy.id,
       p_user_id: user.id,
-      p_rows: body.matchedRows,
+      p_rows: committableRows,
       p_import_id: importBatchId,
       p_sp_token: request.headers.get('x-sp-authorization'),
     })
@@ -152,15 +164,16 @@ export async function POST(request: NextRequest) {
 
     const imported = Number(data?.imported)
     const skipped = Number(data?.skipped)
-    const errors = Number(data?.errors)
-    const total = Number(data?.total)
+    const rpcErrors = Number(data?.errors)
+    const rpcTotal = Number(data?.total)
     if (
       data?.success !== true ||
       !Number.isInteger(imported) ||
       !Number.isInteger(skipped) ||
-      !Number.isInteger(errors) ||
-      !Number.isInteger(total) ||
-      imported + skipped + errors !== total
+      !Number.isInteger(rpcErrors) ||
+      !Number.isInteger(rpcTotal) ||
+      imported + skipped + rpcErrors !== rpcTotal ||
+      rpcTotal !== committableRows.length
     ) {
       console.error('import_inventory_file returned an unverifiable result:', data)
       return NextResponse.json(
@@ -169,7 +182,26 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json(data, { status: 201 })
+    const errors = rpcErrors + rowErrors.length
+    const total = body.matchedRows.length
+    if (imported + skipped + errors !== total) {
+      return NextResponse.json(
+        { error: 'Partial import result could not be reconciled' },
+        { status: 409 },
+      )
+    }
+
+    return NextResponse.json({
+      ...data,
+      imported,
+      skipped,
+      errors,
+      total,
+      partial: rowErrors.length > 0,
+      blocked_rows: rowErrors.length,
+      batch_capture_required: batchCaptureRequired,
+      rowErrors,
+    }, { status: 201 })
   } catch (error) {
     console.error('Import commit failed:', error)
     return NextResponse.json(

@@ -27,6 +27,19 @@ describe('inventory workbook parsing', () => {
       qty: 6,
       min_qty: 0,
       expiry: '2027-12-31',
+      source_fields: {
+        generic_name: 'ARENAX PLUS FORTE X6',
+        brand_name: '',
+        strength: '',
+        dosage_form: '',
+        category: '',
+        pack_size: '80/480MG',
+        sku: '8906035499340',
+        item_type: '',
+        tracks_expiry: false,
+        batch_number: '',
+        expiry_date: '2027-12-31',
+      },
     })
     expect(stagingRows[1].parse_error).toContain('column_shift')
   })

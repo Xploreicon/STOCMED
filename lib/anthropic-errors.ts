@@ -10,7 +10,7 @@ export type ClaudeFailureKind =
 
 export interface ClaudeRequestMetadata {
   model: string
-  operation: 'assistant' | 'triage'
+  operation: 'assistant' | 'triage' | 'import_structurer'
 }
 
 interface ClaudeErrorDetails extends ClaudeRequestMetadata {

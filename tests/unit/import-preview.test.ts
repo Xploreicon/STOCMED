@@ -25,7 +25,7 @@ describe('bulk import preview validation', () => {
     }])).toEqual([])
   })
 
-  it('requires catalogue, batch, and expiry for medicine rows', () => {
+  it('requires catalogue identity fields but allows batch capture after import', () => {
     const errors = validateRows([{
       mapped: {
         item_type: 'medicine',
@@ -37,13 +37,15 @@ describe('bulk import preview validation', () => {
     }])
     expect(errors[0].errors).toEqual(expect.arrayContaining([
       'Catalogue selection is required for medicine',
-      'Batch number is missing or not mapped',
-      'Expiry date is missing, invalid, or not mapped',
+    ]))
+    expect(errors[0].errors).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('Batch number'),
+      expect.stringContaining('Expiry date'),
     ]))
   })
 
-  it('requires batch and expiry for an expiry-tracked store row', () => {
-    const errors = validateRows([{
+  it('allows an expiry-tracked row to defer both batch fields', () => {
+    expect(validateRows([{
       mapped: {
         item_type: 'store',
         tracks_expiry: true,
@@ -52,19 +54,15 @@ describe('bulk import preview validation', () => {
         quantity: 12,
       },
       selected_product_id: '',
-    }])
-    expect(errors[0].errors).toEqual(expect.arrayContaining([
-      'Batch number is missing or not mapped',
-      'Expiry date is missing, invalid, or not mapped',
-    ]))
+    }])).toEqual([])
   })
 
-  it('accepts create_new as a valid catalogue selection for medicine rows', () => {
+  it('rejects pharmacy-side catalogue creation', () => {
     const futureDate = new Date()
     futureDate.setFullYear(futureDate.getFullYear() + 1)
     const expiryDate = futureDate.toISOString().slice(0, 10)
 
-    expect(validateRows([{
+    const errors = validateRows([{
       mapped: {
         item_type: 'medicine',
         generic_name: 'Chloroquine Phosphate',
@@ -76,7 +74,8 @@ describe('bulk import preview validation', () => {
         expiry_date: expiryDate,
       },
       selected_product_id: 'create_new',
-    }])).toEqual([])
+    }])
+    expect(errors[0].errors).toContain('New catalogue products require admin approval')
   })
 
   it('still requires strength and dosage_form for create_new medicine rows', () => {
@@ -101,7 +100,7 @@ describe('bulk import preview validation', () => {
     ]))
   })
 
-  it('reports controlled dosage form and category failures on their row', () => {
+  it('reports controlled dosage-form and admin-candidate failures on their row', () => {
     const futureDate = new Date()
     futureDate.setFullYear(futureDate.getFullYear() + 1)
     const errors = validateRows([{
@@ -126,9 +125,29 @@ describe('bulk import preview validation', () => {
       row: 1,
       errors: expect.arrayContaining([
         'Dosage form "Sachet" is not in the controlled list',
-        'Category "Unknown category" is not in the controlled list',
+        'New catalogue products require admin approval',
       ]),
     }])
+  })
+
+  it('blocks only the malformed row so valid neighbours remain committable', () => {
+    const rows = [
+      {
+        mapped: { item_type: 'store', generic_name: 'Custard', price: 2500, quantity: 4 },
+        selected_product_id: '',
+      },
+      {
+        source_row_number: 1054,
+        mapped: { item_type: 'store', generic_name: 'Bad price row', price: 0, quantity: 2 },
+        selected_product_id: '',
+      },
+      {
+        mapped: { item_type: 'store', generic_name: 'Milk', price: 1800, quantity: 6 },
+        selected_product_id: '',
+      },
+    ]
+
+    expect(validateRows(rows)).toEqual([{ row: 2, errors: ['Price must be greater than zero'] }])
   })
 })
 
@@ -185,7 +204,7 @@ describe('40-row fixture — 15 medicines / 25 store items', () => {
     }
   }
 
-  it('validates all 40 rows with 9 matched + 6 create_new medicines and 25 stores', () => {
+  it('keeps 34 rows committable while 6 unmatched medicines await admin catalogue approval', () => {
     const rows = [
       // 9 medicines with catalogue match
       ...MEDICINES.slice(0, 9).map((name) => buildMedicineRow(name, validUuid)),
@@ -196,7 +215,11 @@ describe('40-row fixture — 15 medicines / 25 store items', () => {
     ]
 
     const errors = validateRows(rows)
-    expect(errors).toEqual([])
+    expect(errors).toHaveLength(6)
+    expect(errors.map((entry) => entry.row)).toEqual([10, 11, 12, 13, 14, 15])
+    errors.forEach((entry) => {
+      expect(entry.errors).toContain('New catalogue products require admin approval')
+    })
   })
 
   it('counts exactly 15 medicines and 25 store items', () => {

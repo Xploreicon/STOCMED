@@ -54,7 +54,7 @@ describe('Real CSV import verification flow (Spirit Pharmacy context)', () => {
     { generic_name: 'Multivitamin Gummies 60s', brand_name: 'Wellwoman', item_type: 'store', strength: '', dosage_form: '', match: null },
   ]
 
-  it('routes the exact 40 CSV rows into 15 Medicine (9 catalogue match + 6 create_new) and 25 Store items', () => {
+  it('routes 9 catalogue matches and holds 6 unmatched medicines without creating products', () => {
     const routingResults = realCsvRows.map((row) => {
       const routing = determineImportRouting(row, row.match)
       return {
@@ -66,20 +66,20 @@ describe('Real CSV import verification flow (Spirit Pharmacy context)', () => {
     const medicines = routingResults.filter((r) => r.routing.itemType === 'medicine')
     const storeItems = routingResults.filter((r) => r.routing.itemType === 'store')
 
-    const matchedMedicines = medicines.filter((m) => m.routing.selectedProductId !== 'create_new')
-    const createNewMedicines = medicines.filter((m) => m.routing.selectedProductId === 'create_new')
+    const matchedMedicines = medicines.filter((m) => Boolean(m.routing.selectedProductId))
+    const heldMedicines = medicines.filter((m) => !m.routing.selectedProductId)
 
     expect(routingResults.length).toBe(40)
     expect(medicines.length).toBe(15)
     expect(storeItems.length).toBe(25)
     expect(matchedMedicines.length).toBe(9)
-    expect(createNewMedicines.length).toBe(6)
+    expect(heldMedicines.length).toBe(6)
   })
 
-  it('spot-checks the 6 newly created catalogue products to ensure generic_name, strength, and dosage_form integrity', () => {
-    const unverifiedCatalogueEntries = realCsvRows
+  it('preserves the six held medicine identities for structuring/admin review', () => {
+    const heldMedicineRows = realCsvRows
       .map((row) => ({ row, routing: determineImportRouting(row, row.match) }))
-      .filter((r) => r.routing.itemType === 'medicine' && r.routing.selectedProductId === 'create_new')
+      .filter((r) => r.routing.itemType === 'medicine' && !r.routing.selectedProductId)
       .map((r) => ({
         generic_name: r.row.generic_name,
         brand_name: r.row.brand_name,
@@ -87,31 +87,31 @@ describe('Real CSV import verification flow (Spirit Pharmacy context)', () => {
         dosage_form: r.row.dosage_form,
       }))
 
-    expect(unverifiedCatalogueEntries).toHaveLength(6)
+    expect(heldMedicineRows).toHaveLength(6)
 
     // Verify each has valid generic name, strength, and dosage form
-    unverifiedCatalogueEntries.forEach((entry) => {
+    heldMedicineRows.forEach((entry) => {
       expect(entry.generic_name).toBeTruthy()
       expect(entry.strength).toBeTruthy()
       expect(entry.dosage_form).toBeTruthy()
     })
 
     // Spot check individual entries
-    expect(unverifiedCatalogueEntries[0]).toEqual({
+    expect(heldMedicineRows[0]).toEqual({
       generic_name: 'Custom Compound Alpha',
       brand_name: 'Alpha-Rx',
       strength: '150mg',
       dosage_form: 'caplet',
     })
 
-    expect(unverifiedCatalogueEntries[1]).toEqual({
+    expect(heldMedicineRows[1]).toEqual({
       generic_name: 'Pediatric Oral Solution Beta',
       brand_name: 'BetaSyrup',
       strength: '5mg/5ml',
       dosage_form: 'syrup',
     })
 
-    expect(unverifiedCatalogueEntries[5]).toEqual({
+    expect(heldMedicineRows[5]).toEqual({
       generic_name: 'Extended Release Zeta',
       brand_name: 'ZetaXR',
       strength: '1000mg',

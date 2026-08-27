@@ -4,6 +4,7 @@ import {
   isKoboImportHeader,
   normalizeImportBarcode,
   normalizeImportProductName,
+  parseImportBoolean,
   parseImportDate,
   parseImportInteger,
   parseImportMoneyToKobo,
@@ -27,6 +28,7 @@ export type NormalizedImportStagingRow = {
   qty: number | null
   min_qty: number | null
   expiry: string | null
+  source_fields: Record<string, string | boolean>
   parse_error?: string
 }
 
@@ -104,6 +106,11 @@ function mappedValue(row: RawImportRow, mapping: Record<string, string>, key: st
   return header ? row[header] : undefined
 }
 
+function mappedText(row: RawImportRow, mapping: Record<string, string>, key: string): string {
+  const value = mappedValue(row, mapping, key)
+  return value === null || value === undefined ? '' : String(value).trim()
+}
+
 function addError(errors: string[], condition: boolean, code: string): void {
   if (condition && !errors.includes(code)) errors.push(code)
 }
@@ -147,6 +154,21 @@ export function normalizeInventoryRows(
         qty,
         min_qty: minQty,
         expiry,
+        source_fields: {
+          generic_name: rawName.trim(),
+          brand_name: mappedText(row, mapping, 'brand_name'),
+          strength: mappedText(row, mapping, 'strength'),
+          dosage_form: mappedText(row, mapping, 'dosage_form'),
+          category: mappedText(row, mapping, 'category'),
+          pack_size: mappedText(row, mapping, 'pack_size'),
+          sku: mappedText(row, mapping, 'sku'),
+          item_type: mappedText(row, mapping, 'item_type'),
+          tracks_expiry: mappedValue(row, mapping, 'tracks_expiry') !== undefined
+            ? parseImportBoolean(mappedValue(row, mapping, 'tracks_expiry'))
+            : false,
+          batch_number: mappedText(row, mapping, 'batch_number'),
+          expiry_date: expiry || '',
+        },
       }
       if (errors.length) normalized.parse_error = errors.join(',')
       return normalized
@@ -161,6 +183,7 @@ export function normalizeInventoryRows(
         qty: null,
         min_qty: null,
         expiry: null,
+        source_fields: {},
         parse_error: `row_parse_error: ${errorMessage(error)}`,
       }
     }

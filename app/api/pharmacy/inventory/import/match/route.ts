@@ -32,6 +32,16 @@ type StagingMatchRow = NormalizedImportStagingRow & {
   matched_catalogue_id: string | null
   confidence: number | string | null
   tier: string | null
+  source_fields: Record<string, unknown>
+  structure_status: 'idle' | 'queued' | 'processing' | 'structured' | 'failed' | 'skipped'
+  structured_is_drug: boolean | null
+  structured_ingredients: string[] | null
+  structured_ingredient_key: string | null
+  structured_strength: string | null
+  structured_dosage_form: string | null
+  structured_brand: string | null
+  structured_pack: string | null
+  structurer_confidence: number | string | null
 }
 
 type CatalogueProduct = {
@@ -56,12 +66,19 @@ type ImportJobProgress = {
   error_rows: number
   started_at: string | null
   completed_at: string | null
+  ai_status: string
+  ai_total_rows: number
+  ai_processed_rows: number
+  ai_resolved_rows: number
+  ai_candidate_rows: number
+  ai_failed_rows: number
+  ai_input_tokens: number
+  ai_output_tokens: number
+  ai_started_at: string | null
+  ai_completed_at: string | null
 }
 
-function mappedValue(row: RawImportRow, mapping: Record<string, string>, key: string): unknown {
-  const header = mapping[key]
-  return header ? row[header] : undefined
-}
+const JOB_SELECT = 'id,status,total_rows,parsed_rows,matched_rows,unmatched_rows,review_rows,error_rows,started_at,completed_at,ai_status,ai_total_rows,ai_processed_rows,ai_resolved_rows,ai_candidate_rows,ai_failed_rows,ai_input_tokens,ai_output_tokens,ai_started_at,ai_completed_at'
 
 function textValue(value: unknown): string {
   return value === null || value === undefined ? '' : String(value).trim()
@@ -99,7 +116,7 @@ async function fetchAllStagingRows(supabase: any, jobId: string, totalRows: numb
       const from = page * PAGE_SIZE
       return supabase
         .from('import_staging')
-        .select('id,source_row_number,raw_name,norm_name,barcode,cost_kobo,price_kobo,qty,min_qty,expiry,parse_error,match_status,matched_catalogue_id,confidence,tier')
+        .select('id,source_row_number,raw_name,norm_name,barcode,cost_kobo,price_kobo,qty,min_qty,expiry,parse_error,match_status,matched_catalogue_id,confidence,tier,source_fields,structure_status,structured_is_drug,structured_ingredients,structured_ingredient_key,structured_strength,structured_dosage_form,structured_brand,structured_pack,structurer_confidence')
         .eq('job_id', jobId)
         .order('source_row_number', { ascending: true })
         .range(from, Math.min(from + PAGE_SIZE - 1, totalRows - 1))
@@ -164,49 +181,56 @@ function buildMatch(product: CatalogueProduct, staging: StagingMatchRow, strengt
 }
 
 function buildReviewRows(
-  rawRows: RawImportRow[],
-  mapping: Record<string, string>,
   stagingRows: StagingMatchRow[],
   productsById: Map<string, CatalogueProduct>,
   dosageForms: string[],
   categories: string[],
 ) {
-  const rawBySourceRow = new Map(
-    rawRows.map((row) => [Number(row[IMPORT_ROW_NUMBER_KEY]), row]),
-  )
-
   return stagingRows.map((staging) => {
-    const rawRow = rawBySourceRow.get(staging.source_row_number)
-    if (!rawRow) throw new Error(`Source row ${staging.source_row_number} is missing from the request`)
-
-    const genericName = textValue(mappedValue(rawRow, mapping, 'name'))
-    const brandName = textValue(mappedValue(rawRow, mapping, 'brand_name'))
-    const strength = textValue(mappedValue(rawRow, mapping, 'strength'))
-    const suppliedDosageForm = textValue(mappedValue(rawRow, mapping, 'dosage_form'))
+    const source = staging.source_fields || {}
+    const genericName = textValue(source.generic_name) || staging.raw_name
+    const sourceBrand = textValue(source.brand_name)
+    const sourceStrength = textValue(source.strength)
+    const structuredStrength = textValue(staging.structured_strength)
+    const suppliedDosageForm = textValue(source.dosage_form) || textValue(staging.structured_dosage_form)
     const dosageForm = mapDosageForm(suppliedDosageForm, dosageForms).value
-    const suppliedCategory = textValue(mappedValue(rawRow, mapping, 'category'))
+    const suppliedCategory = textValue(source.category)
     const category = mapControlledValue(suppliedCategory || 'Others', categories).value
-    const packSize = textValue(mappedValue(rawRow, mapping, 'pack_size'))
-    const sku = textValue(mappedValue(rawRow, mapping, 'sku'))
-    const suppliedType = textValue(mappedValue(rawRow, mapping, 'item_type')).toLowerCase()
-    const suppliedTracksExpiry = mappedValue(rawRow, mapping, 'tracks_expiry') !== undefined
-      ? parseImportBoolean(mappedValue(rawRow, mapping, 'tracks_expiry'))
-      : false
+    const sourcePack = textValue(source.pack_size)
+    const sku = textValue(source.sku)
+    const suppliedType = textValue(source.item_type).toLowerCase()
+    const suppliedTracksExpiry = parseImportBoolean(source.tracks_expiry)
     const normalizedType = ['medicine', 'drug', 'rx'].includes(suppliedType)
       ? 'medicine'
       : ['store', 'grocery', 'frontstore'].includes(suppliedType) ? 'store' : ''
-    const batchNumber = textValue(mappedValue(rawRow, mapping, 'batch_number'))
-    const expiryDate = parseImportDate(mappedValue(rawRow, mapping, 'expiry_date'))
+    const batchNumber = textValue(source.batch_number)
+    const expiryDate = staging.expiry || parseImportDate(source.expiry_date)
     const product = staging.matched_catalogue_id
       ? productsById.get(staging.matched_catalogue_id)
       : undefined
-    const bestMatch = product ? buildMatch(product, staging, strength, dosageForm) : null
+    const matchedByDeterministicGate = staging.match_status === 'matched'
+      && Number(staging.confidence || 0) >= 0.9
+      && Boolean(product)
+    const strength = sourceStrength
+      || structuredStrength
+      || (matchedByDeterministicGate ? textValue(product?.strength) : '')
+    const finalDosageForm = dosageForm
+      || (matchedByDeterministicGate ? mapDosageForm(textValue(product?.dosage_form), dosageForms).value : '')
+    const brandName = sourceBrand || textValue(staging.structured_brand)
+      || (matchedByDeterministicGate ? textValue(product?.brand_name) : '')
+    const packSize = sourcePack || textValue(staging.structured_pack)
+      || (matchedByDeterministicGate ? textValue(product?.pack_size) : '')
+    const bestMatch = product ? buildMatch(product, staging, strength, finalDosageForm) : null
     const matches = bestMatch ? [bestMatch] : []
-    const routing = determineImportRouting({
-      item_type: normalizedType,
-      strength,
-      dosage_form: dosageForm,
-    }, bestMatch)
+    const routing = matchedByDeterministicGate
+      ? { itemType: 'medicine' as const, selectedProductId: product!.id }
+      : staging.tier === 'ai_candidate'
+        ? { itemType: 'medicine' as const, selectedProductId: '' }
+        : determineImportRouting({
+          item_type: normalizedType,
+          strength: sourceStrength || structuredStrength,
+          dosage_form: dosageForm,
+        }, bestMatch)
 
     return {
       parse_error: staging.parse_error || undefined,
@@ -214,11 +238,19 @@ function buildReviewRows(
       match_status: staging.match_status,
       tier: staging.tier,
       confidence: staging.confidence === null ? null : Number(staging.confidence),
+      review_required: staging.match_status === 'review',
+      review_resolved: false,
+      structure_status: staging.structure_status,
+      structured_is_drug: staging.structured_is_drug,
+      structured_ingredients: staging.structured_ingredients || [],
+      structurer_confidence: staging.structurer_confidence === null
+        ? null
+        : Number(staging.structurer_confidence),
       mapped: {
         generic_name: genericName,
         brand_name: brandName,
         strength,
-        dosage_form: dosageForm,
+        dosage_form: finalDosageForm,
         category,
         pack_size: packSize,
         sku,
@@ -253,15 +285,37 @@ export async function GET(request: NextRequest) {
     const context = await authenticatedContext()
     if (context.response) return context.response
     const jobId = request.nextUrl.searchParams.get('job_id') || ''
+    const includeRows = request.nextUrl.searchParams.get('include_rows') === 'true'
     if (!UUID_PATTERN.test(jobId)) return NextResponse.json({ error: 'A valid job_id is required' }, { status: 400 })
     const { data: job, error } = await context.supabase
       .from('import_jobs')
-      .select('id,status,total_rows,parsed_rows,matched_rows,unmatched_rows,review_rows,error_rows,started_at,completed_at')
+      .select(JOB_SELECT)
       .eq('id', jobId)
       .maybeSingle()
     if (error) return NextResponse.json({ error: `Could not load import progress: ${error.message}` }, { status: 500 })
     if (!job) return NextResponse.json({ error: 'Import job not found' }, { status: 404 })
-    return NextResponse.json({ job })
+    if (!includeRows) return NextResponse.json({ job })
+
+    const [stagingRows, dosageFormResult, categoryResult] = await Promise.all([
+      fetchAllStagingRows(context.supabase, jobId, Number(job.total_rows || 0)),
+      context.supabase.from('dosage_forms').select('name').order('name'),
+      context.supabase.from('product_categories').select('name').order('name'),
+    ])
+    if (dosageFormResult.error || categoryResult.error) {
+      throw new Error(`Could not load controlled product values: ${dosageFormResult.error?.message || categoryResult.error?.message}`)
+    }
+    const productsById = await fetchProductsById(
+      context.supabase,
+      stagingRows.flatMap((row) => row.matched_catalogue_id ? [row.matched_catalogue_id] : []),
+    )
+    const dosageForms = (dosageFormResult.data || []).map((entry: { name: string }) => entry.name)
+    const categories = (categoryResult.data || []).map((entry: { name: string }) => entry.name)
+    return NextResponse.json({
+      job,
+      matchedRows: buildReviewRows(stagingRows, productsById, dosageForms, categories),
+      dosageForms,
+      categories,
+    })
   } catch (error) {
     console.error('Import progress failed:', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not load import progress' }, { status: 500 })
@@ -309,10 +363,15 @@ export async function POST(request: NextRequest) {
       throw new Error(`Catalogue matching failed: ${matchError.message}`)
     }
 
+    const { data: aiQueue, error: aiQueueError } = await supabase.rpc('enqueue_import_ai_residual', {
+      p_job_id: jobId,
+    })
+    if (aiQueueError) throw new Error(`Could not queue residual structuring: ${aiQueueError.message}`)
+
     const [jobResult, dosageFormResult, categoryResult] = await Promise.all([
       supabase
         .from('import_jobs')
-        .select('id,status,total_rows,parsed_rows,matched_rows,unmatched_rows,review_rows,error_rows,started_at,completed_at')
+        .select(JOB_SELECT)
         .eq('id', jobId)
         .single(),
       supabase.from('dosage_forms').select('name').order('name'),
@@ -331,11 +390,11 @@ export async function POST(request: NextRequest) {
     )
     const dosageForms = (dosageFormResult.data || []).map((entry: { name: string }) => entry.name)
     const categories = (categoryResult.data || []).map((entry: { name: string }) => entry.name)
-    const matchedRows = buildReviewRows(rawRows, mapping, stagingRows, productsById, dosageForms, categories)
+    const matchedRows = buildReviewRows(stagingRows, productsById, dosageForms, categories)
     const durationMs = Math.round((performance.now() - requestStartedAt) * 1000) / 1000
 
     return NextResponse.json(
-      { job, matchResult, matchedRows, dosageForms, categories, durationMs },
+      { job, matchResult, aiQueue, matchedRows, dosageForms, categories, durationMs },
       { headers: { 'Server-Timing': `import-match;dur=${durationMs}` } },
     )
   } catch (error) {
