@@ -889,6 +889,18 @@ BEGIN
           structurer_confidence = EXCLUDED.structurer_confidence,
           updated_at = clock_timestamp();
       END IF;
+    ELSE
+      -- A fuzzy name suggestion can still be an FMCG row. Once the structurer
+      -- identifies it as a non-drug, clear that suggestion and route it to
+      -- Store instead of leaving it in the medicine review queue.
+      UPDATE public.import_staging
+      SET
+        match_status = 'unmatched',
+        matched_catalogue_id = NULL,
+        confidence = NULL,
+        tier = NULL,
+        updated_at = clock_timestamp()
+      WHERE id = v_queue.staging_id;
     END IF;
 
     UPDATE public.import_ai_queue
