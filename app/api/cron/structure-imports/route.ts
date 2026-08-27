@@ -29,6 +29,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  if (process.env.AI_PROCESSING_PRIVACY_DISCLOSURE_LIVE !== 'true') {
+    return NextResponse.json(
+      { error: 'AI inventory structuring is disabled until the privacy disclosure is confirmed live' },
+      { status: 503 },
+    )
+  }
+
   const admin = getAdminClient() as any
   if (!admin) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
 
