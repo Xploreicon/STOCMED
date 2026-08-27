@@ -269,6 +269,124 @@ AS $$
   );
 $$;
 
+CREATE OR REPLACE FUNCTION public.normalize_import_ai_dosage_form(p_value TEXT)
+RETURNS TEXT
+LANGUAGE sql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+  SELECT CASE
+    WHEN NULLIF(BTRIM(p_value), '') IS NULL THEN NULL
+    WHEN LOWER(p_value) ~ '(caplet|tablet|(^|[^a-z])tab([^a-z]|$))' THEN 'tablet'
+    WHEN LOWER(p_value) ~ '(capsule|(^|[^a-z])cap([^a-z]|$))' THEN 'capsule'
+    WHEN LOWER(p_value) LIKE '%suspension%' THEN 'suspension'
+    WHEN LOWER(p_value) LIKE '%syrup%' THEN 'syrup'
+    WHEN LOWER(p_value) LIKE '%elixir%' THEN 'elixir'
+    WHEN LOWER(p_value) LIKE '%solution%' THEN 'solution'
+    WHEN LOWER(p_value) LIKE '%injection%' OR LOWER(p_value) LIKE '%injectable%' THEN 'injection'
+    WHEN LOWER(p_value) LIKE '%cream%' THEN 'cream'
+    WHEN LOWER(p_value) LIKE '%ointment%' THEN 'ointment'
+    WHEN LOWER(p_value) LIKE '%gel%' THEN 'gel'
+    WHEN LOWER(p_value) LIKE '%drop%' THEN 'drops'
+    WHEN LOWER(p_value) LIKE '%suppositor%' THEN 'suppository'
+    WHEN LOWER(p_value) LIKE '%inhal%' THEN 'inhalation'
+    ELSE REGEXP_REPLACE(LOWER(BTRIM(p_value)), '[^a-z0-9]+', '', 'g')
+  END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.import_ai_strength_is_source_grounded(
+  p_raw_name TEXT,
+  p_source_fields JSONB,
+  p_structured_strength TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+DECLARE
+  v_source TEXT := LOWER(
+    COALESCE(p_raw_name, '') || ' '
+    || COALESCE(p_source_fields->>'strength', '') || ' '
+    || COALESCE(p_source_fields->>'pack_size', '')
+  );
+  v_structured TEXT := LOWER(COALESCE(p_structured_strength, ''));
+  v_token TEXT;
+BEGIN
+  v_source := REPLACE(REPLACE(REPLACE(v_source, 'µg', 'mcg'), 'μg', 'mcg'), 'ug', 'mcg');
+  v_structured := REPLACE(REPLACE(REPLACE(v_structured, 'µg', 'mcg'), 'μg', 'mcg'), 'ug', 'mcg');
+
+  IF NULLIF(BTRIM(v_structured), '') IS NULL THEN RETURN FALSE; END IF;
+
+  FOR v_token IN
+    SELECT DISTINCT match[1]
+    FROM REGEXP_MATCHES(v_structured, '([0-9]+([.][0-9]+)?)', 'g') AS match
+  LOOP
+    IF v_source !~ (
+      '(^|[^0-9.])'
+      || REGEXP_REPLACE(v_token, '[.]', '\\.', 'g')
+      || '([^0-9.]|$)'
+    ) THEN
+      RETURN FALSE;
+    END IF;
+  END LOOP;
+
+  FOR v_token IN
+    SELECT DISTINCT match[1]
+    FROM REGEXP_MATCHES(v_structured, '(mcg|mg|kg|g|ml|cl|l|iu|units?|%)', 'g') AS match
+  LOOP
+    IF v_source !~ (
+      '[0-9]+([.][0-9]+)?'
+      || '([[:space:]]*[/;,+-][[:space:]]*[0-9]+([.][0-9]+)?)*'
+      || '[[:space:]]*' || v_token || '([^a-z]|$)'
+    ) THEN
+      RETURN FALSE;
+    END IF;
+  END LOOP;
+
+  RETURN TRUE;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.import_ai_form_is_source_grounded(
+  p_raw_name TEXT,
+  p_source_fields JSONB,
+  p_structured_form TEXT
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+IMMUTABLE
+PARALLEL SAFE
+SET search_path = ''
+AS $$
+DECLARE
+  v_source TEXT := LOWER(
+    COALESCE(p_raw_name, '') || ' '
+    || COALESCE(p_source_fields->>'dosage_form', '')
+  );
+  v_form TEXT := public.normalize_import_ai_dosage_form(p_structured_form);
+BEGIN
+  RETURN CASE v_form
+    WHEN 'tablet' THEN v_source ~ '(^|[^a-z])(tablet|tablets|tab|tabs|caplet|caplets)([^a-z]|$)'
+    WHEN 'capsule' THEN v_source ~ '(^|[^a-z])(capsule|capsules|cap|caps)([^a-z]|$)'
+    WHEN 'suspension' THEN v_source ~ '(^|[^a-z])(suspension|susp)([^a-z]|$)'
+    WHEN 'syrup' THEN v_source ~ '(^|[^a-z])(syrup|syr)([^a-z]|$)'
+    WHEN 'elixir' THEN v_source ~ '(^|[^a-z])elixir([^a-z]|$)'
+    WHEN 'solution' THEN v_source ~ '(^|[^a-z])(solution|soln)([^a-z]|$)'
+    WHEN 'injection' THEN v_source ~ '(^|[^a-z])(injection|injectable|inj)([^a-z]|$)'
+    WHEN 'cream' THEN v_source ~ '(^|[^a-z])cream([^a-z]|$)'
+    WHEN 'ointment' THEN v_source ~ '(^|[^a-z])(ointment|oint)([^a-z]|$)'
+    WHEN 'gel' THEN v_source ~ '(^|[^a-z])gel([^a-z]|$)'
+    WHEN 'drops' THEN v_source ~ '(^|[^a-z])(drop|drops)([^a-z]|$)'
+    WHEN 'suppository' THEN v_source ~ '(^|[^a-z])(suppository|suppositories)([^a-z]|$)'
+    WHEN 'inhalation' THEN v_source ~ '(^|[^a-z])(inhalation|inhaler)([^a-z]|$)'
+    ELSE FALSE
+  END;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.import_row_looks_drug_like(
   p_raw_name TEXT,
   p_source_fields JSONB DEFAULT '{}'::JSONB
@@ -295,10 +413,16 @@ $$;
 REVOKE ALL ON FUNCTION public.normalize_import_ai_ingredient_key(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.normalize_import_ai_strength_key(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.normalize_import_ai_brand_key(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.normalize_import_ai_dosage_form(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.import_ai_strength_is_source_grounded(TEXT, JSONB, TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.import_ai_form_is_source_grounded(TEXT, JSONB, TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.import_row_looks_drug_like(TEXT, JSONB) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.normalize_import_ai_ingredient_key(TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.normalize_import_ai_strength_key(TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.normalize_import_ai_brand_key(TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.normalize_import_ai_dosage_form(TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.import_ai_strength_is_source_grounded(TEXT, JSONB, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.import_ai_form_is_source_grounded(TEXT, JSONB, TEXT) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.import_row_looks_drug_like(TEXT, JSONB) TO authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION public.enqueue_import_ai_residual(p_job_id UUID)
@@ -424,13 +548,13 @@ BEGIN
 
   WITH queue_counts AS (
     SELECT
-      job_id,
+      queue.job_id,
       COUNT(*)::INTEGER AS total_rows,
-      COUNT(*) FILTER (WHERE status IN ('completed', 'failed'))::INTEGER AS processed_rows,
-      COUNT(*) FILTER (WHERE status = 'failed')::INTEGER AS failed_rows,
-      COUNT(*) FILTER (WHERE status IN ('queued', 'processing'))::INTEGER AS remaining_rows
-    FROM public.import_ai_queue
-    GROUP BY job_id
+      COUNT(*) FILTER (WHERE queue.status IN ('completed', 'failed'))::INTEGER AS processed_rows,
+      COUNT(*) FILTER (WHERE queue.status = 'failed')::INTEGER AS failed_rows,
+      COUNT(*) FILTER (WHERE queue.status IN ('queued', 'processing'))::INTEGER AS remaining_rows
+    FROM public.import_ai_queue AS queue
+    GROUP BY queue.job_id
   )
   UPDATE public.import_jobs AS job
   SET
@@ -536,6 +660,8 @@ DECLARE
   v_strength_key TEXT;
   v_form TEXT;
   v_form_key TEXT;
+  v_strength_grounded BOOLEAN;
+  v_form_grounded BOOLEAN;
   v_brand TEXT;
   v_brand_key TEXT;
   v_pack TEXT;
@@ -603,7 +729,17 @@ BEGIN
     v_strength := NULLIF(BTRIM(v_result->>'strength'), '');
     v_strength_key := public.normalize_import_ai_strength_key(v_strength);
     v_form := NULLIF(BTRIM(v_result->>'dosage_form'), '');
-    v_form_key := public.normalize_dosage_form(v_form);
+    v_form_key := public.normalize_import_ai_dosage_form(v_form);
+    v_strength_grounded := public.import_ai_strength_is_source_grounded(
+      v_staging.raw_name,
+      v_staging.source_fields,
+      v_strength
+    );
+    v_form_grounded := public.import_ai_form_is_source_grounded(
+      v_staging.raw_name,
+      v_staging.source_fields,
+      v_form
+    );
     v_brand := NULLIF(BTRIM(v_result->>'brand'), '');
     v_brand_key := public.normalize_import_ai_brand_key(v_brand);
     v_pack := NULLIF(BTRIM(v_result->>'pack'), '');
@@ -646,7 +782,7 @@ BEGIN
         FROM public.products AS product
         WHERE public.normalize_import_ai_ingredient_key(product.generic_name) = v_ingredient_key
           AND public.normalize_import_ai_strength_key(product.strength) = v_strength_key
-          AND public.normalize_dosage_form(product.dosage_form) = v_form_key
+          AND public.normalize_import_ai_dosage_form(product.dosage_form) = v_form_key
       ), acceptable AS (
         SELECT *
         FROM identity_candidates
@@ -660,7 +796,9 @@ BEGIN
       FROM acceptable;
 
       v_acceptable_count := CASE
-        WHEN v_structurer_confidence >= 0.90 THEN v_identity_match_count
+        WHEN v_structurer_confidence >= 0.90
+          AND v_strength_grounded
+          AND v_form_grounded THEN v_identity_match_count
         ELSE 0
       END;
     END IF;
@@ -702,7 +840,8 @@ BEGIN
         confidence = CASE WHEN v_acceptable_count > 1 THEN 0.8900 ELSE NULL END,
         tier = CASE
           WHEN v_identity_match_count > 0 THEN 'structured_review'
-          WHEN v_ingredient_key IS NOT NULL
+          WHEN v_structurer_confidence >= 0.90
+            AND v_ingredient_key IS NOT NULL
             AND v_strength_key IS NOT NULL
             AND v_form_key IS NOT NULL THEN 'ai_candidate'
           ELSE 'structured_review'
@@ -711,6 +850,7 @@ BEGIN
       WHERE id = v_queue.staging_id;
 
       IF v_identity_match_count = 0
+         AND v_structurer_confidence >= 0.90
          AND v_ingredient_key IS NOT NULL
          AND v_strength_key IS NOT NULL
          AND v_form_key IS NOT NULL THEN

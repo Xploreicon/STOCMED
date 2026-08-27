@@ -32,9 +32,15 @@ Rules:
 2. Do not substitute a similar ingredient. Preserve salts, combinations, strengths, and dosage forms when present.
 3. A familiar brand may be expanded only when you are confident of its marketed active ingredients. Otherwise keep ingredients empty and use a lower confidence.
 4. Source fields can be mislabeled by the POS. A value such as "80/480MG" in source_pack may be strength evidence, not a pack count.
-5. Output this exact top-level shape: {"rows":[...]}. No markdown or explanation.`
+5. Never silently change a visible unit or replace a visible combination strength with a different formulation. Preserve the visible value or lower confidence below 0.90 when it cannot be safely aligned.
+6. When any ingredient, strength, or dosage form is inferred solely from a brand and is not visible in the supplied row, confidence must be below 0.90. A brand can have multiple marketed strengths or forms.
+7. Example: ARENAX PLUS FORTE X6 is artemether + lumefantrine, 80 mg; 480 mg, tablet, brand Arenax Plus Forte, pack 6. Because strength and form are inferred from the brand rather than printed in that row, confidence must remain below 0.90.
+8. Output this exact top-level shape: {"rows":[...]}. No markdown or explanation.`
 
-const nullableText = z.string().trim().min(1).max(160).nullable()
+const nullableText = z.preprocess(
+  (value) => typeof value === 'number' && Number.isFinite(value) ? String(value) : value,
+  z.string().trim().min(1).max(160).nullable(),
+)
 
 const structuredRowSchema = z.object({
   id: z.string().uuid(),

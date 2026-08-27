@@ -55,6 +55,23 @@ describe('import AI structurer response boundary', () => {
       .toThrow('unexpected')
   })
 
+  it('losslessly normalizes numeric pack counts to text', () => {
+    const [row] = parseImportStructureResponse(JSON.stringify({
+      rows: [{
+        id: firstId,
+        is_drug: true,
+        ingredients: ['paracetamol'],
+        strength: '500 mg',
+        dosage_form: 'tablet',
+        brand: null,
+        pack: 24,
+        confidence: 0.95,
+      }],
+    }), [firstId])
+
+    expect(row.pack).toBe('24')
+  })
+
   it('uses the gated batch size and auto-accept threshold', () => {
     expect(IMPORT_STRUCTURER_BATCH_SIZE).toBe(25)
     expect(IMPORT_STRUCTURER_AUTO_ACCEPT_THRESHOLD).toBe(0.9)
