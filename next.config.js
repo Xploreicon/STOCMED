@@ -45,8 +45,8 @@ const nextConfig = {
             value: [
               "default-src 'self';",
               "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sentry.io https://ingest.sentry.io;",
-              "style-src 'self' 'unsafe-inline';",
-              "font-src 'self' data:;",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;",
+              "font-src 'self' data: https://fonts.gstatic.com;",
               "img-src 'self' data: blob: https:;",
               "connect-src 'self' https://auth.askstocmed.com wss://auth.askstocmed.com https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://ingest.sentry.io;",
               "worker-src 'self' blob:;",

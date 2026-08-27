@@ -30,36 +30,36 @@ import {
 import {
   autoMapImportHeaders,
   hasMedicineSignals,
+  INVENTORY_IMPORT_FIELDS,
   isSafeAutoMatch,
   matchConflictLabels,
   parseImportDate,
 } from '@/lib/inventory-import';
 
-type Step = 'upload' | 'mapping' | 'matching' | 'progress' | 'summary';
+type Step = 'upload' | 'mapping' | 'matching' | 'review' | 'progress' | 'summary';
 type ImportSource = 'stocmed' | 'quickbooks';
 
-const CANONICAL_FIELDS = [
-  { key: 'name', label: 'Item / Generic Name', required: true, synonyms: ['name', 'generic name', 'drug name', 'medication', 'product'] },
-  { key: 'item_type', label: 'Type', required: false, synonyms: ['type', 'department', 'item type', 'product type'] },
-  { key: 'tracks_expiry', label: 'Tracks Expiry', required: false, synonyms: ['tracks expiry', 'expiry tracked', 'perishable'] },
-  { key: 'brand_name', label: 'Brand Name', required: false, synonyms: ['brand', 'brand name', 'trade name'] },
-  { key: 'strength', label: 'Strength', required: false, synonyms: ['strength', 'dosage strength', 'mg', 'g', 'ml'] },
-  { key: 'dosage_form', label: 'Dosage Form', required: false, synonyms: ['form', 'dosage form'] },
-  { key: 'category', label: 'Category', required: false, synonyms: ['category', 'class', 'group'] },
-  { key: 'pack_size', label: 'Pack Size', required: false, synonyms: ['pack', 'pack size', 'packaging'] },
-  { key: 'sku', label: 'SKU / Barcode', required: false, synonyms: ['sku', 'barcode', 'product sku'] },
-  { key: 'unit_cost', label: 'Unit Cost (₦)', required: false, synonyms: ['cost', 'unit cost', 'purchase cost'] },
-  { key: 'price', label: 'Selling Price (₦)', required: true, synonyms: ['price', 'selling price', 'rate', 'unit price'] },
-  { key: 'quantity', label: 'Opening Qty', required: true, synonyms: ['quantity', 'qty', 'stock', 'opening qty', 'count'] },
-  { key: 'batch_number', label: 'Batch Number', required: false, synonyms: ['batch', 'batch no', 'batch number', 'lot'] },
-  { key: 'expiry_date', label: 'Expiry Date', required: false, synonyms: ['expiry', 'exp', 'expiry date', 'exp date'] },
-];
+type MatchProgress = {
+  jobId: string | null;
+  status: string;
+  total: number;
+  matched: number;
+  unmatched: number;
+  review: number;
+  errors: number;
+};
+
+const CANONICAL_FIELDS = INVENTORY_IMPORT_FIELDS;
 
 function previewValidation(row: any, source: ImportSource, dosageForms: string[] = [], categories: string[] = []) {
   const errors: string[] = []
   const warnings: string[] = []
   const isMedicine = source === 'quickbooks' || row.mapped.item_type === 'medicine'
   const tracksExpiry = isMedicine || row.mapped.tracks_expiry === true
+  if (row.parse_error) {
+    const rowLabel = row.source_row_number ? `Source row ${row.source_row_number}: ` : ''
+    errors.push(`${rowLabel}spreadsheet columns are malformed (${row.parse_error})`)
+  }
   if (!row.mapped.generic_name) errors.push('Item name is required')
   if (!row.mapped.price || Number(row.mapped.price) <= 0) errors.push('Price must be greater than ₦0')
   if (!Number.isInteger(Number(row.mapped.quantity)) || Number(row.mapped.quantity) < 0) {
@@ -115,6 +115,16 @@ export default function BulkImportWizard() {
   const [bulkCategory, setBulkCategory] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState<'review' | 'matched' | 'unmatched' | 'all'>('review');
+  const [matchProgress, setMatchProgress] = useState<MatchProgress>({
+    jobId: null,
+    status: 'idle',
+    total: 0,
+    matched: 0,
+    unmatched: 0,
+    review: 0,
+    errors: 0,
+  });
   
   // Progress state
   const [importProgress, setImportProgress] = useState(0);
@@ -151,12 +161,12 @@ export default function BulkImportWizard() {
         return;
       }
 
-      const { headers, rows } = await res.json();
+      const { headers, rows, suggestedMapping } = await res.json();
       setHeaders(headers);
       setRawRows(rows);
       
       // Run smart auto-mapping
-      const initialMapping = autoMapImportHeaders(headers, CANONICAL_FIELDS);
+      const initialMapping = suggestedMapping || autoMapImportHeaders(headers, CANONICAL_FIELDS);
       setMapping(initialMapping);
       setStep('mapping');
     } catch (err) {
@@ -182,6 +192,15 @@ export default function BulkImportWizard() {
     }
 
     setIsValidating(true);
+    setMatchProgress({
+      jobId: null,
+      status: 'staging',
+      total: rawRows.length,
+      matched: 0,
+      unmatched: 0,
+      review: 0,
+      errors: 0,
+    });
     setStep('matching');
 
     try {
@@ -198,7 +217,16 @@ export default function BulkImportWizard() {
         return;
       }
 
-      const { matchedRows: results, dosageForms: validDosageForms, categories: validCategories } = await res.json();
+      const { job, matchedRows: results, dosageForms: validDosageForms, categories: validCategories } = await res.json();
+      setMatchProgress({
+        jobId: job.id,
+        status: job.status,
+        total: Number(job.total_rows || 0),
+        matched: Number(job.matched_rows || 0),
+        unmatched: Number(job.unmatched_rows || 0),
+        review: Number(job.review_rows || 0),
+        errors: Number(job.error_rows || 0),
+      });
       setDosageForms(validDosageForms || []);
       setCategories(validCategories || []);
       // High-confidence catalogue matches are medicines; everything else is
@@ -220,6 +248,9 @@ export default function BulkImportWizard() {
 
       setMatchedRows(initializedResults);
       setSelectedRows(new Set());
+      setReviewFilter(Number(job.review_rows || 0) > 0 ? 'review' : 'all');
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      setStep('review');
     } catch (err) {
       console.error(err);
       alert('Error during matching stage.');
@@ -344,7 +375,7 @@ export default function BulkImportWizard() {
       else alert(err.message || 'Error executing import transaction');
       commitLockRef.current = false
       setIsImporting(false);
-      setStep('matching');
+      setStep('review');
     }
   };
 
@@ -358,7 +389,7 @@ export default function BulkImportWizard() {
             Back to Inventory
           </Link>
           <div className="text-xs font-semibold uppercase tracking-wider text-ink-light">
-            Step {step === 'upload' ? '1/4' : step === 'mapping' ? '2/4' : step === 'matching' ? '3/4' : '4/4'}
+            Step {step === 'upload' ? '1/5' : step === 'mapping' ? '2/5' : step === 'matching' ? '3/5' : step === 'review' ? '4/5' : '5/5'}
           </div>
         </div>
 
@@ -476,8 +507,46 @@ export default function BulkImportWizard() {
           </Card>
         )}
 
-        {/* STEP 3: Matching & Preview */}
+        {/* STEP 3: Set-based matching progress */}
         {step === 'matching' && (
+          <Card className="p-8 space-y-8 border-border shadow-xl bg-white rounded-xl">
+            <div className="space-y-3 text-center">
+              {['review', 'completed'].includes(matchProgress.status) ? (
+                <CheckCircle2 className="w-12 h-12 text-success mx-auto" />
+              ) : (
+                <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto" />
+              )}
+              <h2 className="text-xl font-display font-bold text-ink">
+                {['review', 'completed'].includes(matchProgress.status) ? 'Catalogue pass complete' : `Matching ${matchProgress.total.toLocaleString()} rows`}
+              </h2>
+              <p className="text-ink-muted text-sm">
+                One database pass is matching the whole job. These totals come directly from the import job.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Catalogue matching progress">
+              <div className="rounded-lg bg-success/5 p-4 text-center">
+                <div className="text-2xl font-bold text-success">{matchProgress.matched.toLocaleString()}</div>
+                <div className="mt-1 text-xs font-semibold uppercase text-ink-light">Matched</div>
+              </div>
+              <div className="rounded-lg bg-warning/5 p-4 text-center">
+                <div className="text-2xl font-bold text-warning">{matchProgress.review.toLocaleString()}</div>
+                <div className="mt-1 text-xs font-semibold uppercase text-ink-light">Review</div>
+              </div>
+              <div className="rounded-lg bg-surface p-4 text-center">
+                <div className="text-2xl font-bold text-ink-muted">{matchProgress.unmatched.toLocaleString()}</div>
+                <div className="mt-1 text-xs font-semibold uppercase text-ink-light">Unmatched / Store</div>
+              </div>
+              <div className="rounded-lg bg-danger/5 p-4 text-center">
+                <div className="text-2xl font-bold text-danger">{matchProgress.errors.toLocaleString()}</div>
+                <div className="mt-1 text-xs font-semibold uppercase text-ink-light">Errors</div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* STEP 4: Review */}
+        {step === 'review' && (
           <Card className="p-8 space-y-6 border-border shadow-xl bg-white rounded-xl">
             <div className="flex items-center justify-between">
               <div>
@@ -491,27 +560,50 @@ export default function BulkImportWizard() {
                 disabled={isImporting || isValidating || matchedRows.some(row => row.validation.errors.length > 0) || (source === 'quickbooks' && matchedRows.some(row => !row.selected_product_id))}
                 className="shadow-lg"
               >
-                {isImporting ? 'Importing…' : `Import ${matchedRows.length} Items`}
+                {isImporting ? 'Importing…' : `Import ${matchProgress.matched.toLocaleString()} Items`}
               </Button>
             </div>
 
-            {isValidating ? (
-              <div className="py-24 text-center space-y-4">
-                <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
-                <p className="text-ink-muted font-medium">Running catalogue matching algorithms...</p>
-              </div>
-            ) : (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Import job results">
+              {([
+                ['matched', 'Matched', matchProgress.matched],
+                ['review', 'Review', matchProgress.review],
+                ['unmatched', 'Unmatched / Store', matchProgress.unmatched],
+                ['all', 'All rows', matchProgress.total],
+              ] as const).map(([filter, label, count]) => (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setReviewFilter(filter)}
+                  className={`rounded-lg border p-3 text-left transition-colors ${reviewFilter === filter ? 'border-primary bg-primary/5' : 'border-border bg-surface hover:border-primary/40'}`}
+                >
+                  <div className="text-xl font-bold text-ink">{count.toLocaleString()}</div>
+                  <div className="text-xs font-semibold uppercase text-ink-light">{label}</div>
+                </button>
+              ))}
+            </div>
+
+            {(() => {
+              const filteredEntries = matchedRows
+                .map((row, index) => ({ row, index }))
+                .filter(({ row }) => reviewFilter === 'all' || row.match_status === reviewFilter)
+              const visibleEntries = filteredEntries.slice(0, 150)
+              return (
               <div className="space-y-4">
+                <div className="text-xs text-ink-muted">
+                  Showing {visibleEntries.length.toLocaleString()} of {filteredEntries.length.toLocaleString()} {reviewFilter === 'all' ? 'rows' : `${reviewFilter} rows`}.
+                  {filteredEntries.length > visibleEntries.length ? ' Narrow the queue with the filters above to keep review fast.' : ''}
+                </div>
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => updateDepartment(
-                      matchedRows.map((row, index) => !isSafeAutoMatch(row.matches?.[0]) ? index : -1).filter((index) => index >= 0),
+                      matchedRows.map((row, index) => row.match_status === 'unmatched' ? index : -1).filter((index) => index >= 0),
                       'store'
                     )}
                   >
-                    Set all unmatched to Store
+                    Keep all unmatched in Store
                   </Button>
                   <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)} className="h-9 rounded-md border border-border bg-white px-3 text-sm">
                     <option value="">Choose category</option>
@@ -561,7 +653,7 @@ export default function BulkImportWizard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {matchedRows.map((row, index) => {
+                      {visibleEntries.map(({ row, index }) => {
                         const hasErrors = row.validation.errors.length > 0;
                         const hasWarnings = row.validation.warnings.length > 0;
 
@@ -727,7 +819,8 @@ export default function BulkImportWizard() {
                   </table>
                 </div>
               </div>
-            )}
+              )
+            })()}
           </Card>
         )}
 

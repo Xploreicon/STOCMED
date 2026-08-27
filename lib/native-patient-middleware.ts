@@ -16,7 +16,7 @@ type NativePatientContext = {
 
 const SECURITY_HEADERS = {
   'Cache-Control': 'private, no-cache, no-store, max-age=0, must-revalidate',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sentry.io https://ingest.sentry.io; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; connect-src 'self' https://auth.askstocmed.com wss://auth.askstocmed.com https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://ingest.sentry.io; worker-src 'self' blob:; frame-ancestors 'none';",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.sentry.io https://ingest.sentry.io; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' https://auth.askstocmed.com wss://auth.askstocmed.com https://*.supabase.co wss://*.supabase.co https://*.sentry.io https://ingest.sentry.io; worker-src 'self' blob:; frame-ancestors 'none';",
   'Content-Type': 'text/html; charset=utf-8',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'X-Content-Type-Options': 'nosniff',

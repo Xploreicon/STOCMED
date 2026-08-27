@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
+import { autoMapImportHeaders, INVENTORY_IMPORT_FIELDS } from '@/lib/inventory-import'
+import { normalizeInventoryRows, parseInventoryWorkbook } from '@/lib/inventory-import-parser'
 import { NextRequest, NextResponse } from 'next/server'
-import * as XLSX from 'xlsx'
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,33 +36,28 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const workbook = XLSX.read(buffer, { type: 'buffer' })
-    const sheetName = workbook.SheetNames[0]
-    const worksheet = workbook.Sheets[sheetName]
+    const { headers, rows } = parseInventoryWorkbook(buffer)
 
-    // Get raw rows
-    const rawData = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 })
-
-    if (rawData.length === 0) {
+    if (headers.length === 0) {
       return NextResponse.json({ error: 'The uploaded file is empty.' }, { status: 400 })
     }
 
-    // Clean headers and filter out empty columns
-    const rawHeaders = (rawData[0] || []) as any[]
-    const headers = rawHeaders.map((h, index) => (h ? String(h).trim() : `Column_${index + 1}`))
+    const suggestedMapping = autoMapImportHeaders(headers, INVENTORY_IMPORT_FIELDS)
+    const stagingRows = normalizeInventoryRows(rows, suggestedMapping)
+    const parseErrors = stagingRows.filter((row) => row.parse_error).length
 
-    // Parse records
-    const rows = rawData.slice(1)
-      .filter((row: any[]) => row.some(cell => cell !== null && cell !== undefined && String(cell).trim() !== ''))
-      .map((row: any[]) => {
-        const obj: Record<string, any> = {}
-        headers.forEach((header, index) => {
-          obj[header] = row[index] !== undefined ? row[index] : ''
-        })
-        return obj
-      })
-
-    return NextResponse.json({ headers, rows })
+    return NextResponse.json({
+      headers,
+      rows,
+      suggestedMapping,
+      stagingRows,
+      parseSummary: {
+        total: stagingRows.length,
+        errors: parseErrors,
+        valid: stagingRows.length - parseErrors,
+        barcodes: stagingRows.filter((row) => row.barcode !== null).length,
+      },
+    })
   } catch (error: any) {
     console.error('Parse file error:', error)
     return NextResponse.json(

@@ -3,11 +3,15 @@ import {
   autoMapImportHeaders,
   determineImportRouting,
   hasMedicineSignals,
+  INVENTORY_IMPORT_FIELDS,
   isSafeAutoMatch,
+  normalizeImportBarcode,
   normalizeImportDosageForm,
+  normalizeImportProductName,
   normalizeImportStrength,
   parseImportBoolean,
   parseImportDate,
+  parseImportMoneyToKobo,
 } from '@/lib/inventory-import'
 
 describe('inventory import normalization', () => {
@@ -51,6 +55,54 @@ describe('inventory import normalization', () => {
     expect(normalizeImportDosageForm('Elixir')).not.toBe(normalizeImportDosageForm('Tablet'))
   })
 
+  it('maps every Ceres heading, including Kobo prices and minimum quantity', () => {
+    const headers = [
+      'Product Name',
+      'Size',
+      'Barcode',
+      'Cost Price (Kobo)',
+      'Selling price (Kobo)',
+      'Quantity',
+      'Minimum Quantity',
+      'Expiry date',
+    ]
+
+    expect(autoMapImportHeaders(headers, INVENTORY_IMPORT_FIELDS)).toMatchObject({
+      name: 'Product Name',
+      pack_size: 'Size',
+      sku: 'Barcode',
+      unit_cost: 'Cost Price (Kobo)',
+      price: 'Selling price (Kobo)',
+      quantity: 'Quantity',
+      min_quantity: 'Minimum Quantity',
+      expiry_date: 'Expiry date',
+    })
+  })
+
+  it.each([
+    ['ARENAX PLUS FORTE X6', 'arenax plus forte'],
+    ['Babyrex syrup 60ml', 'babyrex syrup'],
+    ['Camosunate junior 300mg/100mg Pack of 4', 'camosunate junior'],
+    ['Daktarcort x 8 tablets', 'daktarcort'],
+    ['DANA DANACID compound magnesium trisilicate tablets B. P', 'dana danacid compound magnesium trisilicate tablets bp'],
+  ])('normalizes %j to %j for matching while dropping dose and pack tokens', (input, expected) => {
+    expect(normalizeImportProductName(input)).toBe(expected)
+  })
+
+  it('keeps only 8, 12, 13, and 14 digit barcode shapes', () => {
+    expect(normalizeImportBarcode(' 8906035499340 ')).toBe('8906035499340')
+    expect(normalizeImportBarcode('12345678')).toBe('12345678')
+    expect(normalizeImportBarcode('ABC-123')).toBeNull()
+    expect(normalizeImportBarcode('123456789')).toBeNull()
+  })
+
+  it('converts money to integer Kobo without floating-point rounding', () => {
+    expect(parseImportMoneyToKobo('1,375', true)).toBe(1375)
+    expect(parseImportMoneyToKobo('₦1,375.25')).toBe(137525)
+    expect(parseImportMoneyToKobo('0.09')).toBe(9)
+    expect(parseImportMoneyToKobo('12.345')).toBeNull()
+  })
+
   it('never auto-accepts a strength or form conflict', () => {
     expect(isSafeAutoMatch({
       confidence: 0.99,
@@ -70,6 +122,13 @@ describe('inventory import normalization', () => {
       form_match: true,
       mismatch_reasons: [],
     })).toBe(true)
+    expect(isSafeAutoMatch({
+      match_status: 'review',
+      confidence: 0.89,
+      strength_match: true,
+      form_match: true,
+      mismatch_reasons: [],
+    })).toBe(false)
   })
 })
 

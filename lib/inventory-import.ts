@@ -2,9 +2,102 @@ export function normalizeImportHeader(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
+export const INVENTORY_IMPORT_FIELDS = [
+  {
+    key: 'name',
+    label: 'Item / Generic Name',
+    required: true,
+    synonyms: ['name', 'item', 'item name', 'generic name', 'drug name', 'medication', 'product', 'product name', 'description'],
+  },
+  {
+    key: 'item_type',
+    label: 'Type',
+    required: false,
+    synonyms: ['type', 'department', 'item type', 'product type'],
+  },
+  {
+    key: 'tracks_expiry',
+    label: 'Tracks Expiry',
+    required: false,
+    synonyms: ['tracks expiry', 'expiry tracked', 'perishable'],
+  },
+  {
+    key: 'brand_name',
+    label: 'Brand Name',
+    required: false,
+    synonyms: ['brand', 'brand name', 'trade name'],
+  },
+  {
+    key: 'strength',
+    label: 'Strength',
+    required: false,
+    synonyms: ['strength', 'dosage strength', 'dose', 'mg', 'g', 'ml'],
+  },
+  {
+    key: 'dosage_form',
+    label: 'Dosage Form',
+    required: false,
+    synonyms: ['form', 'dosage form', 'product form'],
+  },
+  {
+    key: 'category',
+    label: 'Category',
+    required: false,
+    synonyms: ['category', 'class', 'group', 'product category'],
+  },
+  {
+    key: 'pack_size',
+    label: 'Pack Size',
+    required: false,
+    synonyms: ['pack', 'pack size', 'packaging', 'size', 'unit size'],
+  },
+  {
+    key: 'sku',
+    label: 'SKU / Barcode',
+    required: false,
+    synonyms: ['sku', 'barcode', 'bar code', 'gtin', 'ean', 'upc', 'product sku', 'product code'],
+  },
+  {
+    key: 'unit_cost',
+    label: 'Unit Cost',
+    required: false,
+    synonyms: ['cost', 'unit cost', 'purchase cost', 'cost price', 'cost price kobo', 'cost price (kobo)', 'buying price'],
+  },
+  {
+    key: 'price',
+    label: 'Selling Price',
+    required: true,
+    synonyms: ['price', 'selling price', 'selling price kobo', 'selling price (kobo)', 'sales price', 'retail price', 'rate', 'unit price'],
+  },
+  {
+    key: 'quantity',
+    label: 'Opening Qty',
+    required: true,
+    synonyms: ['quantity', 'qty', 'stock', 'opening qty', 'quantity on hand', 'stock on hand', 'count'],
+  },
+  {
+    key: 'min_quantity',
+    label: 'Minimum Qty',
+    required: false,
+    synonyms: ['minimum quantity', 'minimum qty', 'min quantity', 'min qty', 'reorder level', 'low stock threshold'],
+  },
+  {
+    key: 'batch_number',
+    label: 'Batch Number',
+    required: false,
+    synonyms: ['batch', 'batch no', 'batch number', 'lot', 'lot number'],
+  },
+  {
+    key: 'expiry_date',
+    label: 'Expiry Date',
+    required: false,
+    synonyms: ['expiry', 'exp', 'expiry date', 'expiration date', 'exp date', 'best before'],
+  },
+] as const
+
 export function autoMapImportHeaders(
   headers: string[],
-  fields: Array<{ key: string; synonyms: string[] }>
+  fields: ReadonlyArray<{ key: string; synonyms: readonly string[] }>
 ): Record<string, string> {
   const mapping: Record<string, string> = {}
   const used = new Set<string>()
@@ -34,6 +127,71 @@ export function autoMapImportHeaders(
   }
 
   return mapping
+}
+
+/**
+ * Produces the shared comparison key used by the staging matcher. The source
+ * name must be retained separately because this function intentionally drops
+ * strength, volume, and pack-size tokens.
+ */
+export function normalizeImportProductName(value: unknown): string {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/\bb\s*\.\s*p\.?\b/g, 'bp')
+    .replace(/\bpack\s+of\s+\d+\b/g, ' ')
+    .replace(/\bx\s*\d+\s*(?:tablets?|tabs?|capsules?|caps?|sachets?|ampoules?|vials?|bottles?)?\b/g, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*(?:mg|mcg|µg|ug|kg|g|ml|cl|l|iu|units?|%)?(?:\s*\/\s*\d+(?:\.\d+)?\s*(?:mg|mcg|µg|ug|kg|g|ml|cl|l|iu|units?|%)?)+\b/g, ' ')
+    .replace(/\b\d+(?:\.\d+)?\s*(?:mg|mcg|µg|ug|kg|g|ml|cl|l|iu|units?|%)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+/**
+ * Keeps only GTIN-shaped identifiers. Checksum validation is deliberately not
+ * applied here because pharmacy exports frequently contain private-label GTINs
+ * whose useful matching property is their stable 8/12/13/14-digit shape.
+ */
+export function normalizeImportBarcode(value: unknown): string | null {
+  const barcode = String(value ?? '').trim()
+  return /^(?:\d{8}|\d{12}|\d{13}|\d{14})$/.test(barcode) ? barcode : null
+}
+
+export function isKoboImportHeader(header: string | undefined): boolean {
+  return header ? normalizeImportHeader(header).includes('kobo') : false
+}
+
+/** Parse a grouped whole-number cell without passing through floating point. */
+export function parseImportInteger(value: unknown): number | null {
+  const normalized = String(value ?? '').trim().replace(/,/g, '')
+  if (!normalized || !/^[+-]?\d+(?:\.0+)?$/.test(normalized)) return null
+  const result = Number(normalized.replace(/\.0+$/, ''))
+  return Number.isSafeInteger(result) ? result : null
+}
+
+/**
+ * Convert a monetary cell to integer Kobo. Kobo-labelled columns are already
+ * in minor units; other columns are interpreted as Naira and converted using
+ * string arithmetic so decimal precision is not lost.
+ */
+export function parseImportMoneyToKobo(value: unknown, alreadyKobo = false): number | null {
+  const normalized = String(value ?? '')
+    .trim()
+    .replace(/,/g, '')
+    .replace(/^(?:ngn|₦)\s*/i, '')
+    .trim()
+
+  if (!normalized) return null
+  if (alreadyKobo) return parseImportInteger(normalized)
+
+  const match = normalized.match(/^([+-]?)(\d+)(?:\.(\d{1,2}))?$/)
+  if (!match) return null
+  const sign = match[1] === '-' ? -1 : 1
+  const naira = Number(match[2])
+  const fraction = Number((match[3] ?? '').padEnd(2, '0'))
+  if (!Number.isSafeInteger(naira) || naira > Math.floor(Number.MAX_SAFE_INTEGER / 100)) return null
+  const result = sign * (naira * 100 + fraction)
+  return Number.isSafeInteger(result) ? result : null
 }
 
 export function parseImportBoolean(value: unknown): boolean {
@@ -96,6 +254,7 @@ function validIsoDate(year: string, month: string, day: string): string {
 
 export function isSafeAutoMatch(match: Record<string, unknown> | null | undefined): boolean {
   if (!match) return false
+  if (match.match_status && match.match_status !== 'matched') return false
   return Number(match.confidence) >= 0.7
     && match.strength_match === true
     && match.form_match === true
