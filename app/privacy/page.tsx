@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LogoMark } from '@/components/brand/Logo';
-import { ArrowLeft, ShieldAlert } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 export const metadata = {
   title: 'Privacy Policy | StocMed',
@@ -28,25 +28,9 @@ export default function PrivacyPage() {
       <main className="mx-auto max-w-[900px] px-6 py-12">
         <div className="bg-white border border-border rounded-card-lg p-6 sm:p-12 shadow-sm space-y-8">
 
-          {/* DRAFT NOTICE BANNER */}
-          <div className="rounded-card border border-amber-300 bg-amber-50 p-5 text-amber-900 text-sm leading-relaxed space-y-2">
-            <div className="flex items-center gap-2 font-semibold text-amber-950 text-base">
-              <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0" />
-              IMPORTANT — READ BEFORE PUBLISHING
-            </div>
-            <p>
-              These drafts are written to accurately reflect what StocMed&apos;s system actually does with data, based on the platform as built. They are <strong>plain-language and honest</strong>, which is more defensible than generic boilerplate. <strong>However, they are NOT a substitute for legal review.</strong> Before you scale past the pilot, have a lawyer familiar with Nigerian data-protection law (NDPR / the Nigeria Data Protection Act 2023) and pharmacy regulation (PCN) review and finalise these. Fill every <code>[BRACKETED]</code> placeholder with your real details.
-            </p>
-            <p className="pt-1 border-t border-amber-200/60 font-medium">
-              Two things you MUST confirm are true before publishing:
-              <br />1. Money for medicines never flows through StocMed (patients pay pharmacies directly).
-              <br />2. The prescription-upload storage bucket is private and access-controlled.
-            </p>
-          </div>
-
           <header className="border-b border-border pb-6">
             <h1 className="font-display font-medium text-3xl sm:text-4xl text-ink">PRIVACY POLICY</h1>
-            <p className="text-sm font-semibold text-primary mt-2">Last updated: [DATE]</p>
+            <p className="text-sm font-semibold text-primary mt-2">Last updated: 27 August 2026</p>
           </header>
 
           <div className="prose prose-slate max-w-none space-y-6 text-[15px] sm:text-[16px] leading-[1.7] text-ink-muted">
@@ -57,7 +41,7 @@ export default function PrivacyPage() {
             <section className="space-y-3">
               <h2 className="text-xl font-semibold text-ink font-display">Who we are</h2>
               <p>
-                StocMed Health Ltd is a company registered in Nigeria (CAC registration [NUMBER]). For any privacy question or request, contact us at <strong>[PRIVACY EMAIL]</strong>, [ADDRESS].
+                StocMed Health Ltd is a company registered in Nigeria. For any privacy question or request, contact us at <strong>support@askstocmed.com</strong>, Lagos, Nigeria.
               </p>
             </section>
 
@@ -70,7 +54,7 @@ export default function PrivacyPage() {
                 <strong>When you search for medication:</strong> the text of your search and your general location, so we can show you nearby pharmacies that have what you need. We keep a record of your own searches so you can see your history.
               </p>
               <p>
-                <strong>When you chat with our assistant:</strong> the messages you send, so the assistant can help you find medication.
+                <strong>When you chat with our assistant:</strong> the messages you send, so the assistant can help you find medication. Your assistant messages are processed by Anthropic, a third-party AI provider (see &ldquo;Who we share with&rdquo;), solely to generate a response. Under Anthropic&apos;s standard commercial API terms, inputs and outputs are normally deleted from its systems within 30 days, subject to limited legal and safety exceptions, and are not used to train its models by default. The assistant does not diagnose or prescribe.
               </p>
               <p>
                 <strong>When you allow location access:</strong> your device&apos;s location, used only to find pharmacies near you. You can decline this and enter your area manually instead. We do not track your location in the background.
@@ -130,8 +114,8 @@ export default function PrivacyPage() {
             <section className="space-y-3">
               <h2 className="text-xl font-semibold text-ink font-display">How long we keep your information</h2>
               <ul className="list-disc pl-5 space-y-1">
-                <li>Your personal search history is retained for [RETENTION PERIOD, e.g. 12 months] and then automatically deleted.</li>
-                <li>Chat messages are retained for [RETENTION PERIOD] and then deleted.</li>
+                <li>Your personal search history is retained for 12 months and then automatically deleted.</li>
+                <li>Assistant message text stored by StocMed is retained for up to 30 days and then automatically deleted. An account-linked cryptographic hash used for integrity and abuse prevention may be retained for up to 12 months; it does not contain the readable message.</li>
                 <li>Account information is kept while your account is active.</li>
               </ul>
               <p>You can delete your data at any time (see &ldquo;Your rights&rdquo;).</p>
@@ -142,7 +126,17 @@ export default function PrivacyPage() {
               <ul className="list-disc pl-5 space-y-1">
                 <li><strong>Pharmacies:</strong> when you choose to contact or visit a pharmacy through StocMed, relevant details of your request are shared with that pharmacy so they can help you.</li>
                 <li><strong>Delivery partners:</strong> if you choose delivery, the details needed to fulfil it are shared with the delivery provider. Payment and fulfilment are between you, the pharmacy, and the delivery provider — not StocMed.</li>
-                <li><strong>Service providers:</strong> we use trusted providers to host and secure our systems (for example, our database and error-monitoring providers). They process data on our behalf under agreement.</li>
+                <li>
+                  <strong>Service providers (subprocessors):</strong> we use trusted third-party providers to run StocMed. They process data on our behalf, under agreement, and for the purposes below:
+                  <ul className="mt-2 list-disc pl-5 space-y-1">
+                    <li><strong>Supabase</strong> — database, authentication, and private-file hosting for account, search, pharmacy, inventory, and prescription data.</li>
+                    <li><strong>Vercel</strong> — application hosting and delivery.</li>
+                    <li><strong>Resend</strong> — sending transactional account and notification emails.</li>
+                    <li><strong>Termii</strong> — sending SMS messages, such as reservation alerts, to the phone number you provide.</li>
+                    <li><strong>Sentry</strong> — error and performance monitoring. Default personal-information collection is disabled and diagnostic events are scrubbed before transmission.</li>
+                    <li><strong>Anthropic</strong> — provides the AI behind our in-app assistant and the tool that helps pharmacies organise medication inventory. When these features run, the relevant text — your assistant messages or a pharmacy&apos;s product list — is sent to Anthropic to generate a response or structure the inventory data. Under Anthropic&apos;s standard commercial API terms, API inputs and outputs are normally deleted within 30 days, subject to limited legal and safety exceptions, and are not used to train Anthropic&apos;s models by default unless StocMed explicitly opts in or submits the material as feedback.</li>
+                  </ul>
+                </li>
                 <li><strong>Legal:</strong> we may disclose information where required by Nigerian law.</li>
               </ul>
               <p>We do not sell your personal data.</p>
@@ -158,7 +152,7 @@ export default function PrivacyPage() {
                 <li><strong>Withdraw consent</strong> for demand-insights use at any time, in your settings, without losing access to the core service.</li>
                 <li><strong>Complain</strong> to the Nigeria Data Protection Commission if you believe we have mishandled your data.</li>
               </ul>
-              <p>To exercise any of these, use the in-app controls or contact <strong>[PRIVACY EMAIL]</strong>.</p>
+              <p>To exercise any of these, use the in-app controls or contact <strong>support@askstocmed.com</strong>.</p>
             </section>
 
             <section className="space-y-3">
@@ -176,9 +170,16 @@ export default function PrivacyPage() {
             </section>
 
             <section className="space-y-3">
+              <h2 className="text-xl font-semibold text-ink font-display">Where your data is processed</h2>
+              <p>
+                Some of our service providers, including Anthropic, Vercel, Supabase, Resend, and Sentry, may process data outside Nigeria, including in the United States. When personal data is transferred abroad, we use contracts and other safeguards required by applicable Nigerian data-protection law and assess the protections provided by the recipient. Anthropic&apos;s standard commercial API retention and training terms are described above; any stronger contractual retention control will apply only when StocMed has confirmed it in writing with Anthropic.
+              </p>
+            </section>
+
+            <section className="space-y-3">
               <h2 className="text-xl font-semibold text-ink font-display">Children</h2>
               <p>
-                StocMed is intended for adults. We do not knowingly collect data from children. [CONFIRM your intended minimum age and any handling.]
+                StocMed is intended for adults aged 18 and over. We do not knowingly collect personal data from anyone under 18. If you believe a person under 18 has provided personal data to us, contact us so we can investigate and take appropriate action.
               </p>
             </section>
 
@@ -192,7 +193,7 @@ export default function PrivacyPage() {
             <section className="space-y-3 border-t border-border pt-6">
               <h2 className="text-xl font-semibold text-ink font-display">Contact</h2>
               <p className="font-semibold text-ink">
-                [PRIVACY EMAIL] &middot; [ADDRESS] &middot; [PHONE]
+                support@askstocmed.com &middot; Lagos, Nigeria &middot; +234 (0) 800 STOCMED
               </p>
             </section>
           </div>
