@@ -4,6 +4,7 @@ import { getEnrichedInventory } from '@/lib/pharmacyInventory'
 import { NextRequest, NextResponse } from 'next/server'
 import { SP_AUTH_REQUIRED_RESPONSE } from '@/lib/sp-authorization'
 import { checkStaffPermission } from '@/lib/staff-permissions'
+import { z } from 'zod'
 
 export async function PATCH(
   request: NextRequest,
@@ -55,6 +56,35 @@ export async function PATCH(
 
     // Parse request body
     const body = await request.json()
+    if (body.item_type !== undefined || body.product_id !== undefined) {
+      return NextResponse.json(
+        { error: 'Use the catalogue-link promotion action to change inventory identity' },
+        { status: 400 },
+      )
+    }
+
+    const promotionRequested = body.promote_to_product_id !== undefined
+    if (promotionRequested) {
+      const productId = z.string().uuid().safeParse(body.promote_to_product_id)
+      if (!productId.success) {
+        return NextResponse.json(
+          { error: 'Link a valid catalogue drug to promote' },
+          { status: 400 },
+        )
+      }
+      if (
+        body.price !== undefined
+        || body.low_stock_threshold !== undefined
+        || body.whole_pack_only !== undefined
+        || body.pharmacy_image_url !== undefined
+        || body.image_url !== undefined
+      ) {
+        return NextResponse.json(
+          { error: 'Confirm promotion separately from other inventory changes' },
+          { status: 400 },
+        )
+      }
+    }
     if (body.price !== undefined) {
       const staffAccess = await checkStaffPermission(supabase as any, pharmacy.id, request, 'can_change_prices')
       if (!staffAccess.allowed) return NextResponse.json({ error: staffAccess.error, code: staffAccess.code }, { status: 403 })
@@ -64,6 +94,10 @@ export async function PATCH(
     if (body.price !== undefined) inventoryUpdate.price = Number(body.price)
     if (body.low_stock_threshold !== undefined) inventoryUpdate.low_stock_threshold = Number(body.low_stock_threshold)
     if (typeof body.whole_pack_only === 'boolean') inventoryUpdate.whole_pack_only = body.whole_pack_only
+    if (promotionRequested) {
+      inventoryUpdate.item_type = 'medicine'
+      inventoryUpdate.product_id = body.promote_to_product_id
+    }
     // Pharmacy-level image override
     if (body.pharmacy_image_url !== undefined) inventoryUpdate.image_url = body.pharmacy_image_url
 

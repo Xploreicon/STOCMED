@@ -24,6 +24,7 @@ import {
 import { usePharmacyFeatures } from '@/components/providers/PharmacyFeaturesProvider';
 import { withStaffSessionHeader } from '@/lib/staff-session-client';
 import { PriceBenchmarkGuidance } from '@/components/pharmacy/PriceBenchmarkGuidance';
+import { StoreMedicinePromotion } from '@/components/pharmacy/StoreMedicinePromotion';
 
 interface EditDrugModalProps {
   isOpen: boolean;
@@ -347,6 +348,19 @@ export default function EditDrugModal({
                 </div>
               </div>
             </div>
+
+            {drug.item_type === 'store' && (
+              <StoreMedicinePromotion
+                inventoryId={drug.id}
+                initialQuery={drug.item_name || drug.brand_name || drug.name || drug.generic_name || ''}
+                disabled={editDrugMutation.isPending || isUploading}
+                onPromoted={() => {
+                  queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'], refetchType: 'active' });
+                  queryClient.invalidateQueries({ queryKey: ['pharmacy-stats'], refetchType: 'active' });
+                  onSuccess();
+                }}
+              />
+            )}
 
             {/* Image Upload Section */}
             <div className="space-y-3">
