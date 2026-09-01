@@ -7,7 +7,10 @@ let singleton: SupabaseClient<Database> | null = null
 export function getAdminClient() {
   if (singleton) return singleton
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  // Server-only jobs should address the Supabase project directly. The public
+  // URL may be a custom auth proxy and is retained only as a compatibility
+  // fallback for environments that have not set SUPABASE_ADMIN_URL yet.
+  const url = process.env.SUPABASE_ADMIN_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!url || !serviceKey) {
