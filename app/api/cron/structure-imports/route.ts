@@ -39,6 +39,15 @@ export async function GET(request: NextRequest) {
   const admin = getAdminClient() as any
   if (!admin) return NextResponse.json({ error: 'Server configuration error' }, { status: 500 })
 
+  const { count: queuedBefore, error: queueCountError } = await admin
+    .from('import_ai_queue')
+    .select('staging_id', { count: 'exact', head: true })
+    .eq('status', 'queued')
+  console.info('import_structurer_invocation_started', {
+    queued_rows: queuedBefore ?? 0,
+    queue_count_ok: !queueCountError,
+  })
+
   let batches = 0
   let rowsProcessed = 0
   let inputTokens = 0
@@ -92,12 +101,14 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({
+  const result = {
     batches,
     rows_processed: rowsProcessed,
     failed_batches: failedBatches,
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     batch_size: IMPORT_STRUCTURER_BATCH_SIZE,
-  })
+  }
+  console.info('import_structurer_invocation_completed', result)
+  return NextResponse.json(result)
 }
