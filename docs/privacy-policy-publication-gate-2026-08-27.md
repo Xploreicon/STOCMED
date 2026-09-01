@@ -4,7 +4,7 @@ The public privacy-policy draft has been updated to match the implemented system
 
 ## Required owner and counsel confirmations
 
-1. Confirm StocMed Health Ltd's CAC registration number, full service address, and a dialable privacy contact number. The public draft currently uses the verified public contact details: `support@askstocmed.com`, Lagos, Nigeria, and `+234 (0) 800 STOCMED`.
+1. StocMed Health Ltd's incorporation details are confirmed by its CAC certificate and status report: RC 9540156, incorporated 12 May 2026, registered address 18 Anuoluwapo Street, Shomolu, Lagos State, Nigeria. Confirm a dialable privacy contact number before publication; `+234 (0) 800 STOCMED` is the currently published vanity number.
 2. StocMed has confirmed that it does not currently have a written Anthropic Zero-Data-Retention agreement. Keep the public draft's standard API retention wording unless a future written agreement covering both the patient assistant and inventory structurer is executed and verified.
 3. Confirm the lawful basis for sending health-related assistant messages to Anthropic and whether a separate explicit-consent step is required before the first AI request.
 4. Confirm the lawful cross-border transfer mechanism and the relevant data-processing agreements for every listed subprocessor.
@@ -13,6 +13,7 @@ The public privacy-policy draft has been updated to match the implemented system
 
 ## Implementation facts verified in the repository
 
+- The CAC certificate and status report identify StocMed Health Ltd as an active Nigerian private company limited by shares, RC 9540156, with the registered address stated in the public draft.
 - The in-app patient assistant calls the Anthropic Messages API.
 - The Prompt 5 inventory structurer calls the same first-party Anthropic Messages API using the commercial API key configured for the application.
 - Personal search history expires after 365 days and has a scheduled purge function.

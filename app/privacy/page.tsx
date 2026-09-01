@@ -30,7 +30,7 @@ export default function PrivacyPage() {
 
           <header className="border-b border-border pb-6">
             <h1 className="font-display font-medium text-3xl sm:text-4xl text-ink">PRIVACY POLICY</h1>
-            <p className="text-sm font-semibold text-primary mt-2">Last updated: 27 August 2026</p>
+            <p className="text-sm font-semibold text-primary mt-2">Last updated: 1 September 2026</p>
           </header>
 
           <div className="prose prose-slate max-w-none space-y-6 text-[15px] sm:text-[16px] leading-[1.7] text-ink-muted">
@@ -41,7 +41,7 @@ export default function PrivacyPage() {
             <section className="space-y-3">
               <h2 className="text-xl font-semibold text-ink font-display">Who we are</h2>
               <p>
-                StocMed Health Ltd is a company registered in Nigeria. For any privacy question or request, contact us at <strong>support@askstocmed.com</strong>, Lagos, Nigeria.
+                StocMed Health Ltd is a private company limited by shares incorporated in Nigeria on 12 May 2026 (RC 9540156). Our registered address is 18 Anuoluwapo Street, Shomolu, Lagos State, Nigeria. For any privacy question or request, contact us at <strong>support@askstocmed.com</strong>.
               </p>
             </section>
 
@@ -193,7 +193,7 @@ export default function PrivacyPage() {
             <section className="space-y-3 border-t border-border pt-6">
               <h2 className="text-xl font-semibold text-ink font-display">Contact</h2>
               <p className="font-semibold text-ink">
-                support@askstocmed.com &middot; Lagos, Nigeria &middot; +234 (0) 800 STOCMED
+                support@askstocmed.com &middot; 18 Anuoluwapo Street, Shomolu, Lagos State, Nigeria &middot; +234 (0) 800 STOCMED
               </p>
             </section>
           </div>

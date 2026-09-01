@@ -138,7 +138,7 @@ export default function TermsPage() {
                 </a>.
               </p>
               <p className="font-semibold text-ink">
-                Lagos, Nigeria &middot; +234 (0) 800 STOCMED
+                18 Anuoluwapo Street, Shomolu, Lagos State, Nigeria &middot; +234 (0) 800 STOCMED
               </p>
             </section>
           </div>
