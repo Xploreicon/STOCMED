@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { LogoMark } from '@/components/brand/Logo';
-import { ArrowLeft, ShieldAlert } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 
 export const metadata = {
   title: 'Terms of Service | StocMed',
@@ -28,20 +28,9 @@ export default function TermsPage() {
       <main className="mx-auto max-w-[900px] px-6 py-12">
         <div className="bg-white border border-border rounded-card-lg p-6 sm:p-12 shadow-sm space-y-8">
 
-          {/* DRAFT NOTICE BANNER */}
-          <div className="rounded-card border border-amber-300 bg-amber-50 p-5 text-amber-900 text-sm leading-relaxed space-y-2">
-            <div className="flex items-center gap-2 font-semibold text-amber-950 text-base">
-              <ShieldAlert className="h-5 w-5 text-amber-600 shrink-0" />
-              IMPORTANT — READ BEFORE PUBLISHING
-            </div>
-            <p>
-              These drafts are written to accurately reflect what StocMed&apos;s system actually does with data, based on the platform as built. They are <strong>plain-language and honest</strong>, which is more defensible than generic boilerplate. <strong>However, they are NOT a substitute for legal review.</strong> Before you scale past the pilot, have a lawyer familiar with Nigerian data-protection law (NDPR / the Nigeria Data Protection Act 2023) and pharmacy regulation (PCN) review and finalise these. Fill every <code>[BRACKETED]</code> placeholder with your real details.
-            </p>
-          </div>
-
           <header className="border-b border-border pb-6">
             <h1 className="font-display font-medium text-3xl sm:text-4xl text-ink">TERMS OF SERVICE</h1>
-            <p className="text-sm font-semibold text-primary mt-2">Last updated: [DATE]</p>
+            <p className="text-sm font-semibold text-primary mt-2">Last updated: 1 September 2026</p>
           </header>
 
           <div className="prose prose-slate max-w-none space-y-6 text-[15px] sm:text-[16px] leading-[1.7] text-ink-muted">
@@ -84,7 +73,7 @@ export default function TermsPage() {
             <section className="space-y-3">
               <h2 className="text-xl font-semibold text-ink font-display">4. Accounts</h2>
               <p>
-                You are responsible for the accuracy of the information you provide and for keeping your login secure. You must be at least [AGE] years old to use StocMed. Pharmacies must be validly registered with the PCN and are responsible for the accuracy of their inventory, pricing, and licensing information.
+                You are responsible for the accuracy of the information you provide and for keeping your login secure. You must be at least 18 years old to use StocMed. Pharmacies must be validly registered with the PCN and are responsible for the accuracy of their inventory, pricing, and licensing information.
               </p>
             </section>
 
@@ -98,7 +87,10 @@ export default function TermsPage() {
             <section className="space-y-3">
               <h2 className="text-xl font-semibold text-ink font-display">6. For pharmacies</h2>
               <p>
-                Pharmacies using StocMed&apos;s inventory, point-of-sale, and related tools agree to: maintain valid PCN registration; keep inventory and pricing accurate; comply with all applicable pharmacy and drug regulations; and use the platform only for lawful pharmacy operations. [ADD subscription/freemium terms, data ownership, and termination provisions once finalised — this section needs legal input on the commercial relationship.]
+                Pharmacies using StocMed&apos;s inventory, point-of-sale, and related tools agree to: maintain valid PCN registration; keep inventory and pricing accurate; comply with all applicable pharmacy and drug regulations; and use the platform only for lawful pharmacy operations. Pharmacies retain ownership of the business and inventory data they submit and permit StocMed to process that data only as needed to provide, secure, and improve the service, subject to our{' '}
+                <Link href="/privacy" className="font-semibold text-primary hover:underline">
+                  Privacy Policy
+                </Link>. Any applicable plan limits or fees will be disclosed before a pharmacy subscribes or incurs a charge. A pharmacy may stop using the service, subject to any agreed subscription terms and any legal record-retention obligations.
               </p>
             </section>
 
@@ -112,7 +104,7 @@ export default function TermsPage() {
             <section className="space-y-3">
               <h2 className="text-xl font-semibold text-ink font-display">8. Limitation of liability</h2>
               <p>
-                To the fullest extent permitted by Nigerian law, StocMed is not liable for decisions made based on information from the platform, for the acts of pharmacies or delivery partners, or for indirect or consequential losses. Nothing in these terms excludes liability that cannot lawfully be excluded. [LEGAL REVIEW REQUIRED — this clause must be drafted/confirmed by a lawyer.]
+                To the fullest extent permitted by Nigerian law, StocMed is not liable for decisions made based on information from the platform, for the acts of pharmacies or delivery partners, or for indirect or consequential losses. Nothing in these terms excludes liability that cannot lawfully be excluded.
               </p>
             </section>
 
@@ -133,14 +125,20 @@ export default function TermsPage() {
             <section className="space-y-3">
               <h2 className="text-xl font-semibold text-ink font-display">11. Governing law</h2>
               <p>
-                These terms are governed by the laws of the Federal Republic of Nigeria. [CONFIRM dispute-resolution venue with legal.]
+                These terms are governed by the laws of the Federal Republic of Nigeria.
               </p>
             </section>
 
             <section className="space-y-3 border-t border-border pt-6">
               <h2 className="text-xl font-semibold text-ink font-display">12. Contact</h2>
+              <p>
+                Questions about these terms may be sent to{' '}
+                <a href="mailto:support@askstocmed.com" className="font-semibold text-primary hover:underline">
+                  support@askstocmed.com
+                </a>.
+              </p>
               <p className="font-semibold text-ink">
-                [SUPPORT EMAIL] &middot; [ADDRESS] &middot; [PHONE]
+                Lagos, Nigeria &middot; +234 (0) 800 STOCMED
               </p>
             </section>
           </div>

@@ -5,12 +5,11 @@ The public privacy-policy draft has been updated to match the implemented system
 ## Required owner and counsel confirmations
 
 1. Confirm StocMed Health Ltd's CAC registration number, full service address, and a dialable privacy contact number. The public draft currently uses the verified public contact details: `support@askstocmed.com`, Lagos, Nigeria, and `+234 (0) 800 STOCMED`.
-2. Confirm whether the StocMed Anthropic commercial organisation has a written Zero-Data-Retention agreement. The repository and API configuration do not prove this. Until written confirmation exists, the public draft correctly discloses Anthropic's standard API retention of up to 30 days, subject to Anthropic's stated legal and safety exceptions.
-3. If ZDR is confirmed, verify that the same commercial organisation API key covers both the patient assistant and inventory structurer, and that neither path uses a feature excluded from the agreement. Then replace the standard-retention wording with counsel-approved ZDR wording.
-4. Confirm the lawful basis for sending health-related assistant messages to Anthropic and whether a separate explicit-consent step is required before the first AI request.
-5. Confirm the lawful cross-border transfer mechanism and the relevant data-processing agreements for every listed subprocessor.
-6. Confirm that the product's minimum age is 18 and align the Terms of Service before publication.
-7. Obtain final review from counsel familiar with the Nigeria Data Protection Act 2023, NDPR obligations, and PCN pharmacy regulation.
+2. StocMed has confirmed that it does not currently have a written Anthropic Zero-Data-Retention agreement. Keep the public draft's standard API retention wording unless a future written agreement covering both the patient assistant and inventory structurer is executed and verified.
+3. Confirm the lawful basis for sending health-related assistant messages to Anthropic and whether a separate explicit-consent step is required before the first AI request.
+4. Confirm the lawful cross-border transfer mechanism and the relevant data-processing agreements for every listed subprocessor.
+5. Confirm that 18 is the intended minimum age for both patients and pharmacy users.
+6. Obtain final review from counsel familiar with the Nigeria Data Protection Act 2023, NDPR obligations, and PCN pharmacy regulation.
 
 ## Implementation facts verified in the repository
 
@@ -21,6 +20,6 @@ The public privacy-policy draft has been updated to match the implemented system
 - Supabase, Vercel, Resend, Termii, Sentry, and Anthropic are all active or configured application providers.
 - Sentry disables default personal-information collection and scrubs events and breadcrumbs before transmission.
 
-## Separate public-page issue
+## Terms of Service cleanup
 
-The Terms of Service page still exposes its own draft banner and placeholders. It requires a separate legal-content pass before StocMed treats the legal pages as publication-complete.
+The Terms of Service draft banner and placeholders have been removed on this branch. The page now uses the same provisional minimum age and verified public contact details as the privacy draft. Counsel must still review the commercial, liability, governing-law, and pharmacy-regulation terms before publication.
