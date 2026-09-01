@@ -193,7 +193,7 @@ export default function PrivacyPage() {
             <section className="space-y-3 border-t border-border pt-6">
               <h2 className="text-xl font-semibold text-ink font-display">Contact</h2>
               <p className="font-semibold text-ink">
-                support@askstocmed.com &middot; 18 Anuoluwapo Street, Shomolu, Lagos State, Nigeria &middot; +234 (0) 800 STOCMED
+                support@askstocmed.com &middot; 18 Anuoluwapo Street, Shomolu, Lagos State, Nigeria &middot; +234 810 358 7435
               </p>
             </section>
           </div>
