@@ -22,6 +22,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(publicPath, request.url))
   }
 
+  // The broadcast console is a write-capable admin surface. Keep its page
+  // boundary as strict as its APIs: authenticated non-admins receive 403,
+  // while unauthenticated requests continue to the layout's login redirect.
+  if (user && (path === '/admin/broadcast' || path.startsWith('/admin/broadcast/'))) {
+    const { data: broadcastViewer, error: broadcastViewerError } = await (supabase as any)
+      .from('users')
+      .select('is_admin,admin_authorized_at,admin_authorization_basis')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    const mayBroadcast = Boolean(
+      !broadcastViewerError
+      && broadcastViewer?.is_admin
+      && broadcastViewer?.admin_authorized_at
+      && broadcastViewer?.admin_authorization_basis?.trim(),
+    )
+    if (!mayBroadcast) {
+      return new NextResponse('Forbidden', {
+        status: 403,
+        headers: { 'Cache-Control': 'no-store, private' },
+      })
+    }
+  }
+
   if (isNativeApp) {
     const nativeResponse = await handleNativePatientRequest(path, {
       request,
