@@ -133,6 +133,19 @@ export async function PATCH(
       }
     }
 
+    // Promotion is already authoritative in the RPC. Avoid rebuilding the
+    // pharmacy's entire enriched inventory just to acknowledge this one-row
+    // transition; large imported catalogues can make that response path slow.
+    if (promotionRequested) {
+      return NextResponse.json({
+        id,
+        product_id: body.promote_to_product_id,
+        item_type: 'medicine',
+        tracks_expiry: true,
+        batch_capture_required: promotionBatchCaptureRequired,
+      })
+    }
+
     // Update catalogue-level product image if provided
     if (body.image_url !== undefined) {
       const { error: productUpdateError } = await (supabase.rpc as any)(
@@ -169,12 +182,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Drug not found' }, { status: 404 })
     }
 
-    return NextResponse.json({
-      ...drug,
-      ...(promotionRequested
-        ? { batch_capture_required: promotionBatchCaptureRequired }
-        : {}),
-    })
+    return NextResponse.json(drug)
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(
