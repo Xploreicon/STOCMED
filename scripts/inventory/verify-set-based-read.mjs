@@ -29,8 +29,16 @@ function digest(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
 
-if (process.env.INVENTORY_READ_VERIFY_CONFIRM_NON_PRODUCTION !== 'YES') {
-  throw new Error('Refusing to run without INVENTORY_READ_VERIFY_CONFIRM_NON_PRODUCTION=YES')
+const verificationTarget = process.env.INVENTORY_READ_VERIFY_CONFIRM_PRODUCTION === 'YES'
+  ? 'production'
+  : process.env.INVENTORY_READ_VERIFY_CONFIRM_NON_PRODUCTION === 'YES'
+    ? 'non-production'
+    : null
+
+if (!verificationTarget) {
+  throw new Error(
+    'Refusing to run without INVENTORY_READ_VERIFY_CONFIRM_NON_PRODUCTION=YES or INVENTORY_READ_VERIFY_CONFIRM_PRODUCTION=YES',
+  )
 }
 
 const supabaseUrl = required('INVENTORY_READ_VERIFY_SUPABASE_URL')
@@ -190,6 +198,7 @@ for (let index = 0; index < legacyRows.length; index += 1) {
 assert.deepEqual(canonicalSetBased, canonicalLegacy, 'canonical payload differs')
 
 console.log(JSON.stringify({
+  verification_target: verificationTarget,
   rows: snapshot.length,
   payload_equal: true,
   payload_sha256: digest(canonicalSetBased),
