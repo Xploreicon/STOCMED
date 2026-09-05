@@ -5,6 +5,7 @@ import { AlertCircle, Check, Loader2, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { withStaffSessionHeader } from '@/lib/staff-session-client'
+import { toast } from 'sonner'
 
 type CatalogueProduct = {
   id: string
@@ -101,6 +102,11 @@ export function StoreMedicinePromotion({
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Could not promote this Store item')
+      if (payload.batch_capture_required) {
+        toast.warning('Medicine promoted. Add its batch number and expiry date before dispensing.')
+      } else {
+        toast.success('Store item promoted to Medicine.')
+      }
       onPromoted()
     } catch (promotionError) {
       setError(promotionError instanceof Error ? promotionError.message : 'Could not promote this Store item')

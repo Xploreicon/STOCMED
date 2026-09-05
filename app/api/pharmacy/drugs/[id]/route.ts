@@ -101,6 +101,7 @@ export async function PATCH(
     // Pharmacy-level image override
     if (body.pharmacy_image_url !== undefined) inventoryUpdate.image_url = body.pharmacy_image_url
 
+    let promotionBatchCaptureRequired = false
     if (Object.keys(inventoryUpdate).length > 0) {
       const { data: updateResult, error: updateError } = await (supabase.rpc as any)(
         'update_pharmacy_inventory_item',
@@ -126,6 +127,9 @@ export async function PATCH(
           { error: updateResult.error || 'Failed to update drug', code: updateResult.code },
           { status: updateResult.code === 'NOT_FOUND' ? 404 : 409 },
         )
+      }
+      if (promotionRequested) {
+        promotionBatchCaptureRequired = updateResult?.batch_capture_required === true
       }
     }
 
@@ -165,7 +169,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Drug not found' }, { status: 404 })
     }
 
-    return NextResponse.json(drug)
+    return NextResponse.json({
+      ...drug,
+      ...(promotionRequested
+        ? { batch_capture_required: promotionBatchCaptureRequired }
+        : {}),
+    })
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json(
