@@ -3,6 +3,10 @@ import { broadcastComposeSchema } from '@/lib/admin/broadcast-schema'
 import { getAuthorizedAdmin } from '@/lib/admin/authorization'
 import { queueBroadcast } from '@/lib/admin/broadcast-queue'
 import { resolveBroadcastAudience } from '@/lib/admin/broadcast-server'
+import {
+  classifyAdminBroadcastError,
+  getEmailDeliveryConfiguration,
+} from '@/lib/notifications/email-configuration'
 import { getAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -30,6 +34,14 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Check the broadcast' }, { status: 400 })
   }
+  const configuration = getEmailDeliveryConfiguration()
+  if (!configuration.ready) {
+    console.error('Admin broadcast configuration is incomplete:', configuration.issues)
+    return NextResponse.json({
+      error: 'Email delivery is not configured for production',
+      code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
+    }, { status: 503 })
+  }
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'Broadcast service unavailable' }, { status: 503 })
   try {
@@ -50,9 +62,10 @@ export async function POST(request: NextRequest) {
     }, { status: 201 })
   } catch (error) {
     console.error('Could not queue broadcast:', error)
-    const message = error instanceof Error && error.message === 'Choose a valid send time'
-      ? error.message
-      : 'The broadcast could not be queued'
-    return NextResponse.json({ error: message }, { status: message === 'Choose a valid send time' ? 400 : 500 })
+    if (error instanceof Error && error.message === 'Choose a valid send time') {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+    const failure = classifyAdminBroadcastError(error)
+    return NextResponse.json({ error: failure.error }, { status: failure.status })
   }
 }

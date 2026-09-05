@@ -16,6 +16,11 @@ export async function getAuthorizedAdmin() {
     && viewer?.admin_authorized_at
     && viewer?.admin_authorization_basis?.trim(),
   )
-  if (!allowed) return { error: 'Access denied' as const, status: 403 as const }
+  if (!allowed) {
+    return {
+      error: 'Only a provenance-authorized StocMed administrator may perform this action' as const,
+      status: 403 as const,
+    }
+  }
   return { supabase, user }
 }

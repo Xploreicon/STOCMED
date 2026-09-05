@@ -3,6 +3,10 @@ import { broadcastTestSchema } from '@/lib/admin/broadcast-schema'
 import { getAuthorizedAdmin } from '@/lib/admin/authorization'
 import { queueBroadcast } from '@/lib/admin/broadcast-queue'
 import { deliverQueuedEmail } from '@/lib/notifications/email'
+import {
+  classifyAdminBroadcastError,
+  getEmailDeliveryConfiguration,
+} from '@/lib/notifications/email-configuration'
 import { finishDelivery, underGlobalChannelCap } from '@/lib/notifications/core'
 import { getAdminClient } from '@/lib/supabase/admin'
 
@@ -18,6 +22,14 @@ export async function POST(request: NextRequest) {
   }
   const email = viewer.user.email?.trim().toLowerCase()
   if (!email) return NextResponse.json({ error: 'Your admin account has no email address' }, { status: 400 })
+  const configuration = getEmailDeliveryConfiguration()
+  if (!configuration.ready) {
+    console.error('Admin test email configuration is incomplete:', configuration.issues)
+    return NextResponse.json({
+      error: 'Email delivery is not configured for production',
+      code: 'EMAIL_DELIVERY_NOT_CONFIGURED',
+    }, { status: 503 })
+  }
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'Broadcast service unavailable' }, { status: 503 })
 
@@ -69,6 +81,7 @@ export async function POST(request: NextRequest) {
     }, { status: result.status === 'sent' ? 200 : 502 })
   } catch (error) {
     console.error('Could not send admin test email:', error)
-    return NextResponse.json({ error: 'The test email could not be sent' }, { status: 500 })
+    const failure = classifyAdminBroadcastError(error)
+    return NextResponse.json({ error: failure.error }, { status: failure.status })
   }
 }
