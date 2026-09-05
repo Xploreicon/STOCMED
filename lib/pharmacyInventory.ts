@@ -4,16 +4,6 @@ import type { Database } from '@/types/supabase'
 type SupabaseServerClient = SupabaseClient<Database, 'public', any>
 
 export const EXPIRING_SOON_DAYS = 60
-const INVENTORY_PAGE_SIZE = 500
-const ID_QUERY_CHUNK_SIZE = 100
-
-function chunkValues<T>(values: T[], size: number): T[][] {
-  const chunks: T[][] = []
-  for (let index = 0; index < values.length; index += size) {
-    chunks.push(values.slice(index, index + size))
-  }
-  return chunks
-}
 
 export type MovementUiType = 'Restock' | 'Adjustment' | 'Return' | 'Write-off' | 'Expiry' | 'Sale'
 
@@ -111,88 +101,32 @@ function daysFromNow(dateStr: string): number {
   return Math.floor(ms / (1000 * 60 * 60 * 24))
 }
 
-/**
- * Fetches this pharmacy's inventory joined with product catalogue data and
- * batches, and decorates each row with stock/expiry status derived from the
- * stock_movements ledger (batch quantities are derived, not stored).
- */
-export async function getEnrichedInventory(
-  supabase: SupabaseServerClient,
-  pharmacyId: string,
-  options: { showDelisted?: boolean } = {}
-): Promise<{ rows: EnrichedInventoryRow[]; stats: InventoryStats }> {
-  const inventoryRows: any[] = []
-  for (let from = 0; ; from += INVENTORY_PAGE_SIZE) {
-    let query = supabase
-      .from('pharmacy_inventory')
-      .select('*, products(*), batches(*), selling_units(*)')
-      .eq('pharmacy_id', pharmacyId)
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: true })
-      .range(from, from + INVENTORY_PAGE_SIZE - 1)
+interface InventorySnapshotRow {
+  inventory: Record<string, any>
+  product: Record<string, any> | null
+  batches: Array<Record<string, any>> | null
+  selling_units: Array<Record<string, any>> | null
+  reserved_quantity: number
+  sellable_quantity: number
+}
 
-    if (!options.showDelisted) {
-      query = query.is('deleted_at', null)
-    }
-
-    const { data: page, error: invError } = await query
-    if (invError) throw invError
-    inventoryRows.push(...(page ?? []))
-    if (!page || page.length < INVENTORY_PAGE_SIZE) break
-  }
-
-  const inventoryIds = inventoryRows.map((r: any) => r.id)
-  const batchIds = inventoryRows.flatMap((r: any) => (r.batches ?? []).map((b: any) => b.id))
-
-  let movementsByBatch = new Map<string, number>()
-  let reservationAvailability = new Map<string, { reserved_quantity: number; sellable_quantity: number }>()
-  let reservedByBatch = new Map<string, number>()
-  for (const inventoryIdChunk of chunkValues(inventoryIds, ID_QUERY_CHUNK_SIZE)) {
-    const { data, error } = await (supabase.rpc as any)('reservation_sellable_quantities', {
-      p_inventory_ids: inventoryIdChunk,
-    })
-    // A deployment can run against a database before the additive migration is applied.
-    if (error && error.code !== 'PGRST202' && error.code !== '42883') throw error
-    for (const entry of data ?? []) {
-      reservationAvailability.set(entry.inventory_id, entry)
-    }
-    const { data: batchData, error: batchError } = await (supabase.rpc as any)('reservation_batch_quantities', {
-      p_inventory_ids: inventoryIdChunk,
-    })
-    if (batchError && batchError.code !== 'PGRST202' && batchError.code !== '42883') throw batchError
-    for (const entry of batchData ?? []) {
-      reservedByBatch.set(entry.batch_id, Number(entry.reserved_quantity))
-    }
-  }
-  for (const inventoryIdChunk of chunkValues(inventoryIds, ID_QUERY_CHUNK_SIZE)) {
-    const { data: movements, error: movError } = await supabase
-      .from('stock_movements')
-      .select('batch_id, quantity')
-      .in('inventory_id', inventoryIdChunk)
-
-    if (movError) throw movError
-
-    for (const m of movements ?? []) {
-      const key = (m as any).batch_id
-      if (!key) continue
-      movementsByBatch.set(key, (movementsByBatch.get(key) ?? 0) + (m as any).quantity)
-    }
-  }
-  void batchIds
-
-  const rows: EnrichedInventoryRow[] = inventoryRows.map((inv: any) => {
-    const product = inv.products
-    const batches: EnrichedBatch[] = (inv.batches ?? [])
-      .map((b: any) => {
-        const ledgerRemaining = movementsByBatch.get(b.id) ?? b.quantity_received
-        const remaining = Math.max(0, ledgerRemaining - (reservedByBatch.get(b.id) ?? 0))
-        const days = daysFromNow(b.expiry_date)
+export function assembleEnrichedInventory(
+  snapshot: InventorySnapshotRow[],
+): { rows: EnrichedInventoryRow[]; stats: InventoryStats } {
+  const rows: EnrichedInventoryRow[] = snapshot.map((entry) => {
+    const inv = entry.inventory
+    const product = entry.product
+    const batches: EnrichedBatch[] = (entry.batches ?? [])
+      .map((batch: any) => {
+        const ledgerRemaining = Number(batch.__ledger_remaining ?? batch.quantity_received)
+        const remaining = Math.max(0, ledgerRemaining - Number(batch.__reserved_quantity ?? 0))
+        const days = daysFromNow(batch.expiry_date)
         return {
-          id: b.id,
-          batch_number: b.batch_number,
-          expiry_date: b.expiry_date,
-          quantity_received: b.quantity_received,
-          cost_price: b.cost_price,
+          id: batch.id,
+          batch_number: batch.batch_number,
+          expiry_date: batch.expiry_date,
+          quantity_received: batch.quantity_received,
+          cost_price: batch.cost_price,
           remaining_qty: remaining,
           is_expired: days < 0,
           is_expiring_soon: days >= 0 && days <= EXPIRING_SOON_DAYS,
@@ -201,14 +135,11 @@ export async function getEnrichedInventory(
       .filter((batch: EnrichedBatch) => batch.remaining_qty > 0)
       .sort((a: EnrichedBatch, b: EnrichedBatch) => new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime())
 
-    const earliestActiveBatch = batches.find((b) => b.remaining_qty > 0) ?? batches[0] ?? null
-
-    const qty = inv.quantity_in_stock
-    const reservation = reservationAvailability.get(inv.id)
-    const sellableQty = reservation?.sellable_quantity ?? qty
-    const threshold = inv.low_stock_threshold
+    const earliestActiveBatch = batches.find((batch) => batch.remaining_qty > 0) ?? batches[0] ?? null
+    const qty = Number(inv.quantity_in_stock)
+    const sellableQty = Number(entry.sellable_quantity)
+    const threshold = Number(inv.low_stock_threshold)
     const stockStatus: 'in' | 'low' | 'out' = sellableQty <= 0 ? 'out' : sellableQty <= threshold ? 'low' : 'in'
-
     const catalogueImage = product?.image_url ?? null
     const pharmacyImage = inv.image_url ?? null
     const displayImage = pharmacyImage || catalogueImage || null
@@ -240,7 +171,7 @@ export async function getEnrichedInventory(
       display_image_url: displayImage,
       price: inv.price,
       quantity_in_stock: qty,
-      reserved_quantity: reservation?.reserved_quantity ?? 0,
+      reserved_quantity: Number(entry.reserved_quantity),
       sellable_quantity: sellableQty,
       low_stock_threshold: threshold,
       notes: inv.notes ?? null,
@@ -253,7 +184,7 @@ export async function getEnrichedInventory(
       is_expired: earliestActiveBatch?.is_expired ?? false,
       is_expiring_soon: earliestActiveBatch?.is_expiring_soon ?? false,
       batches,
-      selling_units: (inv.selling_units ?? [])
+      selling_units: (entry.selling_units ?? [])
         .map((unit: any) => ({ ...unit, price: Number(unit.price), units_per: Number(unit.units_per) }))
         .sort((a: any, b: any) => a.sort_order - b.sort_order),
       base_unit_name: inv.base_unit_name ?? 'unit',
@@ -261,13 +192,33 @@ export async function getEnrichedInventory(
     }
   })
 
-  const stats: InventoryStats = {
-    total: rows.length,
-    in_stock: rows.filter((r) => r.stock_status === 'in').length,
-    low_stock: rows.filter((r) => r.stock_status === 'low').length,
-    out_of_stock: rows.filter((r) => r.stock_status === 'out').length,
-    expiring_soon: rows.filter((r) => r.is_expiring_soon && !r.is_expired).length,
+  return {
+    rows,
+    stats: {
+      total: rows.length,
+      in_stock: rows.filter((row) => row.stock_status === 'in').length,
+      low_stock: rows.filter((row) => row.stock_status === 'low').length,
+      out_of_stock: rows.filter((row) => row.stock_status === 'out').length,
+      expiring_soon: rows.filter((row) => row.is_expiring_soon && !row.is_expired).length,
+    },
   }
+}
 
-  return { rows, stats }
+/**
+ * Fetches this pharmacy's inventory joined with product catalogue data and
+ * batches, and decorates each row with stock/expiry status derived from the
+ * stock_movements ledger (batch quantities are derived, not stored).
+ */
+export async function getEnrichedInventory(
+  supabase: SupabaseServerClient,
+  pharmacyId: string,
+  options: { showDelisted?: boolean } = {}
+): Promise<{ rows: EnrichedInventoryRow[]; stats: InventoryStats }> {
+  const { data, error } = await (supabase.rpc as any)('get_pharmacy_inventory_enriched', {
+    p_pharmacy_id: pharmacyId,
+    p_show_delisted: options.showDelisted === true,
+  })
+  if (error) throw error
+
+  return assembleEnrichedInventory((data ?? []) as InventorySnapshotRow[])
 }
