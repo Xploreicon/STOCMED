@@ -8,6 +8,14 @@ Release scope:
 - no catalogue or inventory writes.
 
 Known-good pre-change application commit: `da835da`.
+Known-good production deployment:
+`https://stocmed-da4jng2oa-xploreicons-projects.vercel.app`.
+
+Fresh pre-release database archive:
+`/private/tmp/stocmed-inventory-read-fix/reports/backups/production-pre-inventory-read-20260905T213641Z.sql.dump`.
+
+SHA-256:
+`41a063674968ef1f76fcb7f31894c9f5ae64a99abb7e2fbd2c582a7c7f8c8839`.
 
 ## Before production promotion
 
@@ -41,11 +49,11 @@ checksum, inspect the archive, and restore it in the approved maintenance
 window:
 
 ```sh
-shasum -a 256 -c /absolute/path/to/pre-inventory-read.dump.sha256
-pg_restore --list /absolute/path/to/pre-inventory-read.dump
+shasum -a 256 -c /private/tmp/stocmed-inventory-read-fix/reports/backups/production-pre-inventory-read-20260905T213641Z.sql.dump.sha256
+pg_restore --list /private/tmp/stocmed-inventory-read-fix/reports/backups/production-pre-inventory-read-20260905T213641Z.sql.dump
 pg_restore --clean --if-exists --no-owner --no-acl \
   --dbname "$INVENTORY_READ_PRODUCTION_DATABASE_URL" \
-  /absolute/path/to/pre-inventory-read.dump
+  /private/tmp/stocmed-inventory-read-fix/reports/backups/production-pre-inventory-read-20260905T213641Z.sql.dump
 ```
 
 After either rollback, confirm `products` is still 3,419 rows with the approved
