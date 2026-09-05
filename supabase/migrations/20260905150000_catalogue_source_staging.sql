@@ -623,3 +623,5 @@ GRANT EXECUTE ON FUNCTION public.set_catalogue_reconciliation_decision(UUID, TEX
   TO authenticated, service_role;
 
 COMMIT;
+
+NOTIFY pgrst, 'reload schema';
