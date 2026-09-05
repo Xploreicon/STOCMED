@@ -59,7 +59,13 @@ function getStockBadge(stock: number, lowThreshold: number = 10) {
   }
 }
 
-function getExpiryAlert(expiryDateStr: string | null) {
+function getExpiryAlert(expiryDateStr: string | null, batchCaptureRequired = false) {
+  if (batchCaptureRequired) {
+    return {
+      text: 'Batch required',
+      colorClass: 'text-warning bg-warning/5 border-warning/20 border',
+    };
+  }
   if (!expiryDateStr) {
     return {
       text: 'No Expiry',
@@ -174,7 +180,7 @@ export default function InventoryTable({
               drug.quantity_in_stock,
               drug.low_stock_threshold
             );
-            const expiryAlert = getExpiryAlert(drug.expiry_date);
+            const expiryAlert = getExpiryAlert(drug.expiry_date, drug.batch_capture_required);
             const StockIcon = stockBadge.icon;
 
             return (
@@ -395,7 +401,7 @@ export default function InventoryTable({
                 drug.quantity_in_stock,
                 drug.low_stock_threshold
               );
-              const expiryAlert = getExpiryAlert(drug.expiry_date);
+              const expiryAlert = getExpiryAlert(drug.expiry_date, drug.batch_capture_required);
               const StockIcon = stockBadge.icon;
 
               return (

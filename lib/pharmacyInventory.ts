@@ -47,6 +47,7 @@ export interface EnrichedInventoryRow {
   product_id: string | null
   item_type: 'medicine' | 'store'
   tracks_expiry: boolean
+  batch_capture_required: boolean
   item_name: string | null
   unit_description: string | null
   store_category: string | null
@@ -218,6 +219,7 @@ export async function getEnrichedInventory(
       product_id: inv.product_id,
       item_type: inv.item_type ?? 'medicine',
       tracks_expiry: inv.tracks_expiry ?? true,
+      batch_capture_required: inv.batch_capture_required ?? false,
       item_name: inv.item_name ?? null,
       unit_description: inv.unit_description ?? null,
       store_category: inv.store_category ?? null,
