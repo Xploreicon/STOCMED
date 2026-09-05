@@ -117,7 +117,7 @@ SELECT is(
   'direct authenticated push subscription insert is denied'
 );
 
-RESET ROLE;
+SET LOCAL ROLE postgres;
 DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
   PERFORM set_config('request.jwt.claim.sub', 'c9500000-0000-4000-8000-000000000001', TRUE);
@@ -129,7 +129,7 @@ SELECT lives_ok($sql$
   )
 $sql$, 'an admin can subscribe a PWA device for an individual test push');
 
-RESET ROLE;
+SET LOCAL ROLE postgres;
 DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
   PERFORM set_config('request.jwt.claim.sub', 'c9500000-0000-4000-8000-000000000004', TRUE);
@@ -141,7 +141,7 @@ SELECT is(
   'a non-owner cannot read another user push subscription'
 );
 
-RESET ROLE;
+SET LOCAL ROLE postgres;
 DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'service_role', TRUE);
   PERFORM set_config('request.jwt.claim.sub', '', TRUE);
@@ -198,7 +198,7 @@ SELECT is(
   'email unsubscribe does not revoke independent push consent'
 );
 
-RESET ROLE;
+SET LOCAL ROLE postgres;
 DO $$ BEGIN
   PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
   PERFORM set_config('request.jwt.claim.sub', 'c9500000-0000-4000-8000-000000000002', TRUE);
@@ -209,7 +209,7 @@ SELECT ok(
   'authenticated owner removes the subscription through the narrow RPC'
 );
 
-RESET ROLE;
+SET LOCAL ROLE postgres;
 SELECT is(
   (SELECT count(*) FROM public.push_subscriptions
    WHERE user_id = 'c9500000-0000-4000-8000-000000000002'),
