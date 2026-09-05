@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PushSubscriptionControl } from '@/components/notifications/PushSubscriptionControl'
 
 type Preferences = {
   owner_phone: string
@@ -127,6 +128,7 @@ export default function PharmacyNotificationSettingsPage() {
           </label>
         </div>
         <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save choices'}</Button>
+        <PushSubscriptionControl />
       </div>
     </div>
   )

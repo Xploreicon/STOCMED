@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
   const rendered = renderBroadcastEmail({
     subject: parsed.data.subject,
     bodyMarkdown: parsed.data.body_markdown,
+    bodyFormat: parsed.data.body_format,
     template: parsed.data.template,
     unsubscribeUrl: 'https://askstocmed.com/u/preview',
   })

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { deliverQueuedEmail } from '@/lib/notifications/email'
-import { deliverQueuedSms } from '@/lib/notifications/sms'
+import { deliveryHandler } from '@/lib/notifications/dispatcher'
 
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET
@@ -26,11 +25,11 @@ export async function GET(request: NextRequest) {
   // notification traffic or create a sudden provider burst.
   for (let index = 0; index < deliveries.length; index += 2) {
     const batch = deliveries.slice(index, index + 2)
-    results.push(...await Promise.allSettled(batch.map((delivery: any) =>
-      delivery.channel === 'email'
-        ? deliverQueuedEmail(delivery)
-        : deliverQueuedSms(delivery),
-    )))
+    results.push(...await Promise.allSettled(batch.map(async (delivery: any) => {
+      const handler = deliveryHandler(delivery.channel)
+      if (!handler) throw new Error(`Unsupported notification channel: ${delivery.channel}`)
+      return handler(delivery)
+    })))
     if (index + 2 < deliveries.length) {
       await new Promise(resolve => setTimeout(resolve, 550))
     }

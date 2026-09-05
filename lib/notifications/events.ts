@@ -3,6 +3,7 @@ import 'server-only'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { hashRecipient } from '@/lib/notifications/core'
 import { normalizeNigerianPhone } from '@/lib/notifications/phone'
+import { escapeEmailHtml, renderBrandedEmail } from '@/lib/email/template'
 
 type DeliveryChoices = {
   email?: boolean
@@ -24,14 +25,6 @@ type QueueNotificationInput = {
   smsBody?: string
   dailyEmailCap?: number
   dailySmsCap?: number
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
 }
 
 function startOfTodayUtc() {
@@ -74,8 +67,16 @@ export async function queueNotification(input: QueueNotificationInput) {
   ) {
     const recipient = input.email.trim().toLowerCase()
     if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
-      const title = escapeHtml(input.title)
-      const body = escapeHtml(input.body)
+      const rendered = renderBrandedEmail({
+        subject: input.title,
+        preheader: input.body,
+        eyebrow: 'StocMed notification',
+        heading: input.title,
+        bodyHtml: `<p style="margin:0">${escapeEmailHtml(input.body).replaceAll('\n', '<br>')}</p>`,
+        bodyText: input.body,
+        cta: { label: 'Manage notification choices', href: settingsUrl },
+        reason: 'You received this notification because it is enabled in your StocMed notification settings.',
+      })
       deliveries.push({
         channel: 'email',
         provider: 'resend',
@@ -83,10 +84,8 @@ export async function queueNotification(input: QueueNotificationInput) {
         recipient,
         recipient_hash: hashRecipient(recipient),
         payload: {
-          subject: input.title,
-          text: `${input.title}\n\n${input.body}\n\nManage notification choices: ${settingsUrl}`,
-          html: `<main style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px"><h1 style="font-size:22px">${title}</h1><p style="font-size:16px;line-height:1.6">${body}</p><p><a href="${settingsUrl}">Manage notification choices</a></p></main>`,
-          unsubscribeUrl: settingsUrl,
+          ...rendered,
+          settingsUrl,
           consent: 'explicit',
         },
       })

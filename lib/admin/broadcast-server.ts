@@ -10,6 +10,18 @@ export type BroadcastRecipient = {
 }
 
 export async function resolveBroadcastAudience(actorId: string, audience: BroadcastAudience) {
+  return resolveAudienceRpc('resolve_broadcast_audience', actorId, audience)
+}
+
+export async function resolvePushAudience(actorId: string, audience: BroadcastAudience) {
+  return resolveAudienceRpc('resolve_push_audience', actorId, audience)
+}
+
+async function resolveAudienceRpc(
+  rpcName: 'resolve_broadcast_audience' | 'resolve_push_audience',
+  actorId: string,
+  audience: BroadcastAudience,
+) {
   const admin = getAdminClient()
   if (!admin) throw new Error('Broadcast database is not configured')
   const pageSize = 1000
@@ -17,7 +29,7 @@ export async function resolveBroadcastAudience(actorId: string, audience: Broadc
 
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await (admin as any)
-      .rpc('resolve_broadcast_audience', {
+      .rpc(rpcName, {
         p_actor_id: actorId,
         p_audience: audience,
       })

@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { broadcastComposeSchema } from '@/lib/admin/broadcast-schema'
 import { getAuthorizedAdmin } from '@/lib/admin/authorization'
+import { queueBroadcast } from '@/lib/admin/broadcast-queue'
 import { resolveBroadcastAudience } from '@/lib/admin/broadcast-server'
-import { renderBroadcastEmail } from '@/lib/email/broadcast'
-import { hashRecipient } from '@/lib/notifications/core'
-import { createScopedUnsubscribeToken } from '@/lib/notifications/unsubscribe'
 import { getAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
@@ -34,81 +32,27 @@ export async function POST(request: NextRequest) {
   }
   const admin = getAdminClient()
   if (!admin) return NextResponse.json({ error: 'Broadcast service unavailable' }, { status: 503 })
-  let broadcastId: string | null = null
-
   try {
     const recipients = await resolveBroadcastAudience(viewer.user.id, parsed.data.audience)
     if (!recipients.length) {
       return NextResponse.json({ error: 'No subscribed recipients match this audience' }, { status: 400 })
     }
-    const now = new Date()
-    const scheduledAt = parsed.data.scheduled_at ? new Date(parsed.data.scheduled_at) : now
-    if (Number.isNaN(scheduledAt.getTime())) {
-      return NextResponse.json({ error: 'Choose a valid send time' }, { status: 400 })
-    }
-    const { data: broadcast, error: createError } = await (admin as any)
-      .from('broadcasts')
-      .insert({
-        subject: parsed.data.subject,
-        body_markdown: parsed.data.body_markdown,
-        template: parsed.data.template,
-        audience: parsed.data.audience,
-        status: scheduledAt > now ? 'scheduled' : 'draft',
-        scheduled_at: scheduledAt.toISOString(),
-        created_by: viewer.user.id,
-      })
-      .select('id')
-      .single()
-    if (createError || !broadcast) throw createError || new Error('Broadcast was not created')
-    broadcastId = broadcast.id
-
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://askstocmed.com').replace(/\/$/, '')
-    const queueRows = recipients.map(recipient => {
-      const token = createScopedUnsubscribeToken(recipient.user_id, 'broadcast')
-      const unsubscribeUrl = `${siteUrl}/u/${encodeURIComponent(token)}`
-      const rendered = renderBroadcastEmail({
-        subject: parsed.data.subject,
-        bodyMarkdown: parsed.data.body_markdown,
-        template: parsed.data.template,
-        unsubscribeUrl,
-      })
-      return {
-        user_id: recipient.user_id,
-        pharmacy_id: recipient.pharmacy_id,
-        email: recipient.email.toLowerCase(),
-        display_name: recipient.display_name,
-        recipient_hash: hashRecipient(recipient.email),
-        idempotency_key: `broadcast:${broadcast.id}:${recipient.user_id}`,
-        send_after: scheduledAt.toISOString(),
-        payload: { ...rendered, unsubscribeUrl, broadcastId: broadcast.id },
-      }
+    const result = await queueBroadcast({
+      actorId: viewer.user.id,
+      compose: parsed.data,
+      recipients,
     })
-
-    let queued = 0
-    let suppressed = 0
-    for (let index = 0; index < queueRows.length; index += 100) {
-      const { data, error } = await (admin as any).rpc('queue_admin_broadcast_recipients', {
-        p_actor_id: viewer.user.id,
-        p_broadcast_id: broadcast.id,
-        p_rows: queueRows.slice(index, index + 100),
-      })
-      if (error) throw error
-      queued += Number(data?.queued || 0)
-      suppressed += Number(data?.suppressed || 0)
-    }
     return NextResponse.json({
-      broadcast_id: broadcast.id,
-      recipient_count: queued,
-      suppressed_count: suppressed,
-      status: scheduledAt > now ? 'scheduled' : 'queued',
+      broadcast_id: result.broadcastId,
+      recipient_count: result.recipientCount,
+      suppressed_count: result.suppressedCount,
+      status: result.status,
     }, { status: 201 })
   } catch (error) {
     console.error('Could not queue broadcast:', error)
-    if (broadcastId) {
-      await (admin as any).from('broadcasts').update({
-        status: 'failed', completed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      }).eq('id', broadcastId)
-    }
-    return NextResponse.json({ error: 'The broadcast could not be queued' }, { status: 500 })
+    const message = error instanceof Error && error.message === 'Choose a valid send time'
+      ? error.message
+      : 'The broadcast could not be queued'
+    return NextResponse.json({ error: message }, { status: message === 'Choose a valid send time' ? 400 : 500 })
   }
 }

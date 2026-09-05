@@ -6,7 +6,7 @@ export const broadcastTemplateSchema = z.enum([
 
 export const broadcastAudienceSchema = z.object({
   kind: z.enum([
-    'all_pharmacies', 'all_patients', 'premium_pharmacies',
+    'all_users', 'all_pharmacies', 'all_patients', 'premium_pharmacies',
     'free_pharmacies', 'individual_pharmacy', 'individual_user', 'custom',
   ]),
   pharmacy_id: z.string().uuid().optional(),
@@ -37,10 +37,30 @@ export const broadcastAudienceSchema = z.object({
 export const broadcastComposeSchema = z.object({
   subject: z.string().trim().min(1).max(200),
   body_markdown: z.string().trim().min(1).max(20000),
+  body_format: z.enum(['markdown', 'html']).default('markdown'),
   template: broadcastTemplateSchema,
   audience: broadcastAudienceSchema,
   scheduled_at: z.string().datetime().nullable().optional(),
 })
 
+export const broadcastTestSchema = broadcastComposeSchema.pick({
+  subject: true,
+  body_markdown: true,
+  body_format: true,
+  template: true,
+})
+
+export const pushComposeSchema = z.object({
+  title: z.string().trim().min(1).max(100),
+  body: z.string().trim().min(1).max(240),
+  href: z.string().trim().max(500).refine(
+    value => value.startsWith('/') && !value.startsWith('//') && !value.includes('\\'),
+    'Choose a StocMed path beginning with /',
+  ),
+  audience: broadcastAudienceSchema,
+  request_id: z.string().uuid(),
+})
+
 export type BroadcastAudience = z.infer<typeof broadcastAudienceSchema>
 export type BroadcastCompose = z.infer<typeof broadcastComposeSchema>
+export type PushCompose = z.infer<typeof pushComposeSchema>

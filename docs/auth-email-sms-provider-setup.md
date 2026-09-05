@@ -71,21 +71,37 @@ Google callback.
    `https://askstocmed.com/api/webhooks/termii` and configure the webhook signing
    secret. Delivery status and cost are written to the notification audit.
 
-## 4. Release sequence
+## 4. PWA Web Push
+
+1. Generate one VAPID key pair. Set `VAPID_PUBLIC_KEY` (or
+   `NEXT_PUBLIC_VAPID_PUBLIC_KEY`), `VAPID_PRIVATE_KEY`, and `VAPID_SUBJECT` in
+   the server environment. Only the public key may be exposed to browsers.
+2. Apply `20260905000000_email_library_and_web_push.sql` before deploying the
+   routes that read `welcome_email_jobs` or `push_subscriptions`.
+3. Install the production PWA, enable browser push from patient or pharmacy
+   notification settings, and verify the subscription belongs to the signed-in
+   user. Email suppression and push consent are deliberately independent.
+4. The notification dispatcher must have `CRON_SECRET` and all VAPID variables.
+   Expired endpoints are removed on provider responses `404` and `410`.
+
+## 5. Release sequence
 
 1. Apply `20260731000000_oauth_profile_onboarding.sql`.
 2. Apply `20260731010000_notification_outbox.sql`.
 3. Apply `20260802000000_restrict_google_pharmacy_signup.sql`.
 4. Apply `20260802010000_remove_legacy_profile_sync.sql`.
-5. Deploy server variables and cron configuration.
-6. Enable the pharmacy `notifications` feature.
-7. Opt in to owner reservation SMS and/or daily stock digest at
+5. Apply the notification foundation, runtime, broadcast, and email/push
+   migrations in timestamp order through the backup/diff/apply/pgTAP gate.
+6. Deploy server variables and cron configuration.
+7. Enable the pharmacy `notifications` feature.
+8. Opt in to owner reservation SMS and/or daily stock digest at
    `/pharmacy/settings/notifications`. Nothing sends by default.
-8. Patients can opt into product email and reservation reminder SMS from
+9. Patients can opt into product email, reservation reminder SMS, and browser
+   push from
    `/settings`. The initial reservation confirmation uses consent specific to
    that reservation.
 
-## 5. Acceptance checks
+## 6. Acceptance checks
 
 - Google shows StocMed and the OAuth URL/callback stays on
   `askstocmed.com` / `auth.askstocmed.com`.
@@ -106,4 +122,11 @@ Google callback.
   retry, and the dispatcher later sends it once.
 - Owner SMS requires both the `notifications` feature and explicit preference.
   Stock alerts produce one digest per pharmacy/day.
+- A new patient and pharmacy each create one durable welcome job and one
+  idempotent branded email delivery; provider failure never rolls back signup.
+- Search-demand email defaults to one daily, location-scoped digest per
+  pharmacy. `SEARCH_DEMAND_DIGEST_FREQUENCY=hourly` is an explicit opt-in.
+- An installed PWA can subscribe and unsubscribe one device, receive an admin
+  test push through the shared outbox, and open the safe same-origin path when
+  the notification is clicked.
 - Confirm provider keys are absent from browser bundles and source control.

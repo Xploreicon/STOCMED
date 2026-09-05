@@ -67,6 +67,14 @@ function dispatchNavigation(
 }
 
 describe('service worker navigation handling', () => {
+  it('registers Web Push display and click-through handlers', () => {
+    expect(serviceWorker).toContain("self.addEventListener('push'")
+    expect(serviceWorker).toContain('self.registration.showNotification')
+    expect(serviceWorker).toContain("self.addEventListener('notificationclick'")
+    expect(serviceWorker).toContain('self.clients.openWindow')
+    expect(serviceWorker).toContain("href.startsWith('/')")
+  })
+
   it('does not precache routes that can redirect', () => {
     const assetsBlock = serviceWorker.match(/const ASSETS_TO_CACHE = \[([\s\S]*?)\];/)?.[1]
 

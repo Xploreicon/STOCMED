@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stocmed-v6';
+const CACHE_NAME = 'stocmed-v7';
 const ASSETS_TO_CACHE = [
   '/offline.html',
   '/manifest.json',
@@ -27,6 +27,46 @@ self.addEventListener('activate', (event) => {
       );
     }).then(() => self.clients.claim())
   );
+});
+
+self.addEventListener('push', (event) => {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (_error) {
+    payload = { body: event.data ? event.data.text() : '' };
+  }
+
+  const title = payload.title || 'StocMed';
+  const href = typeof payload.href === 'string' && payload.href.startsWith('/') && !payload.href.startsWith('//') && !payload.href.includes('\\')
+    ? payload.href
+    : '/dashboard';
+  event.waitUntil(self.registration.showNotification(title, {
+    body: payload.body || '',
+    icon: payload.icon || '/icon-192.png',
+    badge: payload.badge || '/icon-192.png',
+    tag: payload.tag || 'stocmed-notification',
+    data: { href },
+  }));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const href = event.notification.data && event.notification.data.href;
+  const path = typeof href === 'string' && href.startsWith('/') && !href.startsWith('//') && !href.includes('\\')
+    ? href
+    : '/dashboard';
+  const targetUrl = new URL(path, self.location.origin).href;
+
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+    for (const client of clients) {
+      if (new URL(client.url).origin === self.location.origin) {
+        if ('navigate' in client) client.navigate(targetUrl);
+        return client.focus();
+      }
+    }
+    return self.clients.openWindow ? self.clients.openWindow(targetUrl) : undefined;
+  }));
 });
 
 self.addEventListener('fetch', (event) => {

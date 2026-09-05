@@ -1,4 +1,5 @@
 import { markdownToEmailHtml, markdownToText } from '@/lib/email/markdown'
+import { emailHtmlToText, sanitizeAdminEmailHtml } from '@/lib/email/html'
 import { renderBrandedEmail } from '@/lib/email/template'
 
 export type BroadcastTemplate = 'announcement' | 'product_update' | 'medication_alert' | 'custom'
@@ -38,17 +39,24 @@ export const BROADCAST_TEMPLATE_COPY: Record<BroadcastTemplate, {
 export function renderBroadcastEmail(input: {
   subject: string
   bodyMarkdown: string
+  bodyFormat?: 'markdown' | 'html'
   template: BroadcastTemplate
   unsubscribeUrl: string
 }) {
   const template = BROADCAST_TEMPLATE_COPY[input.template]
+  const bodyHtml = input.bodyFormat === 'html'
+    ? sanitizeAdminEmailHtml(input.bodyMarkdown)
+    : markdownToEmailHtml(input.bodyMarkdown)
+  const bodyText = input.bodyFormat === 'html'
+    ? emailHtmlToText(bodyHtml)
+    : markdownToText(input.bodyMarkdown)
   return renderBrandedEmail({
     subject: input.subject,
     preheader: input.subject,
     eyebrow: template.eyebrow,
     heading: input.subject,
-    bodyHtml: markdownToEmailHtml(input.bodyMarkdown),
-    bodyText: markdownToText(input.bodyMarkdown),
+    bodyHtml,
+    bodyText,
     unsubscribeUrl: input.unsubscribeUrl,
     reason: 'You received this administrative update because your email is associated with a StocMed account.',
   })

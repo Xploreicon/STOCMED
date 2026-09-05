@@ -59,10 +59,12 @@ export async function deliverQueuedEmail(delivery: any) {
         subject: claimed.payload.subject,
         html: claimed.payload.html,
         text: claimed.payload.text,
-        headers: {
-          'List-Unsubscribe': `<${claimed.payload.unsubscribeUrl}>`,
-          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-        },
+        ...(claimed.payload.unsubscribeUrl && claimed.payload.oneClickUnsubscribe === true ? {
+          headers: {
+            'List-Unsubscribe': `<${claimed.payload.unsubscribeUrl}>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          },
+        } : {}),
       }),
       signal: AbortSignal.timeout(10_000),
     })
@@ -107,6 +109,7 @@ export async function sendEmail(input: SendEmailInput) {
       ...rendered,
       subject: input.subject || rendered.subject,
       unsubscribeUrl,
+      oneClickUnsubscribe: true,
       consent: 'explicit',
     },
   })

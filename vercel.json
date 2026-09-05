@@ -4,9 +4,10 @@
     { "path": "/api/cron/expire-reservations", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/purge-prescriptions", "schedule": "17 * * * *" },
     { "path": "/api/cron/dispatch-notifications", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/welcome-emails", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/reservation-reminders", "schedule": "*/10 * * * *" },
     { "path": "/api/cron/stock-alerts", "schedule": "0 7 * * *" },
-    { "path": "/api/cron/search-demand-digest", "schedule": "30 6 * * *" },
+    { "path": "/api/cron/search-demand-digest", "schedule": "30 * * * *" },
     { "path": "/api/cron/daily-sales-summary", "schedule": "0 18 * * *" }
   ]
 }

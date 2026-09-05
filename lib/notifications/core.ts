@@ -2,8 +2,8 @@ import 'server-only'
 import { createHash } from 'crypto'
 import { getAdminClient } from '@/lib/supabase/admin'
 
-export type NotificationChannel = 'email' | 'sms'
-export type NotificationProvider = 'resend' | 'termii'
+export type NotificationChannel = 'email' | 'sms' | 'push'
+export type NotificationProvider = 'resend' | 'termii' | 'web_push'
 
 export function hashRecipient(recipient: string) {
   const pepper = process.env.NOTIFICATION_HASH_PEPPER
@@ -89,7 +89,9 @@ export async function underGlobalChannelCap(channel: NotificationChannel) {
   if (!admin) return false
   const cap = channel === 'sms'
     ? Number(process.env.GLOBAL_DAILY_SMS_CAP || 500)
-    : Number(process.env.GLOBAL_DAILY_EMAIL_CAP || 2000)
+    : channel === 'push'
+      ? Number(process.env.GLOBAL_DAILY_PUSH_CAP || 5000)
+      : Number(process.env.GLOBAL_DAILY_EMAIL_CAP || 2000)
   const since = new Date()
   since.setUTCHours(0, 0, 0, 0)
   const { count } = await (admin.from('notification_deliveries') as any)

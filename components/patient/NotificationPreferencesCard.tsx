@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Bell, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
+import { PushSubscriptionControl } from '@/components/notifications/PushSubscriptionControl'
 
 type Preferences = {
   product_email_opt_in: boolean
@@ -29,6 +30,9 @@ export function NotificationPreferencesCard() {
   const [preferences, setPreferences] = useState(defaults)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const setPushState = useCallback((enabled: boolean) => {
+    setPreferences(current => ({ ...current, patient_push_consent: enabled }))
+  }, [])
 
   useEffect(() => {
     fetch('/api/notifications/preferences')
@@ -110,6 +114,7 @@ export function NotificationPreferencesCard() {
               label="Reservation reminder SMS"
               detail="Receive one reminder shortly before an active hold expires. The initial hold confirmation is transactional."
             />
+            <PushSubscriptionControl onSubscriptionChange={setPushState} />
           </>
         )}
       </CardContent>
