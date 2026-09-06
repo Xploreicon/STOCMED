@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "db:archive": "node scripts/db/safe-postgres-archive.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "start": "next start",

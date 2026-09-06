@@ -53,6 +53,27 @@
 - Before any production database change: take a `pg_dump`, run a Migra diff, and use explicit file staging.
 - Stop and obtain confirmation if native work implies a database, core-identity, or privileged-boundary change.
 
+## Database, REST, and app-endpoint diagnostics
+
+- Database passwords must never appear in process arguments. Do not invoke
+  `pg_dump`, `pg_restore`, or `psql` with a password-bearing URL as a positional
+  argument or `--dbname` value. Use `npm run db:archive` with a protected
+  mode-0600 connection file; the wrapper supplies the password through a
+  short-lived `PGPASSFILE` and removes it after the child process exits.
+- Never use `ps aux`, `ps -ef`, `pgrep -a`, `pgrep -f`, `printenv`, an environment
+  dump, or shell xtrace while a secret-bearing database process may exist. For
+  progress checks, use an exact archive path with `lsof`, or a process view
+  restricted to PID, state, elapsed time, and executable name—never args/env.
+- Treat command text and diagnostic output as publishable. Secret environment
+  variables are runtime references, not strings to interpolate into a command.
+  A failed or incomplete dump stays under a `.partial-<pid>` name and is never
+  checksummed or accepted as a backup.
+- Always compare the same failing operation through raw SQL, raw PostgREST/REST, and the app endpoint before assigning a cause. Do not default to a Supabase incident.
+- **DB works, but raw REST is empty, wrong, or cannot see a new schema object:** treat this as a stale PostgREST schema cache first. Run `NOTIFY pgrst, 'reload schema';`, then repeat the raw REST request before investigating elsewhere.
+- **DB works and raw REST is fast/correct, but the app endpoint is slow:** treat this as an app-layer N+1 or bad read path. Fix the query or fan-out; a schema-cache reload is not the remedy.
+- **Raw SQL is itself slow or erroring:** investigate a real database or infrastructure/Supabase incident. Waiting is justified only when the database layer is also affected.
+- Every schema-changing migration from `20260905150000` onward must finish with `NOTIFY pgrst, 'reload schema';` so new functions, tables, types, and columns are exposed to REST immediately after apply.
+
 ## Tracked implementation items
 
 - **Deferred middleware hunk — resolved in Prompt 3:** the global role-less OAuth redirect is now coupled to explicit callback, native-start, profile-completion, and password-recovery exceptions, with regression coverage in `google-oauth-policy.test.ts`.
