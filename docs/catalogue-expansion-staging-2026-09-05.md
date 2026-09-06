@@ -109,7 +109,8 @@ convention and enter the catalogue with `is_verified=true`.
   authorization, audit history, and the products write boundary.
 - Catalogue database tests: 61 assertions passed across the staging and review
   migrations.
-- Application tests: 35 files and 217 tests passed.
+- Application tests: 36 files and 221 tests passed, including database-command
+  credential-output regression coverage.
 - TypeScript validation and the optimized Next.js production build passed.
 - Browser verification used synthetic `.invalid` accounts only. An authorized
   admin could load, search, filter, edit, resolve and approve review rows; an

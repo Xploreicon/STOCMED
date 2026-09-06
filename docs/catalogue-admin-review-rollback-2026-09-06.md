@@ -23,14 +23,34 @@ credentials in this file, logs, or chat.
 
 ## Required pre-flight
 
-1. Export a fresh custom-format production dump to a gitignored backup path.
-2. Write a SHA-256 sidecar and verify it before applying either migration.
-3. Inspect the archive with `pg_restore --list`.
-4. Confirm deployed production is still based on `a581c22` plus any explicitly
+1. Put the rotated production database URL in a protected file outside the
+   repository (`chmod 600`) and expose only its path through
+   `STOCMED_PRODUCTION_DATABASE_URL_FILE`.
+2. Export a fresh custom-format production dump to a gitignored backup path
+   with the credential-safe archive runner:
+
+   ```sh
+   npm run db:archive -- backup \
+     --connection-file "$STOCMED_PRODUCTION_DATABASE_URL_FILE" \
+     --archive /absolute/gitignored/path/production-pre-catalogue-review.dump
+   ```
+
+3. Never pass the URL itself to `pg_dump`, `pg_restore`, `psql`, or a process
+   diagnostic. Never use `ps`/`pgrep` modes that display arguments or the
+   environment while database tooling is running.
+4. Verify the generated SHA-256 sidecar and archive TOC before applying either
+   migration:
+
+   ```sh
+   npm run db:archive -- verify \
+     --archive /absolute/gitignored/path/production-pre-catalogue-review.dump
+   ```
+
+5. Confirm deployed production is still based on `a581c22` plus any explicitly
    reviewed intervening production commits.
-5. Confirm the release diff contains the two migrations above, their tests, the
+6. Confirm the release diff contains the two migrations above, their tests, the
    loader, and the admin review application changes only.
-6. Record `products` count and the approved deterministic products digest before
+7. Record `products` count and the approved deterministic products digest before
    applying the release. Applying the schema and loading source evidence must
    leave both unchanged.
 
@@ -113,11 +133,10 @@ is restoration from the verified pre-release dump in an approved maintenance
 window:
 
 ```sh
-shasum -a 256 -c "$CATALOGUE_REVIEW_BACKUP.sha256"
-pg_restore --list "$CATALOGUE_REVIEW_BACKUP"
-pg_restore --clean --if-exists --no-owner --no-acl \
-  --dbname "$CATALOGUE_REVIEW_PRODUCTION_DATABASE_URL" \
-  "$CATALOGUE_REVIEW_BACKUP"
+npm run db:archive -- restore \
+  --connection-file "$STOCMED_PRODUCTION_DATABASE_URL_FILE" \
+  --archive "$CATALOGUE_REVIEW_BACKUP" \
+  --confirm RESTORE_VERIFIED_ARCHIVE
 ```
 
 ## Post-rollback verification

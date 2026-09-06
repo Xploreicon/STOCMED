@@ -49,10 +49,10 @@ Use this only if the down migration cannot recover service or data integrity.
 It is destructive and requires an incident lead to stop writes first.
 
 ```sh
-export SHIP_GATE_A_PRODUCTION_URL='postgresql://<production-restore-role>@<production-host>/postgres'
-shasum -a 256 -c /Users/divineajie/stocmed-mvp/reports/backups/production-pre-ship-gate-a-20260827T011713Z.dump.sha256
-pg_restore --list /Users/divineajie/stocmed-mvp/reports/backups/production-pre-ship-gate-a-20260827T011713Z.dump
-pg_restore --clean --if-exists --no-owner --no-acl --dbname "$SHIP_GATE_A_PRODUCTION_URL" /Users/divineajie/stocmed-mvp/reports/backups/production-pre-ship-gate-a-20260827T011713Z.dump
+npm run db:archive -- restore \
+  --connection-file "$STOCMED_PRODUCTION_DATABASE_URL_FILE" \
+  --archive /Users/divineajie/stocmed-mvp/reports/backups/production-pre-ship-gate-a-20260827T011713Z.dump \
+  --confirm RESTORE_VERIFIED_ARCHIVE
 ```
 
 After either rollback, verify the catalogue count and digest, then run a
