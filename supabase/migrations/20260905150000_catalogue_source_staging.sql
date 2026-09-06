@@ -162,8 +162,9 @@ BEGIN
     RAISE EXCEPTION 'Unknown catalogue source snapshot';
   END IF;
 
-  -- Human Greenbook records are proposed conservatively. The current products
-  -- schema has no route/release columns, so those remain explicit evidence gaps.
+  -- Human Greenbook records are proposed conservatively. Route, release, and
+  -- applicant data remain immutable evidence/provenance rather than product
+  -- identity columns.
   WITH human AS (
     SELECT
       source.*,
@@ -241,11 +242,13 @@ BEGIN
       nrn_product.dosage_form AS nrn_dosage_form,
       nrn_product.manufacturer AS nrn_manufacturer,
       identity_match.match_count AS identity_match_count,
-      identity_match.product_id AS identity_product_id
+      identity_match.product_id AS identity_product_id,
+      identity_product.nafdac_number AS identity_nafdac_number
     FROM duplicate_counts source
     JOIN nrn_matches nrn_match ON nrn_match.record_id = source.record_id
     LEFT JOIN public.products nrn_product ON nrn_product.id = nrn_match.product_id
     JOIN identity_matches identity_match ON identity_match.record_id = source.record_id
+    LEFT JOIN public.products identity_product ON identity_product.id = identity_match.product_id
   ),
   classified AS (
     SELECT
@@ -286,6 +289,12 @@ BEGIN
           AND (public.normalize_catalogue_source_text(source.nrn_dosage_form) = source.dosage_form OR public.normalize_catalogue_source_text(source.nrn_dosage_form) = '')
           AND (public.normalize_catalogue_source_text(source.nrn_manufacturer) = source.manufacturer OR public.normalize_catalogue_source_text(source.nrn_manufacturer) = '')
         ) THEN 'nrn_identity_conflict' END,
+        CASE WHEN source.nrn_match_count = 0
+          AND source.identity_match_count = 1
+          AND source.nrn <> ''
+          AND public.normalize_catalogue_source_nrn(source.identity_nafdac_number) <> ''
+          AND public.normalize_catalogue_source_nrn(source.identity_nafdac_number) <> source.nrn
+          THEN 'identity_nrn_conflict' END,
         CASE WHEN source.product_name = '' THEN 'missing_product_name' END,
         CASE WHEN source.ingredient = '' THEN 'missing_ingredient' END,
         CASE WHEN source.strength = '' THEN 'missing_strength' END,
@@ -304,9 +313,7 @@ BEGIN
         CASE WHEN source.quality_flags ? 'missing_or_unresolved_nafdac_number'
           THEN 'missing_or_unresolved_nafdac_number' END,
         CASE WHEN source.quality_flags ? 'source_name_contains_review_note'
-          THEN 'source_name_contains_review_note' END,
-        'route_and_release_not_modelled_in_products',
-        'applicant_authorization_not_modelled_in_products'
+          THEN 'source_name_contains_review_note' END
       ], NULL)::TEXT[] AS reasons
     FROM matched source
   ),
@@ -326,6 +333,7 @@ BEGIN
           AND source.source_fingerprint_count <= 1
           AND source.nrn_match_count = 0
           AND source.identity_match_count = 1
+          AND public.normalize_catalogue_source_nrn(source.identity_nafdac_number) = ''
           THEN 'existing_identity_enrichment'
         WHEN source.source_status = 'Active'
           AND source.source_nrn_count <= 1
@@ -352,12 +360,17 @@ BEGIN
       END AS queue_type,
       CASE
         WHEN source.unique_nrn_identity_agrees THEN source.nrn_product_id
-        WHEN source.nrn_match_count = 0 AND source.identity_match_count = 1 THEN source.identity_product_id
+        WHEN source.nrn_match_count = 0 AND source.identity_match_count = 1
+          THEN source.identity_product_id
         ELSE NULL
       END AS candidate_product_id,
       CASE
         WHEN source.unique_nrn_identity_agrees THEN 'unique_nrn_plus_identity_fields'
-        WHEN source.nrn_match_count = 0 AND source.identity_match_count = 1 THEN 'strict_identity_fields'
+        WHEN source.nrn_match_count = 0 AND source.identity_match_count = 1
+          AND public.normalize_catalogue_source_nrn(source.identity_nafdac_number) = ''
+          THEN 'strict_identity_fields_missing_nrn'
+        WHEN source.nrn_match_count = 0 AND source.identity_match_count = 1
+          THEN 'strict_identity_fields_nrn_conflict'
         WHEN source.nrn_match_count = 0 AND source.identity_match_count = 0 THEN 'no_existing_product_candidate'
         ELSE 'manual_resolution_required'
       END AS match_basis,

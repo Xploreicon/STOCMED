@@ -3,7 +3,7 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
 GRANT USAGE ON SCHEMA extensions TO postgres, service_role, authenticated;
 SET LOCAL search_path = public, extensions, auth, pg_temp;
-SELECT plan(29);
+SELECT plan(31);
 
 SELECT has_table('public', 'catalogue_source_snapshots', 'source snapshot table exists');
 SELECT has_table('public', 'catalogue_source_records', 'source evidence table exists');
@@ -33,13 +33,39 @@ SELECT ok(
 
 CREATE TEMP TABLE product_count_before AS SELECT COUNT(*) AS count FROM public.products;
 
+INSERT INTO auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at, last_sign_in_at
+) VALUES (
+  '00000000-0000-0000-0000-000000000000',
+  'f7020000-0000-4000-8000-000000000001',
+  'authenticated', 'authenticated', 'catalogue-admin@stocmed.invalid', '', NOW(),
+  '', '', '', '', '{}', '{}', NOW(), NOW(), NOW()
+);
+SELECT set_config('app.pilot_role_provenance_reset', 'on', TRUE);
+INSERT INTO public.users (
+  user_id, email, full_name, role, is_admin,
+  admin_authorized_at, admin_authorization_basis
+) VALUES (
+  'f7020000-0000-4000-8000-000000000001',
+  'catalogue-admin@stocmed.invalid', 'Catalogue Admin', 'patient', TRUE,
+  NOW(), 'pgTAP catalogue-review fixture'
+);
+SELECT set_config('app.pilot_role_provenance_reset', 'off', TRUE);
+
 INSERT INTO public.products (
   id, generic_name, brand_name, manufacturer, strength, dosage_form,
   category, pack_size, nafdac_number, is_verified
-) VALUES (
-  'f7000000-0000-4000-8000-000000000001', 'QA Levocetirizine Dihydrochloride', 'Xyzal QA Fixture',
-  'QA UCB Pharma', '5 mg', 'tablet', 'Others', 'QA 1 x 10', 'A4-XYZAL-QA', TRUE
-);
+) VALUES
+  (
+    'f7000000-0000-4000-8000-000000000001', 'QA Levocetirizine Dihydrochloride', 'Xyzal QA Fixture',
+    'QA UCB Pharma', '5 mg', 'tablet', 'Others', 'QA 1 x 10', 'A4-XYZAL-QA', TRUE
+  ),
+  (
+    'f7000000-0000-4000-8000-000000000002', 'Collision Ingredient', 'Collision Brand',
+    'Collision Manufacturer', '30 mg', 'tablet', 'Others', '1 x 10', 'A4-EXISTING-NRN', TRUE
+  );
 
 INSERT INTO public.catalogue_source_snapshots (
   id, source_key, snapshot_date, package_sha256, manifest
@@ -69,6 +95,12 @@ INSERT INTO public.catalogue_source_records (
     repeat('2',64), 'inactive-fingerprint', 'Inactive', 'pending_admin_review',
     'https://greenbook.nafdac.gov.ng/products/details/inactive',
     '{"product_name_display":"Inactive Drug","generic_ingredient_raw":"Inactive INN","strength_raw":"20 mg","dosage_form_raw":"Tablet","route_raw":"Oral","manufacturer_name":"Example Manufacturer","nafdac_number_raw":"A4-INACTIVE","nafdac_status_raw":"Inactive","components_candidate":[{"ingredient_raw":"Inactive INN","strength_raw":"20 mg"}],"quality_flags":[]}'
+  ),
+  (
+    'f7010000-0000-4000-8000-000000000001', 'nafdac_human_medicines', 'nafdac:nrn-mismatch',
+    repeat('e',64), 'nrn-mismatch-fingerprint', 'Active', 'pending_admin_review',
+    'https://greenbook.nafdac.gov.ng/products/details/nrn-mismatch',
+    '{"product_name_display":"Collision Brand","generic_ingredient_raw":"Collision Ingredient","strength_raw":"30 mg","dosage_form_raw":"Tablet","route_raw":"Oral","manufacturer_name":"Collision Manufacturer","pack_size_raw":"1 x 10","nafdac_number_raw":"A4-DIFFERENT-NRN","nafdac_status_raw":"Active","components_candidate":[{"ingredient_raw":"Collision Ingredient","strength_raw":"30 mg"}],"quality_flags":[]}'
   ),
   (
     'f7010000-0000-4000-8000-000000000001', 'nafdac_human_medicines', 'nafdac:repeat-a',
@@ -160,6 +192,18 @@ SELECT ok(
   'inactive status is carried as a blocking reason'
 );
 SELECT is(
+  (SELECT queue_type FROM public.catalogue_reconciliation_queue
+   WHERE record_id = 'nafdac:nrn-mismatch'),
+  'ambiguous_conflicting_match',
+  'an exact identity with a different non-null NRN is not treated as enrichment'
+);
+SELECT ok(
+  (SELECT conflict_reasons @> ARRAY['identity_nrn_conflict']::TEXT[]
+   FROM public.catalogue_reconciliation_queue
+   WHERE record_id = 'nafdac:nrn-mismatch'),
+  'the target/source registration-number mismatch is explicit review evidence'
+);
+SELECT is(
   (SELECT COUNT(*) FROM public.catalogue_reconciliation_queue
    WHERE record_id IN ('nafdac:repeat-a', 'nafdac:repeat-b')
      AND queue_type = 'ambiguous_conflicting_match'
@@ -217,38 +261,42 @@ SELECT lives_ok(
 SELECT is(
   (SELECT COUNT(*) FROM public.catalogue_reconciliation_queue
    WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'),
-  13::bigint,
+  14::bigint,
   'reconciliation retry creates no duplicate queue rows'
 );
 SELECT is(
   (SELECT COUNT(*) FROM public.products),
-  (SELECT count + 1 FROM product_count_before),
+  (SELECT count + 2 FROM product_count_before),
   'reconciliation does not mutate the product catalogue'
 );
 
 DO $$
 BEGIN
-  PERFORM set_config('request.jwt.claim.role', 'service_role', TRUE);
+  PERFORM set_config('request.jwt.claim.role', 'authenticated', TRUE);
+  PERFORM set_config(
+    'request.jwt.claim.sub',
+    'f7020000-0000-4000-8000-000000000001',
+    TRUE
+  );
 END
 $$;
-SET LOCAL ROLE service_role;
+SET LOCAL ROLE authenticated;
 SELECT throws_ok(
   format(
     'SELECT public.set_catalogue_reconciliation_decision(%L, %L, NULL, %L)',
     (SELECT id FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:inactive'),
     'approved', 'must remain blocked'
   ),
-  'P0001', 'This source record has unresolved safety or identity requirements',
+  'P0001', 'Catalogue approval blocked: ambiguous_resolution_evidence_required, resolution_action_required, source_inactive, source_not_active',
   'inactive source evidence cannot be approved'
 );
-SELECT throws_ok(
+SELECT lives_ok(
   format(
     'SELECT public.set_catalogue_reconciliation_decision(%L, %L, NULL, %L)',
     (SELECT id FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:new'),
-    'approved', 'route and release model is incomplete'
+    'approved', 'complete identity reviewed by an authorized admin'
   ),
-  'P0001', 'This source record has unresolved safety or identity requirements',
-  'a clean candidate cannot be approved before route and release are modelled'
+  'route, release and applicant remain provenance without jamming a complete identity'
 );
 SELECT lives_ok(
   format(
@@ -263,8 +311,8 @@ SELECT is(
   (SELECT COUNT(*) FROM public.catalogue_reconciliation_audit audit
    JOIN public.catalogue_reconciliation_queue queue ON queue.id = audit.queue_id
    WHERE queue.record_id = 'nafdac:new'),
-  1::bigint,
-  'decision changes are append-only audited'
+  2::bigint,
+  'each decision change is append-only audited'
 );
 
 SELECT * FROM finish();

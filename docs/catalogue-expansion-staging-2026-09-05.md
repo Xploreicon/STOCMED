@@ -45,15 +45,15 @@ and refuses a staging URL equal to `DATABASE_URL` or
 
 ## Reconciliation result
 
-The full local staging run against the 3,419-row production export completed in
-6.86 seconds. An immediate replay used the same snapshot and completed in 2.27
-seconds without adding source or queue rows.
+The full isolated Supabase preview run against the 3,419-row production export
+completed successfully. An immediate replay used the same snapshot without
+adding source or queue rows.
 
 | Queue | Rows |
 | --- | ---: |
-| Existing identity / enrichment | 2,550 |
+| Existing identity / enrichment | 2,543 |
 | Candidate new identity | 2,165 |
-| Ambiguous / conflicting match | 3,764 |
+| Ambiguous / conflicting match | 3,771 |
 | Non-human / non-medicine scope | 1,808 |
 | **Total review rows** | **10,287** |
 
@@ -74,6 +74,9 @@ and aborts if it changes.
   repeated source-fingerprint groups also stay ambiguous.
 - Ninety-two exact-NRN comparisons have conflicting identity fields and stay
   unresolved.
+- Nine exact identity comparisons whose existing catalogue row carries a
+  different non-null NAFDAC/NRN are forced into the ambiguous queue with an
+  `identity_nrn_conflict`; they cannot ride the quick-enrichment path.
 - The 162 rows with unresolved ingredient-strength pairing remain review-held.
 - All ten curated unregistered/alert records carry a regulatory alert hold.
 - Brustan-N tablets, Brustan-N suspension, Brustan Plus, and Brustan Extra remain
@@ -82,28 +85,46 @@ and aborts if it changes.
 - The one structurally valid retailer EAN remains supporting evidence only. It
   is not written to a verified barcode or crosswalk field.
 
-`set_catalogue_reconciliation_decision` rejects approval while any safety or
-identity requirement remains unresolved. The current `products` table does not
-model route, release characteristics, or applicant/authorization holder, so
-human proposals fail closed until that identity model and its evidence workflow
-exist. Reject and hold decisions remain available and are written to an
-append-only audit table.
+`review_catalogue_reconciliation_candidate` rejects approval while any safety
+or identity requirement remains unresolved. Route, release characteristics,
+and applicant/authorization-holder evidence remain attached to the immutable
+source record and the promotion provenance; they are not unconditional
+catalogue blockers. Reject and hold decisions remain available and every edit,
+conflict resolution, and decision is written to the append-only audit table.
+
+Approval and promotion are deliberately separate. Approval records the human
+decision in staging only. A second explicit, administrator-only call to
+`promote_catalogue_reconciliation_candidate` creates or enriches a product and
+writes an immutable source-to-product provenance row. Active official NAFDAC
+records approved by an authorized administrator use the existing official-source
+convention and enter the catalogue with `is_verified=true`.
 
 ## Verification completed
 
-- Migration applied successfully to a temporary PostgreSQL database.
+- Both migrations applied successfully to an isolated local Supabase preview.
 - Full package imported and reconciled against the products-only export.
 - Same package replayed with identical source, queue, and snapshot counts.
 - Transactional safety assertions passed for inactive records, repeated NRNs,
-  alerts, Brustan variants, Daktarcort, decision authorization, audit history,
-  and the products write boundary.
-- Application tests: 32 files and 208 tests passed.
+  alerts, identity/NRN conflicts, Brustan variants, Daktarcort, decision
+  authorization, audit history, and the products write boundary.
+- Catalogue database tests: 61 assertions passed across the staging and review
+  migrations.
+- Application tests: 35 files and 217 tests passed.
+- TypeScript validation and the optimized Next.js production build passed.
+- Browser verification used synthetic `.invalid` accounts only. An authorized
+  admin could load, search, filter, edit, resolve and approve review rows; an
+  authenticated pharmacist was redirected before the review shell loaded.
+- Approval alone left `products` at 3,419 rows. Separate promotion enriched one
+  existing product and inserted one new product, producing 3,420 rows and two
+  provenance records. Replaying both promotion calls was an idempotent no-op.
 
-The repository pgtap test is
-`supabase/tests/20260905150000_catalogue_source_staging.test.sql`. The local
-Homebrew PostgreSQL installation did not include pgtap, so equivalent
-transactional assertions were executed directly. CI or a Supabase preview must
-still run the checked-in pgtap file before promotion.
+The checked-in pgtap suites are
+`supabase/tests/20260905150000_catalogue_source_staging.test.sql` and
+`supabase/tests/20260906000000_catalogue_admin_review.test.sql`. The current
+Supabase account can reach the parent project but does not have the platform
+permission required to list or create hosted preview branches. The isolated
+local Supabase preview therefore proves the implementation, while a hosted
+preview run remains a production-gate prerequisite for an authorized owner.
 
 ## Promotion prerequisites
 
@@ -111,25 +132,19 @@ Do not apply this migration or source package to production yet. Before a
 production release:
 
 1. Apply the migration and loader on a Supabase preview branch.
-2. Run the checked-in pgtap test and verify RLS as an authorized admin,
-   authenticated non-admin, anonymous user, and service role.
-3. Model route, release characteristics, and applicant/authorization holder, or
-   retain the approval block.
-4. Build an evidence-linked admin review interface. No automatic promotion.
-5. Take a fresh production backup and SHA-256 immediately before any approved
+2. Run both checked-in pgtap tests and verify RLS as an authorized admin,
+   authenticated non-admin, and anonymous user.
+3. Verify the evidence-linked admin review interface and explicit, separate
+   promotion action on preview. No automatic or bulk promotion.
+4. Take a fresh production backup and SHA-256 immediately before any approved
    production migration.
-6. Record a down migration and known-good application commit before deployment.
+5. Confirm production drift and the known-good application commit before
+   deployment, then use the checked-in rollback runbook.
 
 ## Rollback boundary
 
-Before production use, create a down migration that drops, in dependency order:
-
-1. `set_catalogue_reconciliation_decision` and
-   `reconcile_catalogue_source_snapshot`.
-2. `catalogue_reconciliation_audit`, `catalogue_reconciliation_queue`,
-   `catalogue_source_records`, and `catalogue_source_snapshots`.
-3. `touch_catalogue_source_updated_at`, `normalize_catalogue_source_nrn`, and
-   `normalize_catalogue_source_text`.
-
-Dropping these staging objects does not reverse or alter `products`, because
-this release never writes to the catalogue.
+Use `docs/catalogue-admin-review-rollback-2026-09-06.md`. Before the first
+production promotion, the schema-only rollback leaves `products` unchanged.
+After any promotion, retain the provenance tables and use an approved recovery
+window; a blind down migration is not an authoritative way to undo catalogue
+identity changes.
