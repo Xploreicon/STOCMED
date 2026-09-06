@@ -13,7 +13,11 @@ describe('admin email composition', () => {
       unsubscribeUrl: 'https://askstocmed.com/u/signed-token',
     })
 
-    expect(email.html).toContain('StocMed')
+    expect(email.html).toContain('src="https://www.askstocmed.com/email-logo.png"')
+    expect(email.html).toContain('width="150" alt="StocMed" style="display:block')
+    expect(email.html).toContain('color:#0066CC')
+    expect(email.html).toContain('max-width:600px')
+    expect(email.html).not.toContain('#087f5b')
     expect(email.html).toContain('<strong>Safe copy</strong>')
     expect(email.html).not.toContain('onclick')
     expect(email.html).not.toContain('javascript:')
@@ -33,6 +37,7 @@ describe('welcome emails', () => {
     expect(email.html).toContain('Search for medication')
     expect(email.html).toContain('&lt;Patient&gt;')
     expect(email.html).not.toContain('<Patient>')
+    expect(email.html).toContain('background:#0066CC')
     expect(email.text).toContain('reserve eligible stock')
   })
 

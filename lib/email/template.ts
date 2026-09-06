@@ -10,6 +10,9 @@ export type BrandedEmailInput = {
   reason?: string
 }
 
+const EMAIL_LOGO_URL = 'https://www.askstocmed.com/email-logo.png'
+const EMAIL_BRAND_PRIMARY = '#0066CC'
+
 export function escapeEmailHtml(value: unknown) {
   return String(value ?? '')
     .replaceAll('&', '&amp;')
@@ -22,13 +25,13 @@ export function escapeEmailHtml(value: unknown) {
 export function renderBrandedEmail(input: BrandedEmailInput) {
   const preheader = escapeEmailHtml(input.preheader || input.subject)
   const unsubscribe = input.unsubscribeUrl
-    ? `<p style="margin:8px 0 0"><a href="${escapeEmailHtml(input.unsubscribeUrl)}" style="color:#087f5b;text-decoration:underline">Unsubscribe from these emails</a></p>`
+    ? `<p style="margin:8px 0 0"><a href="${escapeEmailHtml(input.unsubscribeUrl)}" style="color:${EMAIL_BRAND_PRIMARY};text-decoration:underline">Unsubscribe from these emails</a></p>`
     : ''
   const cta = input.cta
-    ? `<p style="margin:24px 0 4px"><a href="${escapeEmailHtml(input.cta.href)}" style="display:inline-block;border-radius:8px;background:#087f5b;color:#fff;padding:12px 18px;font-size:14px;font-weight:700;text-decoration:none">${escapeEmailHtml(input.cta.label)}</a></p>`
+    ? `<p style="margin:24px 0 4px"><a href="${escapeEmailHtml(input.cta.href)}" style="display:inline-block;border-radius:8px;background:${EMAIL_BRAND_PRIMARY};color:#fff;padding:12px 18px;font-size:14px;font-weight:700;text-decoration:none">${escapeEmailHtml(input.cta.label)}</a></p>`
     : ''
   const eyebrow = input.eyebrow
-    ? `<p style="margin:0 0 10px;color:#087f5b;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">${escapeEmailHtml(input.eyebrow)}</p>`
+    ? `<p style="margin:0 0 10px;color:${EMAIL_BRAND_PRIMARY};font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">${escapeEmailHtml(input.eyebrow)}</p>`
     : ''
   const reason = escapeEmailHtml(
     input.reason || 'You received this email because you enabled StocMed email updates.',
@@ -39,8 +42,8 @@ export function renderBrandedEmail(input: BrandedEmailInput) {
 <body style="margin:0;background:#f5faf8;color:#17332d;font-family:Arial,Helvetica,sans-serif">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0">${preheader}</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5faf8"><tr><td align="center">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px"><tr><td style="padding:28px 20px">
-      <div style="font-size:24px;font-weight:800;letter-spacing:-.03em;color:#087f5b">StocMed</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px"><tr><td style="padding:28px 20px">
+      <img src="${EMAIL_LOGO_URL}" width="150" alt="StocMed" style="display:block;width:150px;max-width:100%;height:auto;border:0">
       <div style="margin-top:22px;border:1px solid #dce9e4;border-radius:14px;background:#fff;padding:28px">
         ${eyebrow}
         <h1 style="margin:0 0 16px;color:#17332d;font-size:26px;line-height:1.25">${escapeEmailHtml(input.heading)}</h1>
