@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { createHash } from 'node:crypto'
-import { readFile, readdir } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { lstat, readFile, readdir } from 'node:fs/promises'
+import { basename, extname, join, resolve } from 'node:path'
 import process from 'node:process'
 const SOURCE_KEY = 'stocmed-nigeria-catalogue'
 
@@ -15,7 +15,7 @@ function usage() {
     [--dry-run]
 
 Database imports require both:
-  CATALOGUE_STAGING_DATABASE_URL=<non-production postgres URL>
+  CATALOGUE_STAGING_DATABASE_URL_FILE=/protected/path/non-production-database-url
   CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION=YES
 
 The importer validates every manifest digest and JSONL row count before opening
@@ -184,6 +184,24 @@ function databaseConfig(databaseUrl) {
   }
 }
 
+async function readProtectedDatabaseUrl(path) {
+  const absolutePath = resolve(path)
+  const metadata = await lstat(absolutePath)
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new Error('The staging database secret must be a regular, non-symlink file')
+  }
+  if ((metadata.mode & 0o077) !== 0) {
+    throw new Error('The staging database secret must have mode 0600 (no group/world access)')
+  }
+  const databaseUrl = (await readFile(absolutePath, 'utf8')).trim()
+  const url = new URL(databaseUrl)
+  if (!['postgres:', 'postgresql:'].includes(url.protocol)
+    || !url.hostname || !url.username || !url.password || !url.pathname.slice(1)) {
+    throw new Error('The protected staging secret does not contain a complete PostgreSQL URL')
+  }
+  return databaseUrl
+}
+
 function assertNonProduction(databaseUrl) {
   if (process.env.CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION !== 'YES') {
     throw new Error('Set CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION=YES for a database import')
@@ -247,8 +265,14 @@ async function insertRows(client, snapshotId, rows) {
 async function importPackage({ manifest, jsonlRows, datasetCounts }, args) {
   const { default: pg } = await import('pg')
   const { Client } = pg
-  const databaseUrl = process.env.CATALOGUE_STAGING_DATABASE_URL
-  if (!databaseUrl) throw new Error('CATALOGUE_STAGING_DATABASE_URL is required without --dry-run')
+  if (process.env.CATALOGUE_STAGING_DATABASE_URL) {
+    throw new Error('CATALOGUE_STAGING_DATABASE_URL is forbidden; use the protected file reference')
+  }
+  const databaseUrlFile = process.env.CATALOGUE_STAGING_DATABASE_URL_FILE
+  if (!databaseUrlFile) {
+    throw new Error('CATALOGUE_STAGING_DATABASE_URL_FILE is required without --dry-run')
+  }
+  const databaseUrl = await readProtectedDatabaseUrl(databaseUrlFile)
   assertNonProduction(databaseUrl)
 
   const client = new Client(databaseConfig(databaseUrl))

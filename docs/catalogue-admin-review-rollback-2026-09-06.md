@@ -7,14 +7,18 @@ Release scope:
 - catalogue package loader and the server-gated `/admin/catalogue-review` UI;
 - no AI processing and no automatic or bulk catalogue promotion.
 
-Known-good pre-change production application commit: `a581c22`.
+Known-good pre-change production application commit: `06b62b1`.
 
-Stop Gate 1 backup candidate (read-only, full custom-format dump):
+Superseded Stop Gate 1 backup (read-only, full custom-format dump):
 
 - path: `reports/backups/production-pre-catalogue-review-20260906T142641Z.dump`;
 - SHA-256: `8ebe1c23539e5571a696c10fb467006f8e475340ffbcd43e66880279a544cd4f`;
-- `shasum -a 256 -c` passed and `pg_restore --list` parsed 1,343 TOC entries;
-- production baseline at capture: 3,419 `products` rows.
+- `shasum -a 256 -c` passed and `pg_restore --list` parsed 1,343 TOC entries,
+  but a full offline `pg_restore` payload read later failed with unexpected EOF;
+- production baseline at capture: 3,419 `products` rows;
+- status: **invalid and not restorable**. It is superseded and must never be
+  used for recovery. Take a new backup with the safe runner, whose verification
+  now streams every archive entry before publishing the dump.
 
 The dump and checksum are gitignored. If approval is not followed by deployment
 in the same release window, replace this candidate with a newly captured dump
@@ -38,15 +42,15 @@ credentials in this file, logs, or chat.
 3. Never pass the URL itself to `pg_dump`, `pg_restore`, `psql`, or a process
    diagnostic. Never use `ps`/`pgrep` modes that display arguments or the
    environment while database tooling is running.
-4. Verify the generated SHA-256 sidecar and archive TOC before applying either
-   migration:
+4. Verify the generated SHA-256 sidecar, archive TOC, and complete payload before
+   applying either migration:
 
    ```sh
    npm run db:archive -- verify \
      --archive /absolute/gitignored/path/production-pre-catalogue-review.dump
    ```
 
-5. Confirm deployed production is still based on `a581c22` plus any explicitly
+5. Confirm deployed production is still based on `06b62b1` plus any explicitly
    reviewed intervening production commits.
 6. Confirm the release diff contains the two migrations above, their tests, the
    loader, and the admin review application changes only.
@@ -54,20 +58,22 @@ credentials in this file, logs, or chat.
    applying the release. Applying the schema and loading source evidence must
    leave both unchanged.
 
-At Stop Gate 1, the Git release ancestry is exactly `a581c22` plus the catalogue
-staging/review commits. The database migration baseline ends at
-`20260905160000`; neither catalogue staging migration is present. However,
-`origin/main` has advanced on a separate line with unrelated email work, and the
-live site serves both a public endpoint and static asset introduced on that
-newer line. Vercel denied the current credentials access to deployment metadata,
-so the exact live deployment SHA cannot yet be certified. **This is an open
-drift blocker: do not promote this branch until an authorized project owner
-confirms the live SHA and the review commits are replayed onto that exact base.**
-Do not merge unrelated work into this release by implication.
+At Stop Gate 1, the Git release ancestry is exactly `06b62b1` plus four bounded
+commits: catalogue staging, schema-cache hygiene, administrator review/promotion,
+and database-command credential hardening. The database migration baseline ends
+at `20260905160000`; neither catalogue staging migration is present. The owner
+confirmed `06b62b1` as the live application base, corroborating the public
+production markers observed during drift diagnosis. Git drift is therefore
+resolved. Hosted-preview verification is complete. A new safe-runner backup is
+still blocked: the previously exposed production credential continues to
+authenticate, so the attempted rotation did not invalidate it. Do not make
+another production connection until the correct project credential is rotated,
+the old credential fails authentication, and the new credential is installed by
+protected file reference.
 
 ## Application rollback
 
-Roll the application back to the known-good deployment for `a581c22` before
+Roll the application back to the known-good deployment for `06b62b1` before
 removing any RPC on which the review UI depends. This disables the new review
 surface while preserving all staging and provenance data for investigation.
 

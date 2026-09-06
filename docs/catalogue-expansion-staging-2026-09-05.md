@@ -23,10 +23,11 @@ products-only comparison export contains 3,419 rows.
 ## Staging import
 
 Apply `20260905150000_catalogue_source_staging.sql` to a non-production branch,
-then set both environment variables before running the loader:
+put its database URL in a mode-0600 file outside the repository, and expose only
+the file path to the loader:
 
 ```bash
-export CATALOGUE_STAGING_DATABASE_URL='<non-production postgres URL>'
+export CATALOGUE_STAGING_DATABASE_URL_FILE='/protected/path/preview-database-url'
 export CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION=YES
 node scripts/catalogue/import-source-package.mjs \
   --package-dir '<extracted package directory>' \
@@ -109,7 +110,7 @@ convention and enter the catalogue with `is_verified=true`.
   authorization, audit history, and the products write boundary.
 - Catalogue database tests: 61 assertions passed across the staging and review
   migrations.
-- Application tests: 36 files and 221 tests passed, including database-command
+- Application tests: 38 files and 234 tests passed, including database-command
   credential-output regression coverage.
 - TypeScript validation and the optimized Next.js production build passed.
 - Browser verification used synthetic `.invalid` accounts only. An authorized
@@ -121,11 +122,57 @@ convention and enter the catalogue with `is_verified=true`.
 
 The checked-in pgtap suites are
 `supabase/tests/20260905150000_catalogue_source_staging.test.sql` and
-`supabase/tests/20260906000000_catalogue_admin_review.test.sql`. The current
-Supabase account can reach the parent project but does not have the platform
-permission required to list or create hosted preview branches. The isolated
-local Supabase preview therefore proves the implementation, while a hosted
-preview run remains a production-gate prerequisite for an authorized owner.
+`supabase/tests/20260906000000_catalogue_admin_review.test.sql`. The isolated
+local Supabase preview proves the implementation. Hosted preview verification
+is recorded separately after the production-base rebase and remains a
+production-gate prerequisite until every check completes.
+
+## Hosted preview verification after production-base rebase
+
+The release was rebased onto production commit `06b62b1` and verified against
+the isolated, no-data hosted preview project `swmxbnjzjwwhgaukrsin`. No production
+pharmacy, patient, configuration, or inventory rows were copied. The preview was
+bootstrapped with the current `public` schema, controlled dosage/category lookup
+rows, and the products-only reference export. Two synthetic `.invalid` users
+were created solely for the admin-versus-pharmacist route check.
+
+The Supabase platform's automatic no-data branch replay stops in the historical
+migration chain before these two migrations, so the branch status remains
+`MIGRATIONS_FAILED`. That is a legacy clean-install issue, not a failure in the
+catalogue migrations: the current production schema was restored schema-only,
+the two reviewed migrations were applied directly in order, both `NOTIFY`
+statements ran, and raw PostgREST immediately resolved the new objects. No
+production data or production write was involved.
+
+Hosted results:
+
+- products seed: 3,419 rows; deterministic digest
+  `f93e9d49b04d98c8ca0a51dbfbbb65a6`;
+- source load and immediate replay: one snapshot, 14,300 immutable source rows,
+  10,287 queue rows, and unchanged queue/source counts on replay;
+- reconciliation buckets: 2,543 existing-identity enrichments, 2,165 candidate
+  new identities, 3,771 ambiguous/conflicting rows, and 1,808 non-human or
+  non-medicine rows;
+- products before and after both loader runs: 3,419; importer mutation flag:
+  false;
+- hosted database tests: all 31 staging assertions and all 30 admin-review
+  assertions passed against the populated queue. The fixtures now scope their
+  own snapshot/search so they stay repeatable alongside real staged evidence;
+- raw REST: the service role read the single snapshot, anonymous catalogue
+  staging and admin-RPC calls were denied, and anonymous products count remained
+  3,419. Permission errors, rather than missing-object errors, prove the schema
+  cache saw the new tables/functions after `NOTIFY`;
+- browser: the synthetic admin loaded the evidence view and all four bucket
+  counts; a synthetic licensed pharmacist was redirected to `/dashboard` before
+  the catalogue-review shell loaded;
+- approval/promotion separation: one complete active NAFDAC record was approved
+  while products stayed at 3,419 with the original digest. A separate explicit
+  promotion inserted one verified product, changing preview products to 3,420
+  and writing one provenance row. Two immediate replays returned HTTP 200 with
+  the same product and created no duplicate;
+- identity checks: the four Brustan presentations remain four source records;
+  `Daktarcort -> Daktacort` remains `auto_correct=false` supporting evidence and
+  creates no automatic queue/promotion row.
 
 ## Promotion prerequisites
 
