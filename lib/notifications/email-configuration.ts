@@ -49,7 +49,7 @@ export function classifyAdminBroadcastError(error: unknown) {
     }
   }
   if (
-    /(?:RESEND_API_KEY|RESEND_FROM_EMAIL|NOTIFICATION_HASH_PEPPER|NOTIFICATION_SIGNING_SECRET).*(?:not configured|must use)/i.test(message)
+    /(?:RESEND_API_KEY|RESEND_FROM_EMAIL|NOTIFICATION_HASH_PEPPER|NOTIFICATION_SIGNING_SECRET|NOTIFICATION_TEST_RECIPIENTS).*(?:not configured|must use|must contain)/i.test(message)
   ) {
     return {
       status: 503 as const,

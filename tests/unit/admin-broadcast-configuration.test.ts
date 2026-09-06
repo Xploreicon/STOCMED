@@ -44,4 +44,13 @@ describe('admin broadcast production configuration', () => {
       error: 'Email delivery is not configured for production',
     })
   })
+
+  it('maps an invalid locked test audience to a configuration error', () => {
+    expect(classifyAdminBroadcastError(
+      new Error('NOTIFICATION_TEST_RECIPIENTS must contain exactly two unique email addresses'),
+    )).toEqual({
+      status: 503,
+      error: 'Email delivery is not configured for production',
+    })
+  })
 })

@@ -1,33 +1,25 @@
-import { createHmac, timingSafeEqual } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
+import { sha256Hex, verifyResendWebhook } from '@/lib/notifications/webhook-security'
 import { getAdminClient } from '@/lib/supabase/admin'
-
-function verifySvix(payload: string, request: NextRequest) {
-  const secret = process.env.RESEND_WEBHOOK_SECRET
-  const id = request.headers.get('svix-id')
-  const timestamp = request.headers.get('svix-timestamp')
-  const supplied = request.headers.get('svix-signature')
-  if (!secret || !id || !timestamp || !supplied) return false
-  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 5 * 60) return false
-
-  const key = Buffer.from(secret.startsWith('whsec_') ? secret.slice(6) : secret, 'base64')
-  const expected = createHmac('sha256', key)
-    .update(`${id}.${timestamp}.${payload}`)
-    .digest()
-  return supplied.split(' ').some(item => {
-    const encoded = item.startsWith('v1,') ? item.slice(3) : ''
-    if (!encoded) return false
-    const actual = Buffer.from(encoded, 'base64')
-    return actual.length === expected.length && timingSafeEqual(actual, expected)
-  })
-}
 
 export async function POST(request: NextRequest) {
   const payload = await request.text()
-  if (!verifySvix(payload, request)) {
+  const eventId = request.headers.get('svix-id')
+  if (!verifyResendWebhook({
+    payload,
+    secret: process.env.RESEND_WEBHOOK_SECRET,
+    id: eventId,
+    timestamp: request.headers.get('svix-timestamp'),
+    signature: request.headers.get('svix-signature'),
+  })) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
-  const event = JSON.parse(payload) as { type?: string; data?: { email_id?: string } }
+  let event: { type?: string; data?: { email_id?: string } }
+  try {
+    event = JSON.parse(payload)
+  } catch {
+    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+  }
   const emailId = event.data?.email_id
   if (!emailId) return NextResponse.json({ received: true })
 
@@ -37,14 +29,24 @@ export async function POST(request: NextRequest) {
       ? 'failed'
       : 'sent'
   const admin = getAdminClient()
-  if (admin) {
-    await (admin as any).rpc('record_notification_provider_event', {
-      p_provider: 'resend',
-      p_provider_message_id: emailId,
-      p_status: status,
-      p_provider_status: event.type || null,
-      p_cost: null,
-    })
+  if (!admin) {
+    return NextResponse.json({ error: 'Webhook service unavailable' }, { status: 503 })
+  }
+  const { data, error } = await (admin as any).rpc('record_notification_provider_event_once', {
+    p_provider: 'resend',
+    p_event_id: eventId,
+    p_payload_sha256: sha256Hex(payload),
+    p_provider_message_id: emailId,
+    p_status: status,
+    p_provider_status: event.type || null,
+    p_cost: null,
+  })
+  if (error) {
+    console.error('Could not record Resend webhook:', error)
+    return NextResponse.json({ error: 'Could not record provider event' }, { status: 500 })
+  }
+  if (data === 'replay') {
+    return NextResponse.json({ error: 'Replay rejected' }, { status: 409 })
   }
   return NextResponse.json({ received: true })
 }

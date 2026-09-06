@@ -52,10 +52,10 @@ export async function deliverQueuedSms(delivery: any) {
   const apiKey = process.env.TERMII_API_KEY
   const sender = process.env.TERMII_SENDER_ID
   const baseUrl = (process.env.TERMII_BASE_URL || 'https://api.ng.termii.com').replace(/\/$/, '')
-  if (!apiKey || !sender) {
+  if (!apiKey || sender !== 'N-Alert') {
     await finishDelivery(claimed.id, {
       status: 'skipped',
-      error: 'Termii is not configured',
+      error: 'Termii is not configured with the approved N-Alert sender ID',
     })
     return { status: 'skipped' as const }
   }

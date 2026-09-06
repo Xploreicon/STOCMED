@@ -211,7 +211,7 @@ BEGIN
     TRIM(p_event_key), p_recipient_type, p_recipient_id, p_pharmacy_id,
     p_type, TRIM(p_title), TRIM(p_body), COALESCE(p_data, '{}'::JSONB)
   )
-  ON CONFLICT (event_key) DO NOTHING
+  ON CONFLICT (event_key) WHERE event_key IS NOT NULL DO NOTHING
   RETURNING id INTO v_notification_id;
 
   IF v_notification_id IS NULL THEN

@@ -14,7 +14,7 @@ describe('admin email composition', () => {
     })
 
     expect(email.html).toContain('src="https://www.askstocmed.com/email-logo.png"')
-    expect(email.html).toContain('width="150" alt="StocMed" style="display:block')
+    expect(email.html).toContain('width="120" alt="StocMed" style="display:block')
     expect(email.html).toContain('color:#0066CC')
     expect(email.html).toContain('max-width:600px')
     expect(email.html).not.toContain('#087f5b')

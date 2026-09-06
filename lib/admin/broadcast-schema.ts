@@ -7,7 +7,7 @@ export const broadcastTemplateSchema = z.enum([
 export const broadcastAudienceSchema = z.object({
   kind: z.enum([
     'all_users', 'all_pharmacies', 'all_patients', 'premium_pharmacies',
-    'free_pharmacies', 'individual_pharmacy', 'individual_user', 'custom',
+    'free_pharmacies', 'individual_pharmacy', 'individual_user', 'custom', 'test_list',
   ]),
   pharmacy_id: z.string().uuid().optional(),
   user_id: z.string().uuid().optional(),

@@ -12,7 +12,7 @@ import { BROADCAST_TEMPLATE_COPY, type BroadcastTemplate } from '@/lib/email/bro
 
 type AudienceKind =
   | 'all_users' | 'all_pharmacies' | 'all_patients' | 'premium_pharmacies'
-  | 'free_pharmacies' | 'individual_pharmacy' | 'individual_user' | 'custom'
+  | 'free_pharmacies' | 'individual_pharmacy' | 'individual_user' | 'custom' | 'test_list'
 type BodyFormat = 'markdown' | 'html'
 
 type DirectoryResult = {
@@ -53,6 +53,7 @@ const audienceOptions: Array<{ value: AudienceKind; label: string }> = [
   { value: 'free_pharmacies', label: 'Non-premium (free) pharmacies' },
   { value: 'individual_pharmacy', label: 'Individual pharmacy' },
   { value: 'individual_user', label: 'Individual user' },
+  { value: 'test_list', label: 'Controlled test list (2 configured inboxes)' },
   { value: 'custom', label: 'Custom pharmacy segment' },
 ]
 
@@ -346,6 +347,12 @@ export function BroadcastConsole() {
                   <div className="mt-2 space-y-1">
                     {directoryResults.map(result => <button key={`${result.user_id}:${result.pharmacy_id}`} type="button" onClick={() => setSelected(result)} className={`block w-full rounded-md border p-2 text-left text-sm ${selected?.user_id === result.user_id ? 'border-primary bg-white' : 'border-transparent hover:bg-white'}`}><span className="font-semibold text-ink">{result.display_name}</span><span className="block text-xs text-ink-muted">{result.email}{result.detail && result.detail !== result.email ? ` · ${result.detail}` : ''}</span></button>)}
                   </div>
+                </div>
+              )}
+
+              {audienceKind === 'test_list' && (
+                <div className="rounded-card border border-primary/30 bg-primary/5 p-4 text-sm leading-6 text-ink-muted">
+                  This locked audience resolves exactly two server-configured test accounts. Recipient addresses cannot be supplied by the browser.
                 </div>
               )}
 

@@ -43,7 +43,7 @@ export function renderBrandedEmail(input: BrandedEmailInput) {
   <div style="display:none;max-height:0;overflow:hidden;opacity:0">${preheader}</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f5faf8"><tr><td align="center">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px"><tr><td style="padding:28px 20px">
-      <img src="${EMAIL_LOGO_URL}" width="150" alt="StocMed" style="display:block;width:150px;max-width:100%;height:auto;border:0">
+      <img src="${EMAIL_LOGO_URL}" width="120" alt="StocMed" style="display:block;width:120px;max-width:100%;height:auto;border:0">
       <div style="margin-top:22px;border:1px solid #dce9e4;border-radius:14px;background:#fff;padding:28px">
         ${eyebrow}
         <h1 style="margin:0 0 16px;color:#17332d;font-size:26px;line-height:1.25">${escapeEmailHtml(input.heading)}</h1>
