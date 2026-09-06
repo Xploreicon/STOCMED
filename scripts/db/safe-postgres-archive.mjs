@@ -20,6 +20,8 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const RESTORE_CONFIRMATION = 'RESTORE_VERIFIED_ARCHIVE'
+const SQL_CONFIRMATION = 'EXECUTE_REVIEWED_SQL_FILE'
+const PREVIEW_BOOTSTRAP_CONFIRMATION = 'BOOTSTRAP_DATA_FREE_PREVIEW'
 
 function usage() {
   return `Usage:
@@ -37,13 +39,24 @@ function usage() {
     [--checksum-file /gitignored/path/backup.dump.sha256] \\
     --confirm ${RESTORE_CONFIRMATION}
 
+  node scripts/db/safe-postgres-archive.mjs execute \\
+    --connection-file /protected/path/database-url \\
+    --sql-file /reviewed/path/operation.sql \\
+    --confirm ${SQL_CONFIRMATION}
+
+  node scripts/db/safe-postgres-archive.mjs bootstrap-preview \\
+    --connection-file /protected/path/preview-database-url \\
+    --archive /gitignored/path/verified-production-backup.dump \\
+    --expected-preview-ref abcdefghijklmnopqrst \\
+    --confirm ${PREVIEW_BOOTSTRAP_CONFIRMATION}
+
 Add --dry-run to print the credential-free child-process plan. Raw database
 URLs are never accepted as command-line arguments.`
 }
 
 export function parseArgs(argv) {
   const [command, ...rest] = argv
-  if (!['backup', 'verify', 'restore'].includes(command)) {
+  if (!['backup', 'verify', 'restore', 'execute', 'bootstrap-preview'].includes(command)) {
     throw new Error(usage())
   }
 
@@ -58,7 +71,10 @@ export function parseArgs(argv) {
       parsed.help = true
       continue
     }
-    if (!['--connection-file', '--archive', '--checksum-file', '--confirm'].includes(argument)) {
+    if (![
+      '--connection-file', '--archive', '--checksum-file', '--sql-file', '--confirm',
+      '--expected-preview-ref',
+    ].includes(argument)) {
       throw new Error(`Unsupported argument: ${argument}`)
     }
     const value = rest[++index]
@@ -66,16 +82,30 @@ export function parseArgs(argv) {
     if (/^postgres(?:ql)?:\/\//i.test(value)) {
       throw new Error('A raw database URL must never be passed on the command line')
     }
-    parsed[argument.slice(2).replace('-', '_')] = value
+    parsed[argument.slice(2).replaceAll('-', '_')] = value
   }
 
   if (parsed.help) return parsed
-  if (!parsed.archive) throw new Error('--archive is required')
+  if (command !== 'execute' && !parsed.archive) throw new Error('--archive is required')
   if (command !== 'verify' && !parsed.connection_file) {
     throw new Error('--connection-file is required')
   }
   if (command === 'restore' && parsed.confirm !== RESTORE_CONFIRMATION) {
     throw new Error(`Restore requires --confirm ${RESTORE_CONFIRMATION}`)
+  }
+  if (command === 'execute') {
+    if (!parsed.sql_file) throw new Error('--sql-file is required')
+    if (parsed.confirm !== SQL_CONFIRMATION) {
+      throw new Error(`SQL execution requires --confirm ${SQL_CONFIRMATION}`)
+    }
+  }
+  if (command === 'bootstrap-preview') {
+    if (!/^[a-z]{20}$/.test(parsed.expected_preview_ref || '')) {
+      throw new Error('--expected-preview-ref must be the 20-character hosted preview project ref')
+    }
+    if (parsed.confirm !== PREVIEW_BOOTSTRAP_CONFIRMATION) {
+      throw new Error(`Preview bootstrap requires --confirm ${PREVIEW_BOOTSTRAP_CONFIRMATION}`)
+    }
   }
   return parsed
 }
@@ -124,6 +154,12 @@ export function connectionArgs(connection) {
   ]
 }
 
+function assertExpectedPreview(connection, projectRef) {
+  if (!connection.host.includes(projectRef) && !connection.username.includes(projectRef)) {
+    throw new Error('Connection does not belong to the explicitly named hosted preview project')
+  }
+}
+
 function pgPassEscape(value) {
   return String(value).replaceAll('\\', '\\\\').replaceAll(':', '\\:')
 }
@@ -166,15 +202,16 @@ async function withPgPass(connection, callback) {
   }
 }
 
-async function run(command, args, env = undefined) {
+async function run(command, args, env = undefined, options = {}) {
+  const { discardStdout = false } = options
   return await new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, {
       env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', discardStdout ? 'ignore' : 'pipe', 'pipe'],
     })
     const stdout = []
     const stderr = []
-    child.stdout.on('data', (chunk) => stdout.push(chunk))
+    child.stdout?.on('data', (chunk) => stdout.push(chunk))
     child.stderr.on('data', (chunk) => stderr.push(chunk))
     child.on('error', () => reject(new Error(`${command} could not be started`)))
     child.on('close', (code, signal) => {
@@ -196,6 +233,14 @@ async function sha256(path) {
   return hash.digest('hex')
 }
 
+async function validateArchivePayload(archive) {
+  // A TOC listing alone can succeed for a truncated custom-format archive.
+  // Rendering every entry forces pg_restore to read and decompress the full
+  // payload without connecting to (or mutating) a database. Discard the SQL
+  // stream so verification does not need a second dump-sized file.
+  await run('pg_restore', [archive], undefined, { discardStdout: true })
+}
+
 async function verifyArchive(archive, checksumFile) {
   const absoluteArchive = resolve(archive)
   await access(absoluteArchive, fsConstants.R_OK)
@@ -208,12 +253,24 @@ async function verifyArchive(archive, checksumFile) {
   const listing = await run('pg_restore', ['--list', absoluteArchive])
   const tocEntries = Number(listing.match(/TOC Entries:\s*(\d+)/)?.[1] || 0)
   if (!tocEntries) throw new Error('pg_restore could not confirm archive TOC entries')
-  return { archive: absoluteArchive, checksumFile: absoluteChecksum, sha256: digest, tocEntries }
+  await validateArchivePayload(absoluteArchive)
+  return {
+    archive: absoluteArchive,
+    checksumFile: absoluteChecksum,
+    sha256: digest,
+    tocEntries,
+    fullPayloadValidated: true,
+  }
 }
 
 function dryRunPlan(args, connection) {
   if (args.command === 'verify') {
-    return { command: 'pg_restore', args: ['--list', resolve(args.archive)] }
+    return {
+      commands: [
+        { command: 'pg_restore', args: ['--list', resolve(args.archive)] },
+        { command: 'pg_restore', args: [resolve(args.archive)], stdout: '[discarded after full payload read]' },
+      ],
+    }
   }
   const credentialFreeConnection = connectionArgs(connection)
   if (args.command === 'backup') {
@@ -221,6 +278,34 @@ function dryRunPlan(args, connection) {
       command: 'pg_dump',
       args: ['--format=custom', '--no-owner', '--no-acl',
         '--file', `${resolve(args.archive)}.partial-[pid]`, ...credentialFreeConnection],
+      env: { PGPASSFILE: '[ephemeral mode-0600 file]', PGSSLMODE: connection.sslMode },
+    }
+  }
+  if (args.command === 'execute') {
+    return {
+      command: 'psql',
+      args: ['-X', '--set', 'ON_ERROR_STOP=1', ...connectionArgs(connection),
+        '--file', resolve(args.sql_file)],
+      env: { PGPASSFILE: '[ephemeral mode-0600 file]', PGSSLMODE: connection.sslMode },
+    }
+  }
+  if (args.command === 'bootstrap-preview') {
+    assertExpectedPreview(connection, args.expected_preview_ref)
+    const archive = resolve(args.archive)
+    const connectionOptions = connectionArgs(connection)
+    return {
+      commands: [
+        {
+          command: 'psql',
+          args: ['-X', '--set', 'ON_ERROR_STOP=1', ...connectionOptions,
+            '--command', 'DROP SCHEMA public CASCADE; CREATE SCHEMA public AUTHORIZATION pg_database_owner; CREATE EXTENSION pg_trgm WITH SCHEMA public'],
+        },
+        {
+          command: 'pg_restore',
+          args: ['--schema-only', '--schema', 'public', '--no-owner', '--no-acl',
+            ...connectionOptions, archive],
+        },
+      ],
       env: { PGPASSFILE: '[ephemeral mode-0600 file]', PGSSLMODE: connection.sslMode },
     }
   }
@@ -253,11 +338,12 @@ async function backup(args, connection) {
     const listing = await run('pg_restore', ['--list', partial])
     const tocEntries = Number(listing.match(/TOC Entries:\s*(\d+)/)?.[1] || 0)
     if (!tocEntries) throw new Error('The completed dump has no readable TOC entries')
+    await validateArchivePayload(partial)
     const digest = await sha256(partial)
     await rename(partial, archive)
     const checksumFile = `${archive}.sha256`
     await writeFile(checksumFile, `${digest}  ${archive}\n`, { mode: 0o644 })
-    return { archive, checksumFile, sha256: digest, tocEntries }
+    return { archive, checksumFile, sha256: digest, tocEntries, fullPayloadValidated: true }
   } catch (error) {
     await unlink(partial).catch(() => {})
     throw error
@@ -273,6 +359,50 @@ async function restore(args, connection) {
     ], childEnvironment(connection, passFile))
   })
   return { restored: true, ...verified }
+}
+
+async function executeSql(args, connection) {
+  const sqlFile = resolve(args.sql_file)
+  const metadata = await lstat(sqlFile)
+  if (!metadata.isFile() || metadata.isSymbolicLink()) {
+    throw new Error('The reviewed SQL input must be a regular, non-symlink file')
+  }
+  const output = await withPgPass(connection, async (passFile) => {
+    return await run('psql', [
+      '-X', '--set', 'ON_ERROR_STOP=1', ...connectionArgs(connection),
+      '--file', sqlFile,
+    ], childEnvironment(connection, passFile))
+  })
+  return { executed: true, sqlFile, output }
+}
+
+async function bootstrapPreview(args, connection) {
+  assertExpectedPreview(connection, args.expected_preview_ref)
+  const verified = await verifyArchive(args.archive, args.checksum_file)
+  const connectionOptions = connectionArgs(connection)
+  await withPgPass(connection, async (passFile) => {
+    const env = childEnvironment(connection, passFile)
+    await run('psql', [
+      '-X', '--set', 'ON_ERROR_STOP=1', ...connectionOptions,
+      '--command', [
+        'DROP SCHEMA IF EXISTS public CASCADE',
+        'CREATE SCHEMA public AUTHORIZATION pg_database_owner',
+        'GRANT USAGE ON SCHEMA public TO anon, authenticated',
+        'GRANT ALL ON SCHEMA public TO postgres, service_role',
+        'CREATE EXTENSION pg_trgm WITH SCHEMA public',
+      ].join('; '),
+    ], env)
+    await run('pg_restore', [
+      '--exit-on-error', '--schema-only', '--schema', 'public', '--no-owner',
+      '--no-acl', ...connectionOptions, verified.archive,
+    ], env)
+  })
+  return {
+    bootstrapped: true,
+    dataRestored: false,
+    migrationHistoryRestored: false,
+    ...verified,
+  }
 }
 
 async function main() {
@@ -294,6 +424,10 @@ async function main() {
     ? await backup(args, connection)
     : args.command === 'restore'
       ? await restore(args, connection)
+      : args.command === 'execute'
+        ? await executeSql(args, connection)
+        : args.command === 'bootstrap-preview'
+          ? await bootstrapPreview(args, connection)
       : await verifyArchive(args.archive, args.checksum_file)
   console.log(JSON.stringify(result, null, 2))
 }

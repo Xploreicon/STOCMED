@@ -167,45 +167,58 @@ SELECT lives_ok(
 );
 
 SELECT is(
-  (SELECT queue_type FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:5826'),
+  (SELECT queue_type FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'nafdac:5826'),
   'existing_identity_enrichment',
   'unique NRN plus agreeing identity proposes existing enrichment'
 );
 SELECT is(
-  (SELECT candidate_product_id FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:5826'),
+  (SELECT candidate_product_id FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'nafdac:5826'),
   'f7000000-0000-4000-8000-000000000001'::uuid,
   'existing enrichment points to the exact product'
 );
 SELECT is(
-  (SELECT queue_type FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:new'),
+  (SELECT queue_type FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'nafdac:new'),
   'candidate_new_identity',
   'clean active evidence with no match becomes a reviewable new candidate'
 );
 SELECT is(
-  (SELECT queue_type FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:inactive'),
+  (SELECT queue_type FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'nafdac:inactive'),
   'ambiguous_conflicting_match',
   'inactive records cannot become new or existing identity proposals'
 );
 SELECT ok(
   (SELECT conflict_reasons @> ARRAY['source_inactive']::text[]
-   FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:inactive'),
+   FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'nafdac:inactive'),
   'inactive status is carried as a blocking reason'
 );
 SELECT is(
   (SELECT queue_type FROM public.catalogue_reconciliation_queue
-   WHERE record_id = 'nafdac:nrn-mismatch'),
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'nafdac:nrn-mismatch'),
   'ambiguous_conflicting_match',
   'an exact identity with a different non-null NRN is not treated as enrichment'
 );
 SELECT ok(
   (SELECT conflict_reasons @> ARRAY['identity_nrn_conflict']::TEXT[]
    FROM public.catalogue_reconciliation_queue
-   WHERE record_id = 'nafdac:nrn-mismatch'),
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'nafdac:nrn-mismatch'),
   'the target/source registration-number mismatch is explicit review evidence'
 );
 SELECT is(
   (SELECT COUNT(*) FROM public.catalogue_reconciliation_queue
-   WHERE record_id IN ('nafdac:repeat-a', 'nafdac:repeat-b')
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id IN ('nafdac:repeat-a', 'nafdac:repeat-b')
      AND queue_type = 'ambiguous_conflicting_match'
      AND conflict_reasons @> ARRAY['repeated_source_nrn']::text[]),
   2::bigint,
@@ -213,43 +226,57 @@ SELECT is(
 );
 SELECT is(
   (SELECT COUNT(*) FROM public.catalogue_reconciliation_queue
-   WHERE record_id IN ('nafdac:6053', 'nafdac:6052', 'nafdac:4743', 'nafdac:5545')),
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id IN ('nafdac:6053', 'nafdac:6052', 'nafdac:4743', 'nafdac:5545')),
   4::bigint,
   'all four Brustan presentations remain separate review identities'
 );
 SELECT is(
   (SELECT COUNT(DISTINCT record_id) FROM public.catalogue_reconciliation_queue
-   WHERE record_id IN ('nafdac:6053', 'nafdac:6052', 'nafdac:4743', 'nafdac:5545')),
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id IN ('nafdac:6053', 'nafdac:6052', 'nafdac:4743', 'nafdac:5545')),
   4::bigint,
   'Brustan names, strengths, forms, and combinations are not collapsed'
 );
 SELECT is(
-  (SELECT queue_type FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:other'),
+  (SELECT queue_type FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'nafdac:other'),
   'non_human_non_medicine_scope',
   'other regulated products stay outside the medicine catalogue'
 );
 SELECT is(
-  (SELECT queue_type FROM public.catalogue_reconciliation_queue WHERE record_id = 'market:medicine'),
+  (SELECT queue_type FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'market:medicine'),
   'ambiguous_conflicting_match',
   'market medicine observations require identity and registration review'
 );
 SELECT is(
-  (SELECT queue_type FROM public.catalogue_reconciliation_queue WHERE record_id = 'market:fmcg'),
+  (SELECT queue_type FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'market:fmcg'),
   'non_human_non_medicine_scope',
   'market non-medicine items stay outside medicine scope'
 );
 SELECT ok(
   (SELECT conflict_reasons @> ARRAY['regulatory_alert_hold']::text[]
-   FROM public.catalogue_reconciliation_queue WHERE record_id = 'alert:test'),
+   FROM public.catalogue_reconciliation_queue
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'alert:test'),
   'official alert holds are explicit blockers'
 );
 SELECT ok(
   (SELECT payload->>'input_term' = 'Daktarcort'
       AND payload->>'candidate_term' = 'Daktacort'
       AND payload->>'auto_correct' = 'false'
-   FROM public.catalogue_source_records WHERE record_id = 'alias:daktarcort')
+   FROM public.catalogue_source_records
+   WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND record_id = 'alias:daktarcort')
   AND NOT EXISTS (
-    SELECT 1 FROM public.catalogue_reconciliation_queue WHERE record_id = 'alias:daktarcort'
+    SELECT 1 FROM public.catalogue_reconciliation_queue
+    WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+      AND record_id = 'alias:daktarcort'
   ),
   'Daktarcort is preserved as a non-automatic typo suggestion'
 );
@@ -284,7 +311,9 @@ SET LOCAL ROLE authenticated;
 SELECT throws_ok(
   format(
     'SELECT public.set_catalogue_reconciliation_decision(%L, %L, NULL, %L)',
-    (SELECT id FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:inactive'),
+    (SELECT id FROM public.catalogue_reconciliation_queue
+     WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+       AND record_id = 'nafdac:inactive'),
     'approved', 'must remain blocked'
   ),
   'P0001', 'Catalogue approval blocked: ambiguous_resolution_evidence_required, resolution_action_required, source_inactive, source_not_active',
@@ -293,7 +322,9 @@ SELECT throws_ok(
 SELECT lives_ok(
   format(
     'SELECT public.set_catalogue_reconciliation_decision(%L, %L, NULL, %L)',
-    (SELECT id FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:new'),
+    (SELECT id FROM public.catalogue_reconciliation_queue
+     WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+       AND record_id = 'nafdac:new'),
     'approved', 'complete identity reviewed by an authorized admin'
   ),
   'route, release and applicant remain provenance without jamming a complete identity'
@@ -301,7 +332,9 @@ SELECT lives_ok(
 SELECT lives_ok(
   format(
     'SELECT public.set_catalogue_reconciliation_decision(%L, %L, NULL, %L)',
-    (SELECT id FROM public.catalogue_reconciliation_queue WHERE record_id = 'nafdac:new'),
+    (SELECT id FROM public.catalogue_reconciliation_queue
+     WHERE snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+       AND record_id = 'nafdac:new'),
     'held', 'needs clinical review'
   ),
   'an authorized decision is recorded through the RPC'
@@ -310,7 +343,8 @@ RESET ROLE;
 SELECT is(
   (SELECT COUNT(*) FROM public.catalogue_reconciliation_audit audit
    JOIN public.catalogue_reconciliation_queue queue ON queue.id = audit.queue_id
-   WHERE queue.record_id = 'nafdac:new'),
+   WHERE queue.snapshot_id = 'f7010000-0000-4000-8000-000000000001'
+     AND queue.record_id = 'nafdac:new'),
   2::bigint,
   'each decision change is append-only audited'
 );

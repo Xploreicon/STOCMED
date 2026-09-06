@@ -32,7 +32,8 @@ and full-restore fallback. It:
 - gives the child a minimal environment rather than forwarding every secret;
 - removes the password file when the command exits;
 - writes backups under a `.partial-<pid>` name and publishes them atomically
-  only after `pg_dump` exits successfully and `pg_restore --list` succeeds;
+  only after `pg_dump` exits successfully, the TOC parses, and an offline
+  `pg_restore` streams and decompresses every archive entry;
 - writes a SHA-256 sidecar and refuses destructive restore without both a valid
   checksum and the explicit `RESTORE_VERIFIED_ARCHIVE` confirmation.
 

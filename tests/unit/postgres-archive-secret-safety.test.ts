@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -69,6 +70,51 @@ describe('secret-safe PostgreSQL archive runner', () => {
     expect(result.stderr).not.toContain(password)
   })
 
+  it('keeps SQL execution credentials out of the psql process arguments', () => {
+    const { connectionFile, databaseUrl, password } = fixture()
+    const sqlFile = join(temporaryDirectories[0], 'operation.sql')
+    writeFileSync(sqlFile, 'SELECT 1;\n')
+    const result = spawnSync(process.execPath, [
+      script, 'execute', '--connection-file', connectionFile,
+      '--sql-file', sqlFile, '--confirm', 'EXECUTE_REVIEWED_SQL_FILE', '--dry-run',
+    ], { encoding: 'utf8' })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).not.toContain(password)
+    expect(result.stdout).not.toContain(databaseUrl)
+    const plan = JSON.parse(result.stdout)
+    expect(plan.command).toBe('psql')
+    expect(plan.args).toContain('--file')
+    expect(plan.args.join(' ')).not.toMatch(/postgres(?:ql)?:\/\//)
+  })
+
+  it('plans a schema-only preview bootstrap and never restores production table data', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'stocmed-pg-preview-test-'))
+    temporaryDirectories.push(directory)
+    const projectRef = 'abcdefghijklmnopqrst'
+    const connectionFile = join(directory, 'connection-url')
+    const archive = join(directory, 'archive.dump')
+    const password = 'preview-not-real-password'
+    const databaseUrl = `postgresql://postgres.${projectRef}:${password}@pooler.example.invalid:5432/postgres`
+    writeFileSync(connectionFile, `${databaseUrl}\n`, { mode: 0o600 })
+    const result = spawnSync(process.execPath, [
+      script, 'bootstrap-preview', '--connection-file', connectionFile,
+      '--archive', archive, '--expected-preview-ref', projectRef,
+      '--confirm', 'BOOTSTRAP_DATA_FREE_PREVIEW', '--dry-run',
+    ], { encoding: 'utf8' })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).not.toContain(password)
+    expect(result.stdout).not.toContain(databaseUrl)
+    const plan = JSON.parse(result.stdout)
+    expect(plan.commands[0].args.join(' ')).toContain('CREATE EXTENSION pg_trgm WITH SCHEMA public')
+    expect(plan.commands[1].args).toContain('--schema-only')
+    expect(plan.commands[1].args).toContain('public')
+    expect(plan.commands).toHaveLength(2)
+    expect(plan.commands.flatMap((command: { args: string[] }) => command.args))
+      .not.toContain('--data-only')
+  })
+
   it('keeps rollback docs off raw database-URL command arguments', () => {
     const files = [
       'docs/catalogue-admin-review-rollback-2026-09-06.md',
@@ -80,5 +126,46 @@ describe('secret-safe PostgreSQL archive runner', () => {
       expect(content, file).not.toMatch(/--dbname\s+["']?\$\{?\w*(?:DATABASE_URL|PRODUCTION_URL)/)
       expect(content, file).not.toMatch(/(?:pg_dump|pg_restore|psql)[^\n]*postgres(?:ql)?:\/\//i)
     }
+  })
+
+  it('rejects a checksum-valid archive whose payload cannot be fully read', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'stocmed-pg-truncated-test-'))
+    temporaryDirectories.push(directory)
+    const archive = join(directory, 'truncated.dump')
+    const checksum = `${archive}.sha256`
+    const fakeBin = join(directory, 'bin')
+    const fakePgRestore = join(fakeBin, 'pg_restore')
+    mkdirSync(fakeBin)
+    writeFileSync(archive, 'checksum-valid-but-truncated')
+    const digest = createHash('sha256').update(readFileSync(archive)).digest('hex')
+    writeFileSync(checksum, `${digest}  ${archive}\n`)
+    writeFileSync(fakePgRestore, `#!/bin/sh
+if [ "$1" = "--list" ]; then
+  echo '; TOC Entries: 42'
+  exit 0
+fi
+echo 'unexpected end of file' >&2
+exit 1
+`)
+    chmodSync(fakePgRestore, 0o700)
+
+    const result = spawnSync(process.execPath, [
+      script, 'verify', '--archive', archive, '--checksum-file', checksum,
+    ], {
+      encoding: 'utf8',
+      env: { PATH: `${fakeBin}:/usr/bin:/bin`, LANG: 'C', NODE_ENV: 'test' },
+    })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('unexpected end of file')
+  })
+
+  it('requires the catalogue loader to use a protected connection-file reference', () => {
+    const content = readFileSync(resolve('scripts/catalogue/import-source-package.mjs'), 'utf8')
+    expect(content).toContain('CATALOGUE_STAGING_DATABASE_URL_FILE')
+    expect(content).toContain('CATALOGUE_STAGING_DATABASE_URL is forbidden')
+    expect(content).not.toContain(
+      'const databaseUrl = process.env.CATALOGUE_STAGING_DATABASE_URL\n',
+    )
   })
 })

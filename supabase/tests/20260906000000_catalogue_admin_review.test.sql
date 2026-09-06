@@ -124,14 +124,14 @@ SET LOCAL ROLE authenticated;
 
 SELECT is(
   (SELECT (public.get_catalogue_reconciliation_review(
-    'candidate_new_identity','pending',NULL,25,0
+    'candidate_new_identity','pending','review:new',25,0
   )->>'total')::INTEGER),
   1,
   'authorized admin reads the filtered new-identity queue'
 );
 SELECT is(
   (SELECT public.get_catalogue_reconciliation_review(
-    'candidate_new_identity','pending',NULL,25,0
+    'candidate_new_identity','pending','review:new',25,0
   )->'rows'->0->>'can_approve'),
   'true',
   'route, release and applicant provenance no longer jam a complete identity'
