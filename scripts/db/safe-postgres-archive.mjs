@@ -238,7 +238,7 @@ async function validateArchivePayload(archive) {
   // Rendering every entry forces pg_restore to read and decompress the full
   // payload without connecting to (or mutating) a database. Discard the SQL
   // stream so verification does not need a second dump-sized file.
-  await run('pg_restore', [archive], undefined, { discardStdout: true })
+  await run('pg_restore', ['--file=-', archive], undefined, { discardStdout: true })
 }
 
 async function verifyArchive(archive, checksumFile) {
@@ -268,7 +268,7 @@ function dryRunPlan(args, connection) {
     return {
       commands: [
         { command: 'pg_restore', args: ['--list', resolve(args.archive)] },
-        { command: 'pg_restore', args: [resolve(args.archive)], stdout: '[discarded after full payload read]' },
+        { command: 'pg_restore', args: ['--file=-', resolve(args.archive)], stdout: '[discarded after full payload read]' },
       ],
     }
   }

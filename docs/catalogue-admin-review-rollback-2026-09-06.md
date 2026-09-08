@@ -9,6 +9,15 @@ Release scope:
 
 Known-good pre-change production application commit: `06b62b1`.
 
+Current Stop Gate 1 backup (read-only, full custom-format dump):
+
+- path: `reports/backups/production-pre-catalogue-review-20260908T082620Z.dump`;
+- SHA-256: `aded7f544af568e6fefb8499be0a4940be6a40a4d48953dc21ec0f29272a1e43`;
+- 1,339 TOC entries;
+- the SHA-256, TOC and full offline payload read all passed independently;
+- production baseline at capture: 3,419 `products` rows with digest
+  `f93e9d49b04d98c8ca0a51dbfbbb65a6`.
+
 Superseded Stop Gate 1 backup (read-only, full custom-format dump):
 
 - path: `reports/backups/production-pre-catalogue-review-20260906T142641Z.dump`;
@@ -58,18 +67,17 @@ credentials in this file, logs, or chat.
    applying the release. Applying the schema and loading source evidence must
    leave both unchanged.
 
-At Stop Gate 1, the Git release ancestry is exactly `06b62b1` plus four bounded
-commits: catalogue staging, schema-cache hygiene, administrator review/promotion,
-and database-command credential hardening. The database migration baseline ends
-at `20260905160000`; neither catalogue staging migration is present. The owner
+At Stop Gate 1, the Git release ancestry is exactly `06b62b1` plus the bounded
+catalogue staging, schema-cache hygiene, administrator review/promotion, and
+database-command credential-hardening changes recorded on
+`codex/catalogue-expansion-staging`. The database migration baseline ends at
+`20260905160000`; neither catalogue staging migration is present. The owner
 confirmed `06b62b1` as the live application base, corroborating the public
-production markers observed during drift diagnosis. Git drift is therefore
-resolved. Hosted-preview verification is complete. A new safe-runner backup is
-still blocked: the previously exposed production credential continues to
-authenticate, so the attempted rotation did not invalidate it. Do not make
-another production connection until the correct project credential is rotated,
-the old credential fails authentication, and the new credential is installed by
-protected file reference.
+production markers observed during drift diagnosis. Git drift is resolved and
+hosted-preview verification is complete. The exposed database credential was
+rotated and a direct authentication attempt with the retired value failed. The
+new credential works only through the protected-file runner. The current backup
+above is the authoritative pre-release rollback point.
 
 ## Application rollback
 
