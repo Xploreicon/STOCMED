@@ -132,7 +132,7 @@ SELECT is(
   'an identical signed provider event is rejected as a replay'
 );
 
-RESET ROLE;
+SET LOCAL ROLE postgres;
 SELECT is(
   (SELECT count(*) FROM public.notification_webhook_events
    WHERE provider = 'resend' AND event_id = 'pgtap-webhook-event-one'),
