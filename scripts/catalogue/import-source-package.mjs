@@ -5,6 +5,7 @@ import { lstat, readFile, readdir } from 'node:fs/promises'
 import { basename, extname, join, resolve } from 'node:path'
 import process from 'node:process'
 const SOURCE_KEY = 'stocmed-nigeria-catalogue'
+const PRODUCTION_CONFIRMATION = 'LOAD_REVIEW_EVIDENCE_ONLY'
 
 function usage() {
   return `Usage:
@@ -14,9 +15,15 @@ function usage() {
     [--package-sha256 <expected-zip-sha256>] \\
     [--dry-run]
 
-Database imports require both:
-  CATALOGUE_STAGING_DATABASE_URL_FILE=/protected/path/non-production-database-url
+Database imports require a protected connection file:
+  CATALOGUE_DATABASE_URL_FILE=/protected/path/database-url
+
+Preview imports also require:
   CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION=YES
+
+Production review-evidence imports instead require both:
+  CATALOGUE_PRODUCTION_EXPECTED_PROJECT_REF=<20-character-project-ref>
+  CATALOGUE_PRODUCTION_CONFIRM_REVIEW_ONLY=${PRODUCTION_CONFIRMATION}
 
 The importer validates every manifest digest and JSONL row count before opening
 the database. It writes source evidence and review queues only; never products.`
@@ -188,23 +195,44 @@ async function readProtectedDatabaseUrl(path) {
   const absolutePath = resolve(path)
   const metadata = await lstat(absolutePath)
   if (!metadata.isFile() || metadata.isSymbolicLink()) {
-    throw new Error('The staging database secret must be a regular, non-symlink file')
+    throw new Error('The database secret must be a regular, non-symlink file')
   }
   if ((metadata.mode & 0o077) !== 0) {
-    throw new Error('The staging database secret must have mode 0600 (no group/world access)')
+    throw new Error('The database secret must have mode 0600 (no group/world access)')
   }
   const databaseUrl = (await readFile(absolutePath, 'utf8')).trim()
   const url = new URL(databaseUrl)
   if (!['postgres:', 'postgresql:'].includes(url.protocol)
     || !url.hostname || !url.username || !url.password || !url.pathname.slice(1)) {
-    throw new Error('The protected staging secret does not contain a complete PostgreSQL URL')
+    throw new Error('The protected database secret does not contain a complete PostgreSQL URL')
   }
   return databaseUrl
 }
 
-function assertNonProduction(databaseUrl) {
-  if (process.env.CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION !== 'YES') {
-    throw new Error('Set CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION=YES for a database import')
+function assertImportTarget(databaseUrl) {
+  const previewConfirmed = process.env.CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION === 'YES'
+  const productionConfirmed = process.env.CATALOGUE_PRODUCTION_CONFIRM_REVIEW_ONLY
+    === PRODUCTION_CONFIRMATION
+  if (previewConfirmed && productionConfirmed) {
+    throw new Error('Choose exactly one import target: preview or production')
+  }
+
+  if (productionConfirmed) {
+    const expectedRef = process.env.CATALOGUE_PRODUCTION_EXPECTED_PROJECT_REF || ''
+    if (!/^[a-z]{20}$/.test(expectedRef)) {
+      throw new Error('CATALOGUE_PRODUCTION_EXPECTED_PROJECT_REF must be a 20-character project ref')
+    }
+    const url = new URL(databaseUrl)
+    if (!url.hostname.includes(expectedRef) && !url.username.includes(expectedRef)) {
+      throw new Error('Protected database URL does not match the confirmed production project')
+    }
+    return 'production-review-import'
+  }
+
+  if (!previewConfirmed) {
+    throw new Error(
+      `Confirm preview or set CATALOGUE_PRODUCTION_CONFIRM_REVIEW_ONLY=${PRODUCTION_CONFIRMATION}`,
+    )
   }
   if (process.env.DATABASE_URL && databaseUrl === process.env.DATABASE_URL) {
     throw new Error('Refusing import: staging URL is identical to DATABASE_URL')
@@ -212,6 +240,7 @@ function assertNonProduction(databaseUrl) {
   if (process.env.PRODUCTION_DATABASE_URL && databaseUrl === process.env.PRODUCTION_DATABASE_URL) {
     throw new Error('Refusing import: staging URL is identical to PRODUCTION_DATABASE_URL')
   }
+  return 'staging-import'
 }
 
 async function insertRows(client, snapshotId, rows) {
@@ -265,15 +294,16 @@ async function insertRows(client, snapshotId, rows) {
 async function importPackage({ manifest, jsonlRows, datasetCounts }, args) {
   const { default: pg } = await import('pg')
   const { Client } = pg
-  if (process.env.CATALOGUE_STAGING_DATABASE_URL) {
-    throw new Error('CATALOGUE_STAGING_DATABASE_URL is forbidden; use the protected file reference')
+  if (process.env.CATALOGUE_DATABASE_URL || process.env.CATALOGUE_STAGING_DATABASE_URL) {
+    throw new Error('Raw catalogue database URLs are forbidden; use the protected file reference')
   }
-  const databaseUrlFile = process.env.CATALOGUE_STAGING_DATABASE_URL_FILE
+  const databaseUrlFile = process.env.CATALOGUE_DATABASE_URL_FILE
+    || process.env.CATALOGUE_STAGING_DATABASE_URL_FILE
   if (!databaseUrlFile) {
-    throw new Error('CATALOGUE_STAGING_DATABASE_URL_FILE is required without --dry-run')
+    throw new Error('CATALOGUE_DATABASE_URL_FILE is required without --dry-run')
   }
   const databaseUrl = await readProtectedDatabaseUrl(databaseUrlFile)
-  assertNonProduction(databaseUrl)
+  const importMode = assertImportTarget(databaseUrl)
 
   const client = new Client(databaseConfig(databaseUrl))
   await client.connect()
@@ -327,7 +357,7 @@ async function importPackage({ manifest, jsonlRows, datasetCounts }, args) {
     await client.query('COMMIT')
 
     return {
-      mode: 'staging-import',
+      mode: importMode,
       snapshotId,
       snapshotDate: manifest.snapshot_date,
       packageSha256: args.packageSha256,

@@ -162,8 +162,10 @@ exit 1
 
   it('requires the catalogue loader to use a protected connection-file reference', () => {
     const content = readFileSync(resolve('scripts/catalogue/import-source-package.mjs'), 'utf8')
-    expect(content).toContain('CATALOGUE_STAGING_DATABASE_URL_FILE')
-    expect(content).toContain('CATALOGUE_STAGING_DATABASE_URL is forbidden')
+    expect(content).toContain('CATALOGUE_DATABASE_URL_FILE')
+    expect(content).toContain('Raw catalogue database URLs are forbidden')
+    expect(content).toContain('CATALOGUE_PRODUCTION_EXPECTED_PROJECT_REF')
+    expect(content).toContain('LOAD_REVIEW_EVIDENCE_ONLY')
     expect(content).not.toContain(
       'const databaseUrl = process.env.CATALOGUE_STAGING_DATABASE_URL\n',
     )

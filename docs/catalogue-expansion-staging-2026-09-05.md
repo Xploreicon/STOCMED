@@ -27,8 +27,22 @@ put its database URL in a mode-0600 file outside the repository, and expose only
 the file path to the loader:
 
 ```bash
-export CATALOGUE_STAGING_DATABASE_URL_FILE='/protected/path/preview-database-url'
+export CATALOGUE_DATABASE_URL_FILE='/protected/path/preview-database-url'
 export CATALOGUE_STAGING_CONFIRM_NON_PRODUCTION=YES
+node scripts/catalogue/import-source-package.mjs \
+  --package-dir '<extracted package directory>' \
+  --package-zip '<package ZIP>' \
+  --package-sha256 10f0dd0faa5ac3ccdcfd5d367384d705217801474c10d08bd32c8578c6baf0ea
+```
+
+The production release uses the same immutable-evidence transaction and product
+count guard, but requires an explicit project-bound confirmation instead of
+mislabeling production as a preview:
+
+```bash
+export CATALOGUE_DATABASE_URL_FILE='/protected/path/production-database-url'
+export CATALOGUE_PRODUCTION_EXPECTED_PROJECT_REF='<production-project-ref>'
+export CATALOGUE_PRODUCTION_CONFIRM_REVIEW_ONLY=LOAD_REVIEW_EVIDENCE_ONLY
 node scripts/catalogue/import-source-package.mjs \
   --package-dir '<extracted package directory>' \
   --package-zip '<package ZIP>' \
@@ -40,9 +54,10 @@ before it opens a database connection. It computes the ZIP digest itself,
 rejects a changed row inside an existing snapshot, and uses
 `(snapshot_id, dataset, record_id)` as the idempotency key.
 
-It also refuses to run unless the explicit non-production confirmation is set,
-and refuses a staging URL equal to `DATABASE_URL` or
-`PRODUCTION_DATABASE_URL` when either is present.
+It refuses to run unless exactly one target is explicitly confirmed. Preview
+imports reject a URL equal to `DATABASE_URL` or `PRODUCTION_DATABASE_URL`;
+production imports require both the stronger review-only confirmation and an
+exact project-reference match.
 
 ## Reconciliation result
 
