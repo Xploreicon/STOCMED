@@ -1,68 +1,44 @@
-import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { getAuthorizedAdmin } from '@/lib/admin/authorization'
 
 export const dynamic = 'force-dynamic'
 
+const legacyDecisionSchema = z.object({
+  action: z.enum(['verify', 'reject']),
+}).strict()
+
+// Compatibility endpoint for an already-cached copy of the former review UI.
+// The privileged write remains inside the same admin-only SECURITY DEFINER RPC
+// used by the replacement submissions editor.
 export async function POST(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: { id: string } },
 ) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const access = await getAuthorizedAdmin()
+  if ('error' in access) {
+    return NextResponse.json({ error: access.error }, { status: access.status })
+  }
 
-  const { data: viewer } = await (supabase as any)
-    .from('users')
-    .select('is_admin,admin_authorized_at,admin_authorization_basis')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  
-  const isAuthorizedAdmin = Boolean(
-    viewer?.is_admin
-    && viewer?.admin_authorized_at
-    && viewer?.admin_authorization_basis?.trim()
+  const productId = z.string().uuid().safeParse(params.id)
+  const body = legacyDecisionSchema.safeParse(await request.json().catch(() => null))
+  if (!productId.success || !body.success) {
+    return NextResponse.json({ error: 'Invalid catalogue review request' }, { status: 400 })
+  }
+
+  const { data, error } = await (access.supabase.rpc as any)(
+    'review_unverified_catalogue_product',
+    {
+      p_product_id: productId.data,
+      p_action: body.data.action,
+      p_edit: {},
+      p_notes: null,
+    },
   )
-  if (!isAuthorizedAdmin) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+  if (error) {
+    const conflict = /required|already|inventory|unverified/i.test(error.message || '')
+    return NextResponse.json({ error: error.message }, { status: conflict ? 409 : 400 })
   }
 
-  try {
-    const { action } = await request.json()
-    const { id } = params
-
-    if (action === 'verify') {
-      const { error } = await (supabase as any)
-        .from('products')
-        .update({ is_verified: true, updated_at: new Date().toISOString() })
-        .eq('id', id)
-      
-      if (error) throw error
-      
-      return NextResponse.json({ success: true })
-    } 
-    
-    if (action === 'reject') {
-      // Attempt to delete. This will fail if there's a foreign key constraint from pharmacy_inventory
-      const { error } = await (supabase as any)
-        .from('products')
-        .delete()
-        .eq('id', id)
-      
-      if (error) {
-        if (error.code === '23503') {
-          return NextResponse.json(
-            { error: 'Cannot reject this product because it is currently in use by a pharmacy inventory.' },
-            { status: 400 }
-          )
-        }
-        throw error
-      }
-
-      return NextResponse.json({ success: true })
-    }
-
-    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal server error' }, { status: 500 })
-  }
+  return NextResponse.json(data, { headers: { 'Cache-Control': 'no-store, private' } })
 }

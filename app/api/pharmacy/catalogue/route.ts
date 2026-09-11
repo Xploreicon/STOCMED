@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     let builder = supabase
       .from('products')
       .select('id, generic_name, brand_name, strength, dosage_form, pack_size, manufacturer')
+      .eq('is_verified', true)
       .order('generic_name', { ascending: true })
       .limit(20)
 

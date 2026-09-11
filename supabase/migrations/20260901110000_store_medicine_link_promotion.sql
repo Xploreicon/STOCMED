@@ -180,3 +180,5 @@ COMMENT ON FUNCTION public.update_pharmacy_inventory_item(UUID, JSONB, TEXT) IS
   'Owner-scoped inventory updates. Identity fields are accepted only as an atomic Store-to-Medicine link to an existing products row.';
 
 COMMIT;
+
+NOTIFY pgrst, 'reload schema';

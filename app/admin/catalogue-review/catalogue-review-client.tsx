@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
@@ -410,9 +411,17 @@ export default function CatalogueReviewClient() {
               catalogue promotion remains a separate explicit action.
             </p>
           </div>
-          <Button variant="outline" onClick={() => void loadQueue()} disabled={loading} className="gap-2">
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/admin/catalogue-review/submissions"
+              className="inline-flex h-10 items-center justify-center rounded-button border-[1.5px] border-primary bg-white px-5 py-2 text-sm font-bold text-primary shadow-sm transition hover:bg-primary/5"
+            >
+              Pharmacy submissions
+            </Link>
+            <Button variant="outline" onClick={() => void loadQueue()} disabled={loading} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
+          </div>
         </div>
         <div className="rounded-card border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
           <ShieldAlert className="mr-2 inline h-4 w-4" />
