@@ -1,7 +1,7 @@
 # Inventory read performance baseline and contract
 
-Date: 2026-09-05  
-Environment measured: production, Ceres Pharmacy Ltd  
+Date: 2026-09-05
+Environment measured: production, Ceres Pharmacy Ltd
 Production inventory at measurement: 2,670 active rows
 
 This work changes only how the existing inventory payload is read. It does not
