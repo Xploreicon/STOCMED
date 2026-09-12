@@ -333,7 +333,10 @@ export default function AddDrugModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 border border-border rounded-xl shadow-2xl">
+      <DialogContent
+        onClose={onClose}
+        className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 border border-border rounded-xl shadow-2xl"
+      >
         <DialogHeader className="p-6 border-b bg-surface/50">
           <DialogTitle className="text-xl font-semibold text-ink">
             {isCreatingNewProduct
