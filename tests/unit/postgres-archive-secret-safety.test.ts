@@ -44,6 +44,64 @@ describe('secret-safe PostgreSQL archive runner', () => {
     expect(plan.env.PGPASSFILE).toContain('ephemeral')
   })
 
+  it('can route a protected Supabase pooler credential through the direct endpoint', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'stocmed-pg-direct-test-'))
+    temporaryDirectories.push(directory)
+    const projectRef = 'abcdefghijklmnopqrst'
+    const connectionFile = join(directory, 'connection-url')
+    const archive = join(directory, 'archive.dump')
+    const password = 'direct-not-real-password'
+    const databaseUrl = `postgresql://postgres.${projectRef}:${password}@aws-1-eu-west-1.pooler.supabase.com:5432/postgres`
+    writeFileSync(connectionFile, `${databaseUrl}\n`, { mode: 0o600 })
+
+    const result = spawnSync(process.execPath, [
+      script, 'backup', '--connection-file', connectionFile,
+      '--direct-project-ref', projectRef, '--archive', archive, '--dry-run',
+    ], { encoding: 'utf8' })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).not.toContain(password)
+    expect(result.stdout).not.toContain(databaseUrl)
+    const plan = JSON.parse(result.stdout)
+    expect(plan.args).toContain(`db.${projectRef}.supabase.co`)
+    expect(plan.args).toContain('postgres')
+    expect(plan.args.join(' ')).not.toMatch(/postgres(?:ql)?:\/\//)
+  })
+
+  it('supports batched INSERT output when a pooler terminates COPY streaming', () => {
+    const { archive, connectionFile, databaseUrl, password } = fixture()
+    const result = spawnSync(process.execPath, [
+      script, 'backup', '--connection-file', connectionFile,
+      '--archive', archive, '--row-inserts', '--dry-run',
+    ], { encoding: 'utf8' })
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).not.toContain(password)
+    expect(result.stdout).not.toContain(databaseUrl)
+    const plan = JSON.parse(result.stdout)
+    expect(plan.args).toContain('--rows-per-insert=100')
+  })
+
+  it('rejects direct routing to a different Supabase project', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'stocmed-pg-direct-mismatch-test-'))
+    temporaryDirectories.push(directory)
+    const connectionFile = join(directory, 'connection-url')
+    const archive = join(directory, 'archive.dump')
+    writeFileSync(
+      connectionFile,
+      'postgresql://postgres.abcdefghijklmnopqrst:not-real@pooler.example.invalid:5432/postgres\n',
+      { mode: 0o600 },
+    )
+
+    const result = spawnSync(process.execPath, [
+      script, 'backup', '--connection-file', connectionFile,
+      '--direct-project-ref', 'zyxwvutsrqponmlkjihg', '--archive', archive, '--dry-run',
+    ], { encoding: 'utf8' })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('does not belong to the requested Supabase project')
+  })
+
   it('rejects a database URL supplied as an argv value without echoing it', () => {
     const { archive, databaseUrl, password } = fixture()
     const result = spawnSync(process.execPath, [

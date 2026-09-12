@@ -1,5 +1,41 @@
 # Catalogue admin review rollback runbook
 
+## 2026-09-12 product-unlock release
+
+Known-good pre-release application commit: `d23c4fb`.
+
+Fresh verified production backup:
+
+- path: `reports/backups/production-pre-product-unlock-20260911.sql.dump`;
+- SHA-256: `2817fb274fab051a721299277d7bd70baa216619ba3c2c716f1e7fc7e61bf32b`;
+- 1,431 TOC entries;
+- checksum match, TOC parse, and complete offline payload read passed.
+
+The production migration audit confirmed that `20260827020000`,
+`20260827021000`, `20260901110000`, `20260905150000`, and
+`20260906000000` were already applied. The only database migration pending for
+this release is `20260911230000_unverified_catalogue_product_review.sql`.
+
+Rollback sequence:
+
+1. Roll the application back to the known-good `d23c4fb` deployment.
+2. Stop catalogue-review writes and preserve
+   `catalogue_product_submission_audit`; do not erase review provenance merely
+   to remove an unused additive function.
+3. If the new schema must be removed before any review action occurred, apply a
+   reviewed rollback migration that drops
+   `review_unverified_catalogue_product(UUID, TEXT, JSONB, TEXT)` and then the
+   empty `catalogue_product_submission_audit` table, followed by
+   `NOTIFY pgrst, 'reload schema';`.
+4. If product rows were changed incorrectly, use the audit records for a
+   separately reviewed corrective migration. For broad or uncertain
+   corruption, restore the verified backup in an approved maintenance window.
+
+The application release exposes the already-live Store-to-Medicine RPC and the
+already-live 10,287-row catalogue review queue. It must not run the catalogue
+loader or alter `products` during deployment; the pre-release products count is
+3,419.
+
 Release scope:
 
 - migration `20260905150000_catalogue_source_staging.sql`;

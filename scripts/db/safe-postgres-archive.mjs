@@ -27,6 +27,8 @@ function usage() {
   return `Usage:
   node scripts/db/safe-postgres-archive.mjs backup \\
     --connection-file /protected/path/database-url \\
+    [--direct-project-ref abcdefghijklmnopqrst] \\
+    [--row-inserts] \\
     --archive /gitignored/path/backup.dump
 
   node scripts/db/safe-postgres-archive.mjs verify \\
@@ -67,13 +69,17 @@ export function parseArgs(argv) {
       parsed.dryRun = true
       continue
     }
+    if (argument === '--row-inserts') {
+      parsed.row_inserts = true
+      continue
+    }
     if (argument === '--help' || argument === '-h') {
       parsed.help = true
       continue
     }
     if (![
       '--connection-file', '--archive', '--checksum-file', '--sql-file', '--confirm',
-      '--expected-preview-ref',
+      '--expected-preview-ref', '--direct-project-ref',
     ].includes(argument)) {
       throw new Error(`Unsupported argument: ${argument}`)
     }
@@ -106,6 +112,12 @@ export function parseArgs(argv) {
     if (parsed.confirm !== PREVIEW_BOOTSTRAP_CONFIRMATION) {
       throw new Error(`Preview bootstrap requires --confirm ${PREVIEW_BOOTSTRAP_CONFIRMATION}`)
     }
+  }
+  if (parsed.direct_project_ref && !/^[a-z]{20}$/.test(parsed.direct_project_ref)) {
+    throw new Error('--direct-project-ref must be the 20-character Supabase project ref')
+  }
+  if (parsed.row_inserts && command !== 'backup') {
+    throw new Error('--row-inserts is supported only for backups')
   }
   return parsed
 }
@@ -160,6 +172,18 @@ function assertExpectedPreview(connection, projectRef) {
   }
 }
 
+function useSupabaseDirectConnection(connection, projectRef) {
+  if (!connection.host.includes(projectRef) && !connection.username.includes(projectRef)) {
+    throw new Error('Protected connection does not belong to the requested Supabase project')
+  }
+  return {
+    ...connection,
+    host: `db.${projectRef}.supabase.co`,
+    port: '5432',
+    username: 'postgres',
+  }
+}
+
 function pgPassEscape(value) {
   return String(value).replaceAll('\\', '\\\\').replaceAll(':', '\\:')
 }
@@ -186,6 +210,14 @@ function childEnvironment(connection, pgPassFile) {
     PGPASSFILE: pgPassFile,
     PGSSLMODE: connection.sslMode,
   }
+}
+
+function pgDumpOptions(args, outputPath) {
+  return [
+    '--format=custom', '--no-owner', '--no-acl',
+    ...(args.row_inserts ? ['--rows-per-insert=100'] : []),
+    '--file', outputPath,
+  ]
 }
 
 async function withPgPass(connection, callback) {
@@ -276,8 +308,8 @@ function dryRunPlan(args, connection) {
   if (args.command === 'backup') {
     return {
       command: 'pg_dump',
-      args: ['--format=custom', '--no-owner', '--no-acl',
-        '--file', `${resolve(args.archive)}.partial-[pid]`, ...credentialFreeConnection],
+      args: [...pgDumpOptions(args, `${resolve(args.archive)}.partial-[pid]`),
+        ...credentialFreeConnection],
       env: { PGPASSFILE: '[ephemeral mode-0600 file]', PGSSLMODE: connection.sslMode },
     }
   }
@@ -331,7 +363,7 @@ async function backup(args, connection) {
   try {
     await withPgPass(connection, async (passFile) => {
       await run('pg_dump', [
-        '--format=custom', '--no-owner', '--no-acl', '--file', partial,
+        ...pgDumpOptions(args, partial),
         ...connectionArgs(connection),
       ], childEnvironment(connection, passFile))
     })
@@ -411,9 +443,12 @@ async function main() {
     console.log(usage())
     return
   }
-  const connection = args.command === 'verify'
+  let connection = args.command === 'verify'
     ? null
     : await readProtectedConnection(args.connection_file)
+  if (connection && args.direct_project_ref) {
+    connection = useSupabaseDirectConnection(connection, args.direct_project_ref)
+  }
 
   if (args.dryRun) {
     console.log(JSON.stringify(dryRunPlan(args, connection), null, 2))
