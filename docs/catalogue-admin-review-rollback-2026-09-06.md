@@ -6,8 +6,8 @@ Known-good pre-release application commit: `d23c4fb`.
 
 Fresh verified production backup:
 
-- path: `reports/backups/production-pre-product-unlock-20260911.sql.dump`;
-- SHA-256: `2817fb274fab051a721299277d7bd70baa216619ba3c2c716f1e7fc7e61bf32b`;
+- path: `reports/backups/production-pre-product-unlock-20260912.sql.dump`;
+- SHA-256: `798e403ca1c7f6b4a3e40bfa050bb1824e540a439d95c0600e859574a7c08f09`;
 - 1,431 TOC entries;
 - checksum match, TOC parse, and complete offline payload read passed.
 
