@@ -13,7 +13,7 @@ Fresh verified production backup:
 
 The production migration audit confirmed that `20260827020000`,
 `20260827021000`, `20260901110000`, `20260905150000`, and
-`20260906000000` were already applied. The only database migration pending for
+`20260905160000`, and `20260906000000` were already applied. The only database migration pending for
 this release is `20260911230000_unverified_catalogue_product_review.sql`.
 
 Rollback sequence:
