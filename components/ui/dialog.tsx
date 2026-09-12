@@ -9,10 +9,27 @@ interface DialogProps {
 }
 
 const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children }) => {
+  React.useEffect(() => {
+    if (!open) return
+
+    const previousOverflow = document.body.style.overflow
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onOpenChange?.(false)
+    }
+
+    document.body.style.overflow = "hidden"
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [open, onOpenChange])
+
   return (
     <>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center animate-fade-in">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-2 animate-fade-in sm:p-4">
           <div
             className="fixed inset-0 bg-ink/20 backdrop-blur-sm"
             onClick={() => onOpenChange?.(false)}
@@ -34,8 +51,10 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     return (
       <div
         ref={ref}
+        role="dialog"
+        aria-modal="true"
         className={cn(
-          "relative z-50 bg-background rounded-card shadow-modal w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto animate-slide-up",
+          "relative z-[81] w-full max-w-lg max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-card bg-background shadow-modal animate-slide-up sm:max-h-[calc(100dvh-2rem)]",
           className
         )}
         {...props}
@@ -43,10 +62,11 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
         {children}
         {onClose && (
           <button
+            type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            className="absolute right-2 top-2 z-10 grid h-11 w-11 place-items-center rounded-full bg-background/90 text-ink-muted opacity-80 ring-offset-background transition hover:bg-surface hover:text-ink hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 sm:right-3 sm:top-3"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
             <span className="sr-only">Close</span>
           </button>
         )}

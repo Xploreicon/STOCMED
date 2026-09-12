@@ -304,22 +304,26 @@ export default function EditDrugModal({
   return (
     <>
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="flex max-h-[calc(100dvh-1rem)] max-w-md flex-col overflow-hidden rounded-xl border border-border p-0 shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
-        <DialogHeader className="shrink-0 border-b bg-surface/50 p-6">
-          <DialogTitle className="text-xl font-semibold text-ink">
+      <DialogContent
+        onClose={onClose}
+        aria-labelledby="edit-inventory-title"
+        className="flex max-h-[calc(100dvh-1rem)] max-w-md flex-col overflow-hidden rounded-xl border border-border p-0 shadow-2xl sm:max-h-[calc(100dvh-2rem)]"
+      >
+        <DialogHeader className="shrink-0 border-b bg-surface/50 p-4 pr-14 sm:p-6 sm:pr-16">
+          <DialogTitle id="edit-inventory-title" className="text-lg font-semibold text-ink sm:text-xl">
             Edit Inventory Details
           </DialogTitle>
         </DialogHeader>
 
         {formError && (
-          <div className="mx-6 mt-4 p-3 bg-danger/5 border border-danger/20 text-danger rounded-md flex items-start gap-2 text-sm">
+          <div className="mx-4 mt-4 flex items-start gap-2 rounded-md border border-danger/20 bg-danger/5 p-3 text-sm text-danger sm:mx-6">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <span>{formError}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-6">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 [scrollbar-gutter:stable] sm:space-y-6 sm:p-6">
             {/* Product info header with display image */}
             <div className="bg-surface border border-border rounded-lg p-4 flex gap-4">
               {displayImage ? (
@@ -573,16 +577,21 @@ export default function EditDrugModal({
           </div>
 
           {/* Footer */}
-          <div className="flex shrink-0 justify-end gap-3 border-t bg-surface/50 p-6">
+          <div className="grid shrink-0 grid-cols-2 gap-3 border-t bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(15,23,42,0.08)] sm:flex sm:justify-end sm:bg-surface/50 sm:p-6 sm:shadow-none">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
               disabled={editDrugMutation.isPending || isUploading}
+              className="min-h-11 w-full sm:w-auto"
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={editDrugMutation.isPending || isUploading}>
+            <Button
+              type="submit"
+              disabled={editDrugMutation.isPending || isUploading}
+              className="min-h-11 w-full sm:w-auto"
+            >
               {editDrugMutation.isPending || isUploading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
