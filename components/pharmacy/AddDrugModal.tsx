@@ -34,13 +34,13 @@ const categories = [
 ];
 
 const dosageForms = [
-  'Tablet',
-  'Capsule',
-  'Syrup',
-  'Injection',
-  'Cream',
-  'Drops',
-  'Inhaler',
+  { value: 'tablet', label: 'Tablet' },
+  { value: 'capsule', label: 'Capsule' },
+  { value: 'syrup', label: 'Syrup' },
+  { value: 'injection', label: 'Injection' },
+  { value: 'cream', label: 'Cream' },
+  { value: 'drops', label: 'Drops' },
+  { value: 'inhaler', label: 'Inhaler' },
 ];
 
 export default function AddDrugModal({
@@ -521,8 +521,8 @@ export default function AddDrugModal({
                 >
                   <option value="">Select form</option>
                   {dosageForms.map((form) => (
-                    <option key={form} value={form}>
-                      {form}
+                    <option key={form.value} value={form.value}>
+                      {form.label}
                     </option>
                   ))}
                 </select>

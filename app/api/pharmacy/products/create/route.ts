@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
+import { normalizeDosageForm } from '@/lib/catalogue-values'
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,11 +29,29 @@ export async function POST(request: NextRequest) {
     // Parse body
     const body = await request.json()
     const { generic_name, brand_name, manufacturer, strength, dosage_form, category, pack_size, image_url } = body
+    const normalizedDosageForm = normalizeDosageForm(dosage_form)
 
-    if (!generic_name || !strength || !dosage_form || !category) {
+    if (!generic_name || !strength || !normalizedDosageForm || !category) {
       return NextResponse.json(
         { error: 'Missing required fields: generic_name, strength, dosage_form, category' },
         { status: 400 }
+      )
+    }
+
+    const { data: supportedDosageForm, error: dosageFormError } = await supabase
+      .from('dosage_forms')
+      .select('name')
+      .eq('name', normalizedDosageForm)
+      .maybeSingle()
+
+    if (dosageFormError) {
+      console.error('Error validating dosage form:', dosageFormError)
+      return NextResponse.json({ error: 'Could not validate dosage form' }, { status: 500 })
+    }
+    if (!supportedDosageForm) {
+      return NextResponse.json(
+        { error: `Unsupported dosage form: ${normalizedDosageForm}` },
+        { status: 400 },
       )
     }
 
@@ -46,7 +65,7 @@ export async function POST(request: NextRequest) {
         p_brand_name: brand_name || null,
         p_manufacturer: manufacturer || null,
         p_strength: strength,
-        p_dosage_form: dosage_form,
+        p_dosage_form: normalizedDosageForm,
         p_category: category,
         p_pack_size: pack_size || null,
         p_image_url: image_url || null,

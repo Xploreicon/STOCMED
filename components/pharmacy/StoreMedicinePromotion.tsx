@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { withStaffSessionHeader } from '@/lib/staff-session-client'
 import { toast } from 'sonner'
+import { catalogueSearchSeed } from '@/lib/catalogue-values'
 
 type CatalogueProduct = {
   id: string
@@ -36,7 +37,7 @@ export function StoreMedicinePromotion({
   disabled = false,
   onPromoted,
 }: StoreMedicinePromotionProps) {
-  const [query, setQuery] = useState(initialQuery)
+  const [query, setQuery] = useState(() => catalogueSearchSeed(initialQuery))
   const [results, setResults] = useState<CatalogueProduct[]>([])
   const [selected, setSelected] = useState<CatalogueProduct | null>(null)
   const [isSearching, setIsSearching] = useState(false)
@@ -44,7 +45,7 @@ export function StoreMedicinePromotion({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setQuery(initialQuery)
+    setQuery(catalogueSearchSeed(initialQuery))
     setResults([])
     setSelected(null)
     setError(null)
@@ -103,9 +104,9 @@ export function StoreMedicinePromotion({
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error || 'Could not promote this Store item')
       if (payload.batch_capture_required) {
-        toast.warning('Medicine promoted. Add its batch number and expiry date before dispensing.')
+        toast.warning('Medicine promoted and moved to Medicines. Add its batch number and expiry date before dispensing.')
       } else {
-        toast.success('Store item promoted to Medicine.')
+        toast.success('Store item promoted and moved to Medicines.')
       }
       onPromoted()
     } catch (promotionError) {
@@ -182,7 +183,7 @@ export function StoreMedicinePromotion({
 
       {!isSearching && search.length >= 2 && results.length === 0 && !error && (
         <div className="rounded-md border border-dashed border-border bg-white p-3 text-xs leading-5 text-ink-muted">
-          No catalogue drug found. Keep this item in Store and request a catalogue addition; it can be promoted after admin approval.
+          No catalogue drug found. Try only the brand or generic name. If it is still missing, keep the item in Store and request a catalogue addition.
         </div>
       )}
 

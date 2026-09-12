@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 
-import { useEffect, useState } from 'react';
+import { useDeferredValue, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useUser } from '@/hooks/useUser';
@@ -24,6 +24,8 @@ import AddStoreItemModal from '@/components/pharmacy/AddStoreItemModal';
 
 export const dynamic = 'force-dynamic';
 
+const INVENTORY_PAGE_SIZE = 100;
+
 export default function PharmacyInventory() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,9 +35,11 @@ export default function PharmacyInventory() {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [department, setDepartment] = useState<'all' | 'medicine' | 'store'>('all');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
+  const [inventoryPage, setInventoryPage] = useState(1);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const showDelisted = filterStatus === 'delisted';
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const addProductId = searchParams.get('add_product_id');
   const addProductName = searchParams.get('name');
@@ -146,11 +150,11 @@ export default function PharmacyInventory() {
 
   // Filter logic
   const filteredDrugs = departmentItems.filter((drug: any) => {
-    const matchesSearch = searchQuery
-      ? drug.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        drug.generic_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        drug.brand_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        drug.category?.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = deferredSearchQuery
+      ? drug.name?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        drug.generic_name?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        drug.brand_name?.toLowerCase().includes(deferredSearchQuery.toLowerCase()) ||
+        drug.category?.toLowerCase().includes(deferredSearchQuery.toLowerCase())
       : true;
 
     let matchesStatus = true;
@@ -186,6 +190,16 @@ export default function PharmacyInventory() {
 
     return matchesSearch && matchesStatus;
   });
+  const inventoryPageCount = Math.max(1, Math.ceil(filteredDrugs.length / INVENTORY_PAGE_SIZE));
+  const currentInventoryPage = Math.min(inventoryPage, inventoryPageCount);
+  const visibleDrugs = filteredDrugs.slice(
+    (currentInventoryPage - 1) * INVENTORY_PAGE_SIZE,
+    currentInventoryPage * INVENTORY_PAGE_SIZE,
+  );
+  const visibleStart = filteredDrugs.length === 0
+    ? 0
+    : (currentInventoryPage - 1) * INVENTORY_PAGE_SIZE + 1;
+  const visibleEnd = Math.min(currentInventoryPage * INVENTORY_PAGE_SIZE, filteredDrugs.length);
 
   const stats: Array<{ label: string; value: number; icon: LucideIcon; color: string }> = [
     { label: 'Total products', value: totalProducts, icon: Boxes, color: 'var(--navy)' },
@@ -208,14 +222,16 @@ export default function PharmacyInventory() {
   ];
 
   return (
-    <div className="w-full min-w-0 max-w-[1000px] mx-auto py-2">
+    <div className="w-full min-w-0 max-w-[1400px] mx-auto py-2">
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
         <div>
           <div className="flex items-center gap-2.5">
             <h1 className="text-[24px] font-medium text-ink">Inventory</h1>
             <span className="text-[13px] font-medium text-primary bg-[var(--surface)] border border-border px-2.5 py-1 rounded-full whitespace-nowrap">
-              {totalProducts} {totalProducts === 1 ? 'product' : 'products'}
+              {department === 'all'
+                ? `${totalProducts} ${totalProducts === 1 ? 'product' : 'products'}`
+                : `${totalProducts} ${department} ${totalProducts === 1 ? 'item' : 'items'}`}
             </span>
           </div>
           <p className="text-[14px] text-ink-muted mt-1.5">
@@ -289,7 +305,10 @@ export default function PharmacyInventory() {
         ] as const).map(([value, label]) => (
           <Button
             key={value}
-            onClick={() => setDepartment(value)}
+            onClick={() => {
+              setDepartment(value);
+              setInventoryPage(1);
+            }}
             className={`h-9 rounded px-4 text-sm font-semibold transition-colors ${
               department === value ? 'bg-primary text-white shadow-sm' : 'bg-transparent text-ink-muted hover:bg-surface'
             }`}
@@ -304,7 +323,10 @@ export default function PharmacyInventory() {
         <input
           type="text"
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            setInventoryPage(1);
+          }}
           placeholder="Search inventory..."
           className="flex-1 h-11 border border-border rounded-button px-4 text-[14px] text-ink bg-white focus:outline-none focus:border-primary min-w-[200px]"
         />
@@ -314,7 +336,10 @@ export default function PharmacyInventory() {
             return (
               <Button
                 key={f.value}
-                onClick={() => setFilterStatus(f.value)}
+                onClick={() => {
+                  setFilterStatus(f.value);
+                  setInventoryPage(1);
+                }}
                 className={`h-11 flex items-center px-3.5 text-[13px] font-medium border rounded-button whitespace-nowrap transition-colors ${
                   isActive
                     ? 'text-primary bg-[var(--surface)] border-primary/45'
@@ -368,11 +393,47 @@ export default function PharmacyInventory() {
           )}
         </div>
       ) : (
-        <InventoryTable
-          drugs={filteredDrugs}
-          onRefetch={refetch}
-          viewMode={viewMode}
-        />
+        <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-muted">
+            <span>
+              Showing {visibleStart.toLocaleString()}–{visibleEnd.toLocaleString()} of {filteredDrugs.length.toLocaleString()}
+            </span>
+            {inventoryPageCount > 1 && (
+              <span>Page {currentInventoryPage.toLocaleString()} of {inventoryPageCount.toLocaleString()}</span>
+            )}
+          </div>
+          <InventoryTable
+            drugs={visibleDrugs}
+            viewMode={viewMode}
+            onMedicinePromoted={() => {
+              setDepartment('medicine');
+              setFilterStatus('all');
+              setSearchQuery('');
+              setInventoryPage(1);
+            }}
+          />
+          {inventoryPageCount > 1 && (
+            <nav className="mt-4 flex items-center justify-between gap-3" aria-label="Inventory pagination">
+              <Button
+                variant="outline"
+                onClick={() => setInventoryPage((page) => Math.max(1, page - 1))}
+                disabled={currentInventoryPage === 1}
+              >
+                Previous 100
+              </Button>
+              <span className="text-sm text-ink-muted">
+                {visibleStart.toLocaleString()}–{visibleEnd.toLocaleString()} of {filteredDrugs.length.toLocaleString()}
+              </span>
+              <Button
+                variant="outline"
+                onClick={() => setInventoryPage((page) => Math.min(inventoryPageCount, page + 1))}
+                disabled={currentInventoryPage === inventoryPageCount}
+              >
+                Next 100
+              </Button>
+            </nav>
+          )}
+        </>
       )}
 
       {/* Add Drug Modal */}
@@ -383,7 +444,6 @@ export default function PharmacyInventory() {
           if (addProductId) router.replace('/pharmacy/inventory');
         }}
         onSuccess={() => {
-          refetch();
           setIsAddModalOpen(false);
           if (addProductId) router.replace('/pharmacy/inventory');
         }}
@@ -393,7 +453,6 @@ export default function PharmacyInventory() {
         isOpen={isStoreModalOpen}
         onClose={() => setIsStoreModalOpen(false)}
         onSuccess={() => {
-          refetch();
           setIsStoreModalOpen(false);
           setDepartment('store');
         }}

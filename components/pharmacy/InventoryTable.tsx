@@ -30,8 +30,8 @@ import {
 
 interface InventoryTableProps {
   drugs: any[];
-  onRefetch: () => void;
   viewMode?: 'table' | 'grid';
+  onMedicinePromoted?: () => void;
 }
 
 function getStockBadge(stock: number, lowThreshold: number = 10) {
@@ -124,8 +124,8 @@ function DrugImage({ drug, size = 'md' }: { drug: any; size?: 'sm' | 'md' }) {
 
 export default function InventoryTable({
   drugs,
-  onRefetch,
   viewMode = 'table',
+  onMedicinePromoted,
 }: InventoryTableProps) {
   const [editingDrug, setEditingDrug] = useState<any | null>(null);
   const [deletingDrug, setDeletingDrug] = useState<any | null>(null);
@@ -153,7 +153,6 @@ export default function InventoryTable({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'], refetchType: 'active' });
-      onRefetch();
     },
     onSettled: () => {
       setRestoringId(null);
@@ -287,11 +286,24 @@ export default function InventoryTable({
                       </Button>
                       <Button
                         variant="outline"
-                        size="icon"
+                        size={drug.item_type === 'store' ? 'sm' : 'icon'}
                         onClick={() => setEditingDrug(drug)}
-                        className="h-9 w-9 hover:bg-surface"
+                        className={drug.item_type === 'store'
+                          ? 'h-9 flex-1 px-3 text-xs hover:bg-primary/5 hover:text-primary'
+                          : 'h-9 w-9 hover:bg-surface'}
+                        title={drug.item_type === 'store' ? 'Link to catalogue medicine' : 'Edit details'}
+                        aria-label={drug.item_type === 'store'
+                          ? `Link ${drug.item_name || drug.name || 'Store item'} to a catalogue medicine`
+                          : `Edit ${drug.name || drug.brand_name || 'inventory item'}`}
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        {drug.item_type === 'store' ? (
+                          <>
+                            <Pill className="mr-1.5 h-3.5 w-3.5" />
+                            Link medicine
+                          </>
+                        ) : (
+                          <Pencil className="h-3.5 w-3.5" />
+                        )}
                       </Button>
                     </>
                   )}
@@ -317,8 +329,8 @@ export default function InventoryTable({
             isOpen={!!editingDrug}
             onClose={() => setEditingDrug(null)}
             drug={editingDrug}
+            onMedicinePromoted={onMedicinePromoted}
             onSuccess={() => {
-              onRefetch();
               setEditingDrug(null);
             }}
           />
@@ -330,7 +342,6 @@ export default function InventoryTable({
             onClose={() => setDeletingDrug(null)}
             drug={deletingDrug}
             onSuccess={() => {
-              onRefetch();
               setDeletingDrug(null);
             }}
           />
@@ -342,7 +353,6 @@ export default function InventoryTable({
             onClose={() => setAdjustingDrug(null)}
             row={adjustingDrug}
             onSuccess={() => {
-              onRefetch();
               setAdjustingDrug(null);
             }}
           />
@@ -364,9 +374,14 @@ export default function InventoryTable({
 
   return (
     <>
-      <div className="overflow-x-auto bg-card rounded-card border border-border shadow-card">
-        <table className="w-full text-left text-sm border-collapse">
-          <thead className="bg-surface border-b border-border">
+      <div
+        className="overflow-x-auto overscroll-x-contain bg-card rounded-card border border-border shadow-card lg:max-h-[calc(100dvh-16rem)] lg:overflow-auto [scrollbar-gutter:stable]"
+        role="region"
+        aria-label="Scrollable inventory table"
+        tabIndex={0}
+      >
+        <table className="w-full min-w-[1180px] text-left text-sm border-collapse">
+          <thead className="bg-surface border-b border-border lg:sticky lg:top-0 lg:z-10">
             <tr>
               <th className="px-6 py-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Image
@@ -501,9 +516,14 @@ export default function InventoryTable({
                             size="icon"
                             onClick={() => setEditingDrug(drug)}
                             className="hover:bg-surface"
-                            title="Edit Details"
+                            title={drug.item_type === 'store' ? 'Link to catalogue medicine' : 'Edit details'}
+                            aria-label={drug.item_type === 'store'
+                              ? `Link ${drug.item_name || drug.name || 'Store item'} to a catalogue medicine`
+                              : `Edit ${drug.name || drug.brand_name || 'inventory item'}`}
                           >
-                            <Pencil className="w-4 h-4" />
+                            {drug.item_type === 'store'
+                              ? <Pill className="h-4 w-4" />
+                              : <Pencil className="h-4 w-4" />}
                           </Button>
                           <Button
                             variant="ghost"
@@ -531,8 +551,8 @@ export default function InventoryTable({
           isOpen={!!editingDrug}
           onClose={() => setEditingDrug(null)}
           drug={editingDrug}
+          onMedicinePromoted={onMedicinePromoted}
           onSuccess={() => {
-            onRefetch();
             setEditingDrug(null);
           }}
         />
@@ -545,7 +565,6 @@ export default function InventoryTable({
           onClose={() => setDeletingDrug(null)}
           drug={deletingDrug}
           onSuccess={() => {
-            onRefetch();
             setDeletingDrug(null);
           }}
         />
@@ -558,7 +577,6 @@ export default function InventoryTable({
           onClose={() => setAdjustingDrug(null)}
           row={adjustingDrug}
           onSuccess={() => {
-            onRefetch();
             setAdjustingDrug(null);
           }}
         />

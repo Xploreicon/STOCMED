@@ -31,6 +31,7 @@ interface EditDrugModalProps {
   onClose: () => void;
   drug: any;
   onSuccess: () => void;
+  onMedicinePromoted?: () => void;
 }
 
 export default function EditDrugModal({
@@ -38,6 +39,7 @@ export default function EditDrugModal({
   onClose,
   drug,
   onSuccess,
+  onMedicinePromoted,
 }: EditDrugModalProps) {
   const queryClient = useQueryClient();
   const { isEnabled } = usePharmacyFeatures();
@@ -338,7 +340,7 @@ export default function EditDrugModal({
               )}
               <div className="flex-1 min-w-0">
                 <h4 className="text-xs font-semibold text-ink-light uppercase tracking-wider">
-                  Product Details (Locked)
+                  {drug.item_type === 'store' ? 'Catalogue identity not linked' : 'Catalogue details'}
                 </h4>
                 <div className="font-semibold text-ink mt-1 truncate">
                   {drug.brand_name ? `${drug.brand_name} (${drug.name || drug.generic_name})` : (drug.name || drug.generic_name)}
@@ -346,6 +348,11 @@ export default function EditDrugModal({
                 <div className="text-xs text-ink-muted mt-1 truncate">
                   {drug.strength} • {drug.dosage_form} • {drug.category}
                 </div>
+                {drug.item_type === 'store' && (
+                  <p className="mt-2 text-xs leading-5 text-ink-muted">
+                    Link a verified medicine below to populate its clinical identity and move it out of Store.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -355,6 +362,7 @@ export default function EditDrugModal({
                 initialQuery={drug.item_name || drug.brand_name || drug.name || drug.generic_name || ''}
                 disabled={editDrugMutation.isPending || isUploading}
                 onPromoted={() => {
+                  onMedicinePromoted?.();
                   queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'], refetchType: 'active' });
                   queryClient.invalidateQueries({ queryKey: ['pharmacy-stats'], refetchType: 'active' });
                   onSuccess();
