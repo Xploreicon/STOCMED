@@ -43,6 +43,9 @@ Do not add packs and sachets without a confirmed pack conversion and price-per-s
 
 ## Verification
 
+- Production rollout on 26 September 2026: all three migrations applied atomically after backing up the affected function definitions and lookup values. The authorization wrapper was confirmed unchanged.
+- Authenticated DeLaw CSV upload saved all 160 rows in batch `939454ac-6ae3-4e16-b327-1f08dee861ed`. Eleven complete records were imported; seven exact existing-stock matches were preserved; 142 remain pending, including four ready-looking alternate-name overlaps held for reconciliation. Inventory increased from 523 to 534 records (99 medicine, 435 store). No existing stock was overwritten.
+- The missing information still requires pharmacy confirmation. Saving every source row does not make incomplete or expired entries saleable stock.
 - Regression tests cover title rows, CSV/XLSX parity, source row numbering, month-end dates, leading-zero batch identifiers, identity mapping, route-specific forms, explicit strength extraction, category aliases and missing quantities.
 - Optional local-file acceptance: set `FIELD_STOCKTAKE_DIR` to the folder containing the two original inventory files and run `npm test -- tests/unit/field-stocktake-import.test.ts`.
 - Database regression coverage is in `supabase/tests/20260926000000_field_stocktake.test.sql`. Run it against a disposable local database with the migration chain applied before rollout.

@@ -156,8 +156,12 @@ export default function BulkImportWizard() {
       setDosageForms(data.dosageForms);
       setCategories(data.categories);
       setMatchedRows(data.batch.review_rows.map((row: any) => ({ ...row, validation: { errors: row.review_errors || [], warnings: [] } })));
-      setMatchProgress({ jobId: null, status: 'review', total: data.batch.review_rows.length, matched: 0, unmatched: 0, review: 0, errors: 0 });
-      setOnboardingResult(null);
+      const savedRows = data.batch.review_rows;
+      const countStatus = (status: string) => savedRows.filter((row: any) => row.match_status === status).length;
+      setMatchProgress({ jobId: null, status: 'review', total: savedRows.length, matched: countStatus('matched'), unmatched: countStatus('unmatched'), review: countStatus('review'), errors: countStatus('error') });
+      const imported = savedRows.filter((row: any) => row.onboarding_status === 'imported').length;
+      const existing = savedRows.filter((row: any) => row.onboarding_status === 'existing').length;
+      setOnboardingResult({ saved: savedRows.length, imported_total: imported, existing, pending: savedRows.length - imported - existing });
       setReviewFilter('all');
       setReviewLimit(150);
       setStep('review');
@@ -621,7 +625,7 @@ export default function BulkImportWizard() {
         {/* STEP 4: Review */}
         {step === 'review' && (
           <Card className="p-8 space-y-6 border-border shadow-xl bg-white rounded-xl">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h2 className="text-xl font-display font-bold text-ink">Review Departments & Matches</h2>
                 <p className="text-ink-muted text-sm mt-1">Save every row, import ready stock, and finish corrections later. Existing stock is held for reconciliation, never added twice.</p>
