@@ -7,6 +7,14 @@ const row = { source_row_number: 4, selected_product_id: 'create_new', mapped: {
   item_type: 'medicine', quantity: 3, price: 100, batch_number: 'B1', expiry_date: '2099-12-31',
 } }
 describe('saved onboarding review', () => {
+  it('holds shorter-name stock overlaps without claiming they are the same product', () => {
+    const result = reviewOnboardingRows([{ ...row, mapped: { ...row.mapped, source_name: 'Cataflam Tablets 50mg' } }], lookups, ['Cataflam'])
+    expect(result[0].review_errors).toContain('Possible existing stock under a shorter or different name: reconcile before adding opening stock')
+  })
+  it('does not confuse a partial brand word with the same first word', () => {
+    const result = reviewOnboardingRows([{ ...row, mapped: { ...row.mapped, source_name: 'Emzor Dispersible Paracetamol 125mg' } }], lookups, ['Emzoron Tonique 200ml', 'Chlorpheniramine Syrup Emzor'])
+    expect(result[0].review_errors).toEqual([])
+  })
   it('keeps every row and identifies complete records', () => {
     const result = reviewOnboardingRows([row, { ...row, source_row_number: 5, mapped: { ...row.mapped, quantity: null } }], lookups)
     expect(result).toHaveLength(2)

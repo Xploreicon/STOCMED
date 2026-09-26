@@ -61,10 +61,23 @@ export async function POST(request: NextRequest) {
       ctx.supabase.from('dosage_forms').select('name'), ctx.supabase.from('product_categories').select('name'),
     ])
     if (forms.error || categories.error) throw new Error('Could not validate controlled product values')
+    // Existing free-text stock can omit strength/form (e.g. "Brand" versus
+    // "Brand Tablets 50mg"). Hold possible overlaps; never merge on this hint.
+    const existingItemNames: string[] = []
+    for (let offset = 0; ; offset += 1000) {
+      const inventory = await ctx.supabase.from('pharmacy_inventory').select('item_name,brand')
+        .eq('pharmacy_id', ctx.pharmacy.id).is('deleted_at', null).order('id').range(offset, offset + 999)
+      if (inventory.error) throw new Error('Could not check existing stock before onboarding')
+      for (const item of inventory.data) {
+        if (item.item_name) existingItemNames.push(item.item_name)
+        if (item.brand) existingItemNames.push(item.brand)
+      }
+      if (inventory.data.length < 1000) break
+    }
     const reviewed = reviewOnboardingRows(rows, {
       dosageForms: forms.data.map((r: { name: string }) => r.name),
       categories: categories.data.map((r: { name: string }) => r.name),
-    })
+    }, existingItemNames)
     const { data, error } = await ctx.supabase.rpc('save_pharmacy_onboarding', {
       p_pharmacy_id: ctx.pharmacy.id, p_file_name: file_name,
       p_source_rows: raw_rows, p_review_rows: reviewed, p_commit: commit,

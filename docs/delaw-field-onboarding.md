@@ -12,6 +12,7 @@
 - Pass manufacturer into new unverified catalogue products without modifying existing products. Preserve the atomic import engine, duplicate-import checks and the five-argument superintendent-authorization wrapper.
 - Save every source row in a pharmacy-owned onboarding batch. Import complete rows independently; retain incomplete and failed rows for correction and resumption. Saved intake is not saleable stock.
 - Detect already-stocked products conservatively and hold them for reconciliation rather than adding their opening stock again. Serialize submissions per pharmacy and retain committed row snapshots so retries do not double-import.
+- Hold possible overlaps with existing free-text inventory by their first brand/name word (at least four characters). This is a review hint, not permission to merge products or infer matching strengths.
 - Allow quantity, selling price, batch, expiry and strength corrections in the review screen. Offer save-only and save-and-import-ready actions, with reconciled result counts.
 
 ## Source acceptance and outstanding data
