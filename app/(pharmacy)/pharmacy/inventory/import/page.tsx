@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal';
+import { FormulationEditor } from '@/components/pharmacy/FormulationEditor';
+import { formulationDisplay, sameFormulation, type ProductFormulation } from '@/lib/product-formulation';
 import {
   clearCachedSpToken,
   getCachedSpToken,
@@ -67,7 +69,11 @@ function previewValidation(row: any, source: ImportSource, dosageForms: string[]
   }
   // 'create_new' is a valid selection — it triggers self-enrichment
   if (isMedicine && !row.selected_product_id) errors.push('Select a catalogue match for medicine')
-  if (isMedicine && !row.mapped.strength) errors.push('Strength is missing or not mapped')
+  if (isMedicine && row.mapped.formulation) {
+    const { display, error } = formulationDisplay(row.mapped.formulation)
+    if (error) errors.push(error)
+    else if (row.mapped.strength !== display) errors.push('Displayed strength differs from the formulation')
+  } else if (isMedicine && !row.mapped.strength) errors.push('Strength is missing or not mapped')
   if (isMedicine && !row.mapped.dosage_form) errors.push('Dosage form is missing or not mapped')
   else if (isMedicine && dosageForms.length && !dosageForms.includes(row.mapped.dosage_form)) {
     errors.push(`Dosage form "${row.mapped.dosage_form}" is not recognised. Select a valid form.`)
@@ -198,6 +204,18 @@ export default function BulkImportWizard() {
       const updated = { ...row,
         parse_error: row.parse_error?.split(',').filter((error: string) => error !== code).join(',') || undefined,
         mapped: { ...row.mapped, [key]: ['quantity', 'price'].includes(key) ? (value.trim() === '' ? null : Number(value)) : value },
+      };
+      return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) };
+    }));
+  };
+
+  const updateFormulation = (index: number, value: ProductFormulation | null) => {
+    setMatchedRows(rows => rows.map((row, rowIndex) => {
+      if (rowIndex !== index || ['imported', 'existing'].includes(row.onboarding_status)) return row;
+      const updated = {
+        ...row,
+        selected_product_id: row.mapped.item_type === 'medicine' ? (value ? 'create_new' : '') : row.selected_product_id,
+        mapped: { ...row.mapped, formulation: value, strength: value ? formulationDisplay(value).display : '' },
       };
       return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) };
     }));
@@ -781,6 +799,7 @@ export default function BulkImportWizard() {
                                 aria-label={`Strength for row ${index + 1}`}
                                 placeholder="Confirm strength from pack"
                                 value={row.mapped.strength || ''}
+                                disabled={Boolean(row.mapped.formulation) || ['imported', 'existing'].includes(row.onboarding_status)}
                                 onChange={(e) => setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
                                   if (candidateIndex !== index) return candidate
                                   // A changed strength invalidates the old automatic catalogue choice.
@@ -789,6 +808,12 @@ export default function BulkImportWizard() {
                                 }))}
                                 className="w-[180px] rounded-md border border-border bg-white px-2 py-1.5 text-xs"
                               />
+                              {row.mapped.item_type === 'medicine' && (
+                                <FormulationEditor sourceRow={row.source_row_number || index + 1}
+                                  value={row.mapped.formulation || null}
+                                  disabled={['imported', 'existing'].includes(row.onboarding_status)}
+                                  onChange={value => updateFormulation(index, value)} />
+                              )}
                               {row.mapped.item_type === 'medicine' ? (
                                 <div className="mt-1 space-y-1">
                                   <select
@@ -897,7 +922,8 @@ export default function BulkImportWizard() {
                                 <option value="">{row.mapped.item_type === 'store' ? 'Not added to catalogue' : 'Select a catalogue match'}</option>
                                 <option value="create_new">⚠️ MEDICINE — new catalogue product</option>
                                 {row.matches && row.matches.map((m: any) => (
-                                  <option key={m.id} value={m.id} disabled={m.strength_match === false || m.form_match === false}>
+                                  <option key={m.id} value={m.id} disabled={m.strength_match === false || m.form_match === false ||
+                                    (row.mapped.formulation ? !sameFormulation(row.mapped.formulation, m.formulation) : Boolean(m.formulation))}>
                                     {m.brand_name ? `${m.brand_name} (${m.generic_name})` : m.generic_name} ({m.strength}, {m.dosage_form}) - {Math.round(m.confidence * 100)}%{matchConflictLabels(m).length ? ` - ${matchConflictLabels(m).join(', ')}` : ''}
                                   </option>
                                 ))}

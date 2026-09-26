@@ -41,6 +41,7 @@ type CatalogueProduct = {
   brand_name: string | null
   manufacturer: string | null
   strength: string
+  formulation: unknown | null
   dosage_form: string | null
   category: string | null
   pack_size: string | null
@@ -128,7 +129,7 @@ async function fetchProductsById(supabase: any, ids: string[]) {
   )
   const results = await Promise.all(chunks.map((chunk) => supabase
     .from('products')
-    .select('id,generic_name,brand_name,manufacturer,strength,dosage_form,category,pack_size')
+    .select('id,generic_name,brand_name,manufacturer,strength,formulation,dosage_form,category,pack_size')
     .in('id', chunk)))
   const failure = results.find((result) => result.error)
   if (failure?.error) throw new Error(`Could not load catalogue matches: ${failure.error.message}`)
@@ -140,7 +141,8 @@ async function fetchProductsById(supabase: any, ids: string[]) {
 function buildMatch(product: CatalogueProduct, staging: StagingMatchRow, strength: string, dosageForm: string) {
   const requestedStrength = normalizeImportStrength(strength)
   const requestedForm = normalizeImportDosageForm(dosageForm)
-  const strengthMatch = requestedStrength
+  // A legacy free-text strength must not authorize a structured combination.
+  const strengthMatch = product.formulation ? null : requestedStrength
     ? normalizeImportStrength(product.strength) === requestedStrength
     : null
   const formMatch = requestedForm

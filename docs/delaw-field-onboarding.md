@@ -14,6 +14,8 @@
 - Detect already-stocked products conservatively and hold them for reconciliation rather than adding their opening stock again. Serialize submissions per pharmacy and retain committed row snapshots so retries do not double-import.
 - Hold possible overlaps with existing free-text inventory by their first brand/name word (at least four characters). This is a review hint, not permission to merge products or infer matching strengths.
 - Allow quantity, selling price, batch, expiry and strength corrections in the review screen. Offer save-only and save-and-import-ready actions, with reconciled result counts.
+- Fixed-dose combinations and multivitamins can use a label-confirmed, structured formulation: each ingredient/nutrient name, positive amount and unit, and the labelled quantity per tablet/capsule or serving volume. The full formulation is saved on new unverified catalogue products; the existing strength text is derived from it for legacy readers. Single-ingredient records retain their original path.
+- A structured product cannot be matched to an unstructured catalogue record or one with a different component, amount, type or serving basis. Incomplete/unconfirmed entries remain in the saved batch. Pharmacy staff must transcribe the complete pack panel; the app does not infer omitted nutrients from a brand name.
 
 ## Source acceptance and outstanding data
 
@@ -51,3 +53,4 @@ Do not add packs and sachets without a confirmed pack conversion and price-per-s
 - Database regression coverage is in `supabase/tests/20260926000000_field_stocktake.test.sql`. Run it against a disposable local database with the migration chain applied before rollout.
 - Local checks passed: unit suite (including both supplied files), TypeScript, targeted lint and whitespace checks. A regression test also confirms that the replacement atomic import function differs only in manufacturer forwarding.
 - `scripts/test-onboarding-db.cjs` is a disposable-local-PostgreSQL contract test. It exercises the actual atomic import and onboarding engines with minimal dependency fixtures: tenant isolation, retries, partial failures and rollback, existing-stock detection, saved row retention, manufacturer forwarding and private-engine permissions. It refuses non-local database targets.
+- Structured-formulation tests additionally cover exact component/basis comparison, unconfirmed labels, rejected mismatches, no legacy free-text substitution, and atomic product-formulation persistence. Apply `20260927000000` before `20260927010000`; the five-argument SP authorization wrapper remains unchanged.

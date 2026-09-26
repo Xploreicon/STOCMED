@@ -1,4 +1,5 @@
 import { parseImportBoolean, parseImportDate } from '@/lib/inventory-import'
+import { formulationDisplay } from '@/lib/product-formulation'
 
 export type ImportRow = {
   mapped?: Record<string, unknown>
@@ -31,7 +32,11 @@ export function validateRows(
       else if (expiry <= new Date()) errors.push('Expiry date must be in the future')
     }
     if (itemType === 'medicine') {
-      if (!mapped.strength || typeof mapped.strength !== 'string') errors.push('Strength is required for medicine matching')
+      if (mapped.formulation) {
+        const { display, error } = formulationDisplay(mapped.formulation)
+        if (error) errors.push(error)
+        else if (mapped.strength !== display) errors.push('Formulation and displayed strength do not match')
+      } else if (!mapped.strength || typeof mapped.strength !== 'string') errors.push('Strength is required for medicine matching')
       if (!mapped.dosage_form || typeof mapped.dosage_form !== 'string') errors.push('Dosage form is required for medicine matching')
       else if (lookups?.dosageForms && !lookups.dosageForms.includes(mapped.dosage_form)) {
         errors.push(`Dosage form "${mapped.dosage_form}" is not in the controlled list`)
@@ -48,8 +53,9 @@ export function validateRows(
         (typeof mapped.category !== 'string' || !lookups.categories.includes(mapped.category))) {
         errors.push(`Category "${String(mapped.category || '')}" is not in the controlled list`)
       }
-    } else if (row.selected_product_id) {
-      errors.push('Store items cannot reference the medicine catalogue')
+    } else {
+      if (row.selected_product_id) errors.push('Store items cannot reference the medicine catalogue')
+      if (mapped.formulation) errors.push('Structured formulations belong to medicine catalogue products')
     }
 
     return errors.length ? [{ row: index + 1, errors }] : []
