@@ -24,7 +24,7 @@ export function validateRows(
     if (!row || typeof row !== 'object') errors.push('Row must be an object')
     if (!mapped.generic_name || typeof mapped.generic_name !== 'string') errors.push('Item name is required')
     if (!Number.isFinite(price) || price <= 0) errors.push('Price must be greater than zero')
-    if (!Number.isInteger(quantity) || quantity < 0) errors.push('Quantity must be a non-negative integer')
+    if (mapped.quantity === null || mapped.quantity === undefined || String(mapped.quantity).trim() === '' || !Number.isSafeInteger(quantity) || quantity < 0) errors.push('Quantity must be a non-negative integer')
     if (tracksExpiry) {
       if (!mapped.batch_number || typeof mapped.batch_number !== 'string') errors.push('Batch number is missing or not mapped')
       if (!expiry || Number.isNaN(expiry.getTime())) errors.push('Expiry date is missing, invalid, or not mapped')

@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx'
 
 import {
+  autoMapImportHeaders,
+  INVENTORY_IMPORT_FIELDS,
   isKoboImportHeader,
   normalizeImportBarcode,
   normalizeImportProductName,
@@ -57,22 +59,30 @@ export function parseInventoryWorkbook(buffer: Buffer): ParsedInventoryWorkbook 
   const worksheet = workbook.Sheets[sheetName]
   const rawData = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
     header: 1,
+    range: 0,
     raw: true,
     blankrows: true,
   })
 
   if (rawData.length === 0) return { headers: [], rows: [] }
 
-  const rawHeaders = Array.isArray(rawData[0]) ? rawData[0] : []
-  const headers = rawHeaders.map((header, index) =>
+  // Field stocktakes often start with a pharmacy title and blank spacer rows.
+  // Require all three import headings before skipping any source content.
+  const detectedHeaderIndex = rawData.findIndex((cells) => {
+    const mapping = autoMapImportHeaders(Array.from(cells || [], (cell) => String(cell ?? '')), INVENTORY_IMPORT_FIELDS)
+    return Boolean(mapping.name && mapping.price && mapping.quantity)
+  })
+  const headerIndex = detectedHeaderIndex >= 0 ? detectedHeaderIndex : 0
+  const rawHeaders = Array.isArray(rawData[headerIndex]) ? rawData[headerIndex] : []
+  const headers = Array.from(rawHeaders, (header, index) =>
     header === null || header === undefined || String(header).trim() === ''
       ? `Column_${index + 1}`
       : String(header).trim(),
   )
 
   const rows: RawImportRow[] = []
-  rawData.slice(1).forEach((sourceRow, index) => {
-    const rowNumber = index + 2
+  rawData.slice(headerIndex + 1).forEach((sourceRow, index) => {
+    const rowNumber = index + headerIndex + 2
     const rawRow = Array.isArray(sourceRow) ? sourceRow : []
 
     try {

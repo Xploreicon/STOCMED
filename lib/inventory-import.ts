@@ -7,7 +7,7 @@ export const INVENTORY_IMPORT_FIELDS = [
     key: 'name',
     label: 'Item / Generic Name',
     required: true,
-    synonyms: ['name', 'item', 'item name', 'generic name', 'drug name', 'medication', 'product', 'product name', 'description'],
+    synonyms: ['name', 'item', 'item name', 'generic name', 'drug name', 'medication', 'product', 'product name', 'product name (with strength)', 'description'],
   },
   {
     key: 'item_type',
@@ -26,6 +26,18 @@ export const INVENTORY_IMPORT_FIELDS = [
     label: 'Brand Name',
     required: false,
     synonyms: ['brand', 'brand name', 'trade name'],
+  },
+  {
+    key: 'composition',
+    label: 'API / Composition (Generic Name)',
+    required: false,
+    synonyms: ['api / composition', 'composition', 'active ingredients'],
+  },
+  {
+    key: 'manufacturer',
+    label: 'Manufacturer',
+    required: false,
+    synonyms: ['manufacturer', 'manufactured by'],
   },
   {
     key: 'strength',
@@ -113,9 +125,17 @@ export function autoMapImportHeaders(
       continue
     }
 
+  }
+
+  // Reserve every exact match first: fuzzy "name" must not steal Brand Name,
+  // and "quantity" must not steal Minimum Quantity.
+  for (const field of fields) {
+    if (mapping[field.key]) continue
+    const aliases = [field.key, ...field.synonyms].map(normalizeImportHeader)
     const fuzzy = headers.find((header) => {
       if (used.has(header)) return false
       const normalized = normalizeImportHeader(header)
+      if (normalized.length < 4) return false
       return aliases.some((alias) =>
         alias.length >= 4 && (normalized.includes(alias) || alias.includes(normalized))
       )
@@ -205,9 +225,40 @@ export function normalizeImportStrength(value: unknown): string {
   return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9.]/g, '')
 }
 
+/** Only extract a single explicitly unit-labelled strength, never a brand
+ * suffix (e.g. "150"), bottle volume, or an incomplete combination dose. */
+export function extractImportStrength(value: unknown): string {
+  const text = String(value ?? '')
+  const doses = text.match(/\b\d+(?:\.\d+)?\s*(?:mcg|mg|µg|ug|g|iu|%)(?:\s*\/\s*\d+(?:\.\d+)?\s*(?:mcg|mg|µg|ug|g|ml|iu))?(?![a-z])/gi)
+  if (doses?.length !== 1 || /\d\s*\//.test(text.replace(doses[0], ''))) return ''
+  return doses[0].trim()
+}
+
+export function importMedicineIdentity(values: {
+  name: unknown; composition?: unknown; brand_name?: unknown; strength?: unknown; manufacturer?: unknown
+}) {
+  const name = String(values.name ?? '').trim()
+  const composition = String(values.composition ?? '').trim()
+  return {
+    generic_name: composition || name,
+    brand_name: String(values.brand_name ?? '').trim() || (composition ? name : ''),
+    strength: String(values.strength ?? '').trim() || extractImportStrength(name),
+    manufacturer: String(values.manufacturer ?? '').trim(),
+  }
+}
+
 export function normalizeImportDosageForm(value: unknown): string {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (!normalized) return ''
+  // Route-specific forms must never collapse into generic drops/ointment/gel.
+  const route = /\b(eye|ophthalmic)\b/.test(normalized) ? 'eye'
+    : /\b(ear|otic)\b/.test(normalized) ? 'ear'
+      : /\boral\b/.test(normalized) ? 'oral' : ''
+  if (/\b(eye|ophthalmic)\b/.test(normalized) && /\b(ear|otic)\b/.test(normalized) && normalized.includes('drop')) return 'eye/ear drops'
+  if (route && normalized.includes('drop')) return `${route} drops`
+  if (route && normalized.includes('ointment')) return `${route} ointment`
+  if (route && normalized.includes('gel')) return `${route} gel`
+  if (/soft\s*gel/.test(normalized)) return 'softgel'
   if (/(caplet|tablet|(^|[^a-z])tab([^a-z]|$))/.test(normalized)) return 'tablet'
   if (/(capsule|(^|[^a-z])cap([^a-z]|$))/.test(normalized)) return 'capsule'
   if (normalized.includes('suspension')) return 'suspension'
@@ -241,6 +292,16 @@ export function parseImportDate(value: unknown): string {
 
   const dayFirstMatch = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
   if (dayFirstMatch) return validIsoDate(dayFirstMatch[3], dayFirstMatch[2], dayFirstMatch[1])
+
+  // Month-only stocktake expiry: the last day of the printed month, with
+  // two-digit years explicitly in 2000–2099 (never JS's date heuristics).
+  const monthYear = text.match(/^(\d{1,2})[/-](\d{2}|\d{4})$/)
+  if (monthYear) {
+    const month = Number(monthYear[1])
+    const year = Number(monthYear[2].length === 2 ? `20${monthYear[2]}` : monthYear[2])
+    if (month < 1 || month > 12 || year < 1000) return ''
+    return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)
+  }
 
   const parsed = new Date(text)
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10)

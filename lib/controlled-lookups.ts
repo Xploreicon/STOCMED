@@ -6,6 +6,11 @@ const DOSAGE_FORM_ALIASES: Record<string, string[]> = {
   susp: ['suspension'],
   inj: ['injection'],
   injection: ['injection'],
+  'injection (syringe)': ['injection'],
+  'ophthalmic drops': ['eye drops'],
+  'otic drops': ['ear drops'],
+  'ophthalmic ointment': ['eye ointment'],
+  'ophthalmic gel': ['eye gel'],
   softgel: ['softgel', 'capsule'],
   'soft gel': ['softgel', 'capsule'],
   softgels: ['softgel', 'capsule'],
@@ -38,6 +43,7 @@ export function mapControlledValue(
   input: unknown,
   allowedValues: string[],
   aliases: Record<string, string[]> = {},
+  acceptFuzzy = true,
 ) {
   const value = normalized(input)
   if (!value) return { value: '', recognized: false, suggested: null as string | null }
@@ -56,13 +62,38 @@ export function mapControlledValue(
     .sort((a, b) => a.distance - b.distance || a.allowed.localeCompare(b.allowed))[0]
   const fuzzyMatch = closest && closest.distance <= Math.max(1, Math.floor(value.length * 0.25))
   return {
-    value: fuzzyMatch ? closest.allowed : String(input ?? '').trim(),
-    recognized: Boolean(fuzzyMatch),
+    value: acceptFuzzy && fuzzyMatch ? closest.allowed : String(input ?? '').trim(),
+    recognized: Boolean(acceptFuzzy && fuzzyMatch),
     suggested: closest?.allowed ?? null,
   }
 }
 
 export function mapDosageForm(input: unknown, allowedValues: string[]) {
-  return mapControlledValue(input, allowedValues, DOSAGE_FORM_ALIASES)
+  return mapControlledValue(input, allowedValues, DOSAGE_FORM_ALIASES, false)
 }
 
+const CATEGORY_ALIASES: Record<string, string[]> = {
+  analgesic: ['Analgesics'],
+  'analgesic / antipyretic': ['Analgesics'],
+  antibiotic: ['Antibiotics'],
+  antimalarial: ['Antimalarials'],
+  nsaid: ['NSAIDs'],
+  anthelmintic: ['Anthelmintics / Anti-parasitics'],
+  antiseptic: ['Antiseptics & Disinfectants'],
+  'antiseptic / disinfectant': ['Antiseptics & Disinfectants'],
+  ophthalmic: ['Ophthalmics (Eye Preparations)'],
+  corticosteroid: ['Corticosteroids'],
+  antacid: ['Antacids & Anti-ulcer'],
+  antispasmodic: ['Antispasmodics'],
+  probiotic: ['Probiotics'],
+  enzyme: ['Enzymes'],
+  antifibrinolytic: ['Antifibrinolytics'],
+  diuretic: ['Diuretics'],
+  'joint care': ['Joint Care / Osteoarthritis'],
+  other: ['Others'],
+}
+
+// Combination classes remain explicit for pharmacist review, not fuzzy guesses.
+export function mapImportCategory(input: unknown, allowedValues: string[]) {
+  return mapControlledValue(input, allowedValues, CATEGORY_ALIASES, false)
+}

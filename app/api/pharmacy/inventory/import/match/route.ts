@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-import { mapControlledValue, mapDosageForm } from '@/lib/controlled-lookups'
+import { mapImportCategory, mapDosageForm } from '@/lib/controlled-lookups'
 import {
   determineImportRouting,
   INVENTORY_IMPORT_FIELDS,
+  importMedicineIdentity,
   normalizeImportDosageForm,
   normalizeImportStrength,
   parseImportBoolean,
@@ -179,13 +180,18 @@ function buildReviewRows(
     const rawRow = rawBySourceRow.get(staging.source_row_number)
     if (!rawRow) throw new Error(`Source row ${staging.source_row_number} is missing from the request`)
 
-    const genericName = textValue(mappedValue(rawRow, mapping, 'name'))
-    const brandName = textValue(mappedValue(rawRow, mapping, 'brand_name'))
-    const strength = textValue(mappedValue(rawRow, mapping, 'strength'))
+    const identity = importMedicineIdentity({
+      name: mappedValue(rawRow, mapping, 'name'),
+      composition: mappedValue(rawRow, mapping, 'composition'),
+      brand_name: mappedValue(rawRow, mapping, 'brand_name'),
+      strength: mappedValue(rawRow, mapping, 'strength'),
+      manufacturer: mappedValue(rawRow, mapping, 'manufacturer'),
+    })
+    const strength = identity.strength
     const suppliedDosageForm = textValue(mappedValue(rawRow, mapping, 'dosage_form'))
     const dosageForm = mapDosageForm(suppliedDosageForm, dosageForms).value
     const suppliedCategory = textValue(mappedValue(rawRow, mapping, 'category'))
-    const category = mapControlledValue(suppliedCategory || 'Others', categories).value
+    const category = mapImportCategory(suppliedCategory || 'Others', categories).value
     const packSize = textValue(mappedValue(rawRow, mapping, 'pack_size'))
     const sku = textValue(mappedValue(rawRow, mapping, 'sku'))
     const suppliedType = textValue(mappedValue(rawRow, mapping, 'item_type')).toLowerCase()
@@ -215,9 +221,8 @@ function buildReviewRows(
       tier: staging.tier,
       confidence: staging.confidence === null ? null : Number(staging.confidence),
       mapped: {
-        generic_name: genericName,
-        brand_name: brandName,
-        strength,
+        ...identity,
+        source_name: textValue(mappedValue(rawRow, mapping, 'name')),
         dosage_form: dosageForm,
         category,
         pack_size: packSize,

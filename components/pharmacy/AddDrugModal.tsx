@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -21,28 +21,6 @@ interface AddDrugModalProps {
   preselectedProduct?: any | null;
 }
 
-const categories = [
-  'Analgesics',
-  'Antibiotics',
-  'Antimalarials',
-  'Antihypertensives',
-  'Diabetes',
-  'Vitamins',
-  'Gastrointestinal',
-  'Respiratory',
-  'Others',
-];
-
-const dosageForms = [
-  { value: 'tablet', label: 'Tablet' },
-  { value: 'capsule', label: 'Capsule' },
-  { value: 'syrup', label: 'Syrup' },
-  { value: 'injection', label: 'Injection' },
-  { value: 'cream', label: 'Cream' },
-  { value: 'drops', label: 'Drops' },
-  { value: 'inhaler', label: 'Inhaler' },
-];
-
 export default function AddDrugModal({
   isOpen,
   onClose,
@@ -50,6 +28,24 @@ export default function AddDrugModal({
   preselectedProduct = null,
 }: AddDrugModalProps) {
   const queryClient = useQueryClient();
+  const lookups = useQuery({
+    queryKey: ['product-controlled-lookups'],
+    enabled: isOpen,
+    queryFn: async () => {
+      const supabase = createClient();
+      const [forms, categories] = await Promise.all([
+        supabase.from('dosage_forms').select('name').order('name'),
+        supabase.from('product_categories').select('name').order('name'),
+      ]);
+      if (forms.error || categories.error) throw new Error('Could not load dosage forms and categories. Please retry.');
+      return {
+        dosageForms: (forms.data || []).map((row: { name: string }) => row.name),
+        categories: (categories.data || []).map((row: { name: string }) => row.name),
+      };
+    },
+  });
+  const dosageForms = lookups.data?.dosageForms || [];
+  const categories = lookups.data?.categories || [];
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -522,10 +518,10 @@ export default function AddDrugModal({
                   required
                   className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm h-10 bg-white"
                 >
-                  <option value="">Select form</option>
+                  <option value="">{lookups.isPending ? 'Loading forms…' : 'Select form'}</option>
                   {dosageForms.map((form) => (
-                    <option key={form.value} value={form.value}>
-                      {form.label}
+                    <option key={form} value={form}>
+                      {form}
                     </option>
                   ))}
                 </select>
@@ -587,7 +583,13 @@ export default function AddDrugModal({
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to search
               </Button>
-              <Button type="submit" disabled={createProductMutation.isPending || isUploading}>
+              {lookups.isError && (
+                <div role="alert" className="text-sm text-danger">
+                  Could not load dosage forms and categories.
+                  <button type="button" onClick={() => lookups.refetch()} className="ml-2 underline">Retry</button>
+                </div>
+              )}
+              <Button type="submit" disabled={createProductMutation.isPending || isUploading || lookups.isPending || lookups.isError}>
                 {createProductMutation.isPending || isUploading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

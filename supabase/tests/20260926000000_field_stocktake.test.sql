@@ -1,0 +1,17 @@
+BEGIN;
+CREATE EXTENSION IF NOT EXISTS pgtap WITH SCHEMA extensions;
+SELECT plan(12);
+SELECT is(public.normalize_dosage_form('Eye Drops'), 'eye drops', 'eye route retained');
+SELECT is(public.normalize_dosage_form('Ear Drops'), 'ear drops', 'ear route retained');
+SELECT is(public.normalize_dosage_form('Oral Drops'), 'oral drops', 'oral route retained');
+SELECT is(public.normalize_dosage_form('Eye/Ear Drops'), 'eye/ear drops', 'combined route retained');
+SELECT isnt(public.normalize_dosage_form('Eye Drops'), public.normalize_dosage_form('Drops'), 'unspecified drops do not match eye drops');
+SELECT isnt(public.normalize_dosage_form('Eye Ointment'), public.normalize_dosage_form('Ointment'), 'eye ointment differs from topical ointment');
+SELECT isnt(public.normalize_dosage_form('Eye Gel'), public.normalize_dosage_form('Gel'), 'eye gel differs from topical gel');
+SELECT is(public.normalize_dosage_form('Softgel'), 'softgel', 'softgel is not topical gel');
+SELECT ok(EXISTS (SELECT 1 FROM public.dosage_forms WHERE name = 'ear drops'), 'new form is selectable');
+SELECT ok(EXISTS (SELECT 1 FROM public.product_categories WHERE name = 'Anthelmintics / Anti-parasitics'), 'new category is selectable');
+SELECT ok(NOT has_function_privilege('authenticated', 'public.import_inventory_file(uuid,uuid,jsonb,uuid)', 'EXECUTE'), 'private engine remains private');
+SELECT ok(has_function_privilege('authenticated', 'public.import_inventory_file(uuid,uuid,jsonb,uuid,text)', 'EXECUTE'), 'SP wrapper remains the client entrypoint');
+SELECT * FROM finish();
+ROLLBACK;

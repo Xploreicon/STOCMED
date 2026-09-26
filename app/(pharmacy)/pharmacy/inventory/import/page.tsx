@@ -58,11 +58,11 @@ function previewValidation(row: any, source: ImportSource, dosageForms: string[]
   const tracksExpiry = isMedicine || row.mapped.tracks_expiry === true
   if (row.parse_error) {
     const rowLabel = row.source_row_number ? `Source row ${row.source_row_number}: ` : ''
-    errors.push(`${rowLabel}spreadsheet columns are malformed (${row.parse_error})`)
+    errors.push(`${rowLabel}source data needs correction (${row.parse_error}). Correct the source file and upload again.`)
   }
   if (!row.mapped.generic_name) errors.push('Item name is required')
   if (!row.mapped.price || Number(row.mapped.price) <= 0) errors.push('Price must be greater than ₦0')
-  if (!Number.isInteger(Number(row.mapped.quantity)) || Number(row.mapped.quantity) < 0) {
+  if (row.mapped.quantity === null || row.mapped.quantity === undefined || String(row.mapped.quantity).trim() === '' || !Number.isSafeInteger(Number(row.mapped.quantity)) || Number(row.mapped.quantity) < 0) {
     errors.push('Stock quantity must be a non-negative whole number')
   }
   // 'create_new' is a valid selection — it triggers self-enrichment
@@ -115,7 +115,8 @@ export default function BulkImportWizard() {
   const [bulkCategory, setBulkCategory] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
-  const [reviewFilter, setReviewFilter] = useState<'review' | 'matched' | 'unmatched' | 'all'>('review');
+  const [reviewFilter, setReviewFilter] = useState<'review' | 'matched' | 'unmatched' | 'error' | 'all'>('review');
+  const [reviewLimit, setReviewLimit] = useState(150);
   const [matchProgress, setMatchProgress] = useState<MatchProgress>({
     jobId: null,
     status: 'idle',
@@ -136,6 +137,67 @@ export default function BulkImportWizard() {
   });
   const [isImporting, setIsImporting] = useState(false);
   const [showPriceAuthorization, setShowPriceAuthorization] = useState(false);
+  const [savedBatches, setSavedBatches] = useState<any[]>([]);
+  const [onboardingFileName, setOnboardingFileName] = useState('Inventory upload');
+  const [onboardingResult, setOnboardingResult] = useState<any>(null);
+  const [onboardingError, setOnboardingError] = useState('');
+
+  const loadSavedOnboarding = async (id?: string) => {
+    setOnboardingError('');
+    setIsValidating(true);
+    try {
+      const res = await fetch(`/api/pharmacy/inventory/import/onboarding${id ? `?id=${encodeURIComponent(id)}` : ''}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      if (!id) { setSavedBatches(data.batches); return; }
+      setSource('stocmed');
+      setRawRows(data.batch.source_rows);
+      setOnboardingFileName(data.batch.file_name);
+      setDosageForms(data.dosageForms);
+      setCategories(data.categories);
+      setMatchedRows(data.batch.review_rows.map((row: any) => ({ ...row, validation: { errors: row.review_errors || [], warnings: [] } })));
+      setMatchProgress({ jobId: null, status: 'review', total: data.batch.review_rows.length, matched: 0, unmatched: 0, review: 0, errors: 0 });
+      setOnboardingResult(null);
+      setReviewFilter('all');
+      setReviewLimit(150);
+      setStep('review');
+    } catch (error) {
+      setOnboardingError(error instanceof Error ? error.message : 'Could not load saved imports');
+    } finally { setIsValidating(false); }
+  };
+
+  const saveOnboarding = async (commit: boolean) => {
+    if (commitLockRef.current) return;
+    commitLockRef.current = true;
+    setIsImporting(true);
+    setOnboardingError('');
+    try {
+      const res = await fetch('/api/pharmacy/inventory/import/onboarding', {
+        method: 'POST', headers: withSpAuthorizationHeader('price_change', getCachedSpToken('price_change'), { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ file_name: onboardingFileName, raw_rows: rawRows, rows: matchedRows, commit }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setOnboardingResult(data);
+      setMatchedRows(data.rows.map((row: any) => ({ ...row, validation: { errors: row.review_errors || [], warnings: [] } })));
+      setReviewFilter('all');
+      await queryClient.invalidateQueries({ queryKey: ['pharmacy-drugs'] });
+    } catch (error) {
+      setOnboardingError(error instanceof Error ? error.message : 'Could not save onboarding');
+    } finally { commitLockRef.current = false; setIsImporting(false); }
+  };
+
+  const updateOnboardingField = (index: number, key: string, value: string) => {
+    setMatchedRows((rows) => rows.map((row, rowIndex) => {
+      if (index !== rowIndex || ['imported', 'existing'].includes(row.onboarding_status)) return row;
+      const code = ({ quantity: 'invalid_quantity', price: 'invalid_price', expiry_date: 'invalid_expiry' } as Record<string, string>)[key];
+      const updated = { ...row,
+        parse_error: row.parse_error?.split(',').filter((error: string) => error !== code).join(',') || undefined,
+        mapped: { ...row.mapped, [key]: ['quantity', 'price'].includes(key) ? (value.trim() === '' ? null : Number(value)) : value },
+      };
+      return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) };
+    }));
+  };
 
   // File Upload Handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -143,6 +205,8 @@ export default function BulkImportWizard() {
     if (!selectedFile) return;
 
     setFile(selectedFile);
+    setOnboardingFileName(selectedFile.name);
+    setOnboardingResult(null);
     setIsParsing(true);
 
     const formData = new FormData();
@@ -406,6 +470,15 @@ export default function BulkImportWizard() {
               </p>
             </div>
 
+            <div className="space-y-2">
+              <Button variant="outline" onClick={() => void loadSavedOnboarding()} disabled={isValidating}>Load saved onboarding batches</Button>
+              {savedBatches.map((batch) => (
+                <button key={batch.id} type="button" onClick={() => void loadSavedOnboarding(batch.id)} className="block text-sm text-primary underline">
+                  Resume {batch.file_name} ({batch.imported_source_rows.length} imported)
+                </button>
+              ))}
+              {onboardingError && <p role="alert" className="text-sm text-danger">{onboardingError}</p>}
+            </div>
             <div className="grid grid-cols-2 gap-1 rounded-input border border-border bg-surface p-1">
               <Button variant={source === 'stocmed' ? 'default' : 'ghost'} onClick={() => setSource('stocmed')}>StocMed template</Button>
               <Button variant={source === 'quickbooks' ? 'default' : 'ghost'} onClick={() => setSource('quickbooks')}>QuickBooks export</Button>
@@ -551,30 +624,38 @@ export default function BulkImportWizard() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-display font-bold text-ink">Review Departments & Matches</h2>
-                <p className="text-ink-muted text-sm mt-1">
-                  Strong catalogue matches route to Medicines. Unmatched rows stay private in Store.
-                </p>
+                <p className="text-ink-muted text-sm mt-1">Save every row, import ready stock, and finish corrections later. Existing stock is held for reconciliation, never added twice.</p>
               </div>
               <Button
-                onClick={() => void handleCommitImport()}
-                disabled={isImporting || isValidating || matchedRows.some(row => row.validation.errors.length > 0) || (source === 'quickbooks' && matchedRows.some(row => !row.selected_product_id))}
+                onClick={() => source === 'stocmed' ? void saveOnboarding(true) : void handleCommitImport()}
+                disabled={isImporting || isValidating || (source === 'quickbooks' && matchedRows.some(row => row.validation.errors.length > 0 || !row.selected_product_id))}
                 className="shadow-lg"
               >
-                {isImporting ? 'Importing…' : `Import ${matchProgress.matched.toLocaleString()} Items`}
+                {isImporting ? 'Saving…' : source === 'stocmed' ? 'Save all & import ready rows' : `Import ${matchedRows.length} items`}
               </Button>
             </div>
+
+            {source === 'stocmed' && <Button variant="outline" onClick={() => void saveOnboarding(false)} disabled={isImporting}>Save for later without changing stock</Button>}
+            {onboardingError && <p role="alert" className="text-sm text-danger">{onboardingError}</p>}
+            {onboardingResult && (
+              <div role="status" className="rounded-lg border border-border bg-surface p-4 text-sm">
+                <strong>{onboardingResult.saved} source rows saved.</strong> {onboardingResult.imported_total} imported into inventory, {onboardingResult.existing} already stocked, {onboardingResult.pending} awaiting completion.
+                <p className="mt-1">Rows awaiting completion are not sellable stock. Resume this batch from the upload screen any time.</p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Import job results">
               {([
                 ['matched', 'Matched', matchProgress.matched],
                 ['review', 'Review', matchProgress.review],
                 ['unmatched', 'Unmatched / Store', matchProgress.unmatched],
+                ['error', 'Source errors', matchProgress.errors],
                 ['all', 'All rows', matchProgress.total],
               ] as const).map(([filter, label, count]) => (
                 <button
                   key={filter}
                   type="button"
-                  onClick={() => setReviewFilter(filter)}
+                  onClick={() => { setReviewFilter(filter); setReviewLimit(150); }}
                   className={`rounded-lg border p-3 text-left transition-colors ${reviewFilter === filter ? 'border-primary bg-primary/5' : 'border-border bg-surface hover:border-primary/40'}`}
                 >
                   <div className="text-xl font-bold text-ink">{count.toLocaleString()}</div>
@@ -587,13 +668,21 @@ export default function BulkImportWizard() {
               const filteredEntries = matchedRows
                 .map((row, index) => ({ row, index }))
                 .filter(({ row }) => reviewFilter === 'all' || row.match_status === reviewFilter)
-              const visibleEntries = filteredEntries.slice(0, 150)
+              const visibleEntries = filteredEntries.slice(0, reviewLimit)
               return (
               <div className="space-y-4">
                 <div className="text-xs text-ink-muted">
                   Showing {visibleEntries.length.toLocaleString()} of {filteredEntries.length.toLocaleString()} {reviewFilter === 'all' ? 'rows' : `${reviewFilter} rows`}.
-                  {filteredEntries.length > visibleEntries.length ? ' Narrow the queue with the filters above to keep review fast.' : ''}
+                  {filteredEntries.length > visibleEntries.length && (
+                    <button type="button" onClick={() => setReviewLimit((limit) => limit + 150)} className="ml-2 text-primary underline">
+                      Show more rows
+                    </button>
+                  )}
                 </div>
+                <p className="text-xs text-ink-muted">
+                  Confirm strengths from the packs. Month/year expiry dates use the last day of that month.
+                  Quantities must use one confirmed selling unit; mixed packs and sachets need conversion in the source file before uploading again.
+                </p>
                 <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
                   <Button
                     variant="outline"
@@ -674,13 +763,28 @@ export default function BulkImportWizard() {
                               />
                             </td>
                             <td className="p-3">
-                              <div className="font-semibold text-ink">Row {index + 1}: {row.mapped.generic_name}</div>
+                              <div className="font-semibold text-ink">Row {row.source_row_number || index + 1}: {row.mapped.generic_name}</div>
                               {row.mapped.brand_name && (
                                 <div className="text-xs text-ink-light">Brand: {row.mapped.brand_name}</div>
                               )}
+                              {row.mapped.manufacturer && (
+                                <div className="text-xs text-ink-light">Manufacturer: {row.mapped.manufacturer}</div>
+                              )}
+                              {row.onboarding_status && <div className="mt-1 text-xs font-semibold">{row.onboarding_status.replace('_', ' ')}</div>}
                             </td>
                             <td className="p-3">
-                              <div>{row.mapped.strength || 'N/A'}</div>
+                              <input
+                                aria-label={`Strength for row ${index + 1}`}
+                                placeholder="Confirm strength from pack"
+                                value={row.mapped.strength || ''}
+                                onChange={(e) => setMatchedRows((rows) => rows.map((candidate, candidateIndex) => {
+                                  if (candidateIndex !== index) return candidate
+                                  // A changed strength invalidates the old automatic catalogue choice.
+                                  const updated = { ...candidate, selected_product_id: candidate.mapped.item_type === 'medicine' ? '' : candidate.selected_product_id, mapped: { ...candidate.mapped, strength: e.target.value } }
+                                  return { ...updated, validation: previewValidation(updated, source, dosageForms, categories) }
+                                }))}
+                                className="w-[180px] rounded-md border border-border bg-white px-2 py-1.5 text-xs"
+                              />
                               {row.mapped.item_type === 'medicine' ? (
                                 <div className="mt-1 space-y-1">
                                   <select
@@ -719,6 +823,18 @@ export default function BulkImportWizard() {
                             <td className="p-3">
                               <div className="font-semibold">₦{row.mapped.price?.toLocaleString()}</div>
                               <div className="text-xs text-ink-muted">{row.mapped.quantity} in stock</div>
+                              {source === 'stocmed' && !['imported', 'existing'].includes(row.onboarding_status) && (
+                                <div className="mt-2 space-y-1">
+                                  {(['quantity', 'price', 'batch_number', 'expiry_date'] as const).map((key) => (
+                                    <label key={key} className="block text-xs">
+                                      {{ quantity: 'Selling-unit quantity', price: 'Selling price (₦)', batch_number: 'Batch number', expiry_date: 'Expiry date' }[key]}
+                                      <input aria-label={`${key} for source row ${row.source_row_number}`} type={key === 'expiry_date' ? 'date' : 'text'}
+                                        value={row.mapped[key] ?? ''} onChange={(e) => updateOnboardingField(index, key, e.target.value)}
+                                        className="block w-[180px] rounded border border-border px-2 py-1" />
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
                               {(row.mapped.item_type === 'medicine' || row.mapped.tracks_expiry) && (
                                 <div className="mt-1 text-[11px] text-ink-light">
                                   Batch: {row.mapped.batch_number || 'not mapped'} · Expiry: {row.mapped.expiry_date || 'not mapped'}
