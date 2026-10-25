@@ -213,7 +213,7 @@ export default function InventoryTable({
               <div
                 key={drug.id}
                 className={`bg-card rounded-card border border-border overflow-hidden shadow-card hover:shadow-card-hover transition-shadow duration-200 flex flex-col justify-between ${
-                  isDelisted ? 'opacity-60 ring-1 ring-warning/30' : ''
+                  isDelisted ? 'ring-1 ring-warning/30' : ''
                 }`}
               >
                 <div className="p-5 space-y-4">
@@ -456,7 +456,7 @@ export default function InventoryTable({
               const StockIcon = stockBadge.icon;
 
               return (
-                <tr key={drug.id} className={`hover:bg-surface/50 transition-colors ${isDelisted ? 'opacity-50 bg-warning/5' : ''}`}>
+                <tr key={drug.id} className={`hover:bg-surface/50 transition-colors ${isDelisted ? 'bg-warning/5' : ''}`}>
                   <td className="px-4 py-4">
                     <input type="checkbox" className="h-4 w-4 accent-primary" checked={selectedIds.has(drug.id)}
                       onChange={(event) => toggleSelected(drug.id, event.target.checked)}
