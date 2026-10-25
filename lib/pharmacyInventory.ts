@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { canRestoreInventory } from '@/lib/inventory-recovery'
 
 type SupabaseServerClient = SupabaseClient<Database, 'public', any>
 
@@ -68,6 +69,8 @@ export interface EnrichedInventoryRow {
   is_listed: boolean
   /** Non-null when the item has been soft-deleted (delisted) */
   deleted_at: string | null
+  recovery_expires_at: string | null
+  deletion_reason: string | null
   created_at: string
   updated_at: string
   stock_status: 'in' | 'low' | 'out'
@@ -177,6 +180,8 @@ export function assembleEnrichedInventory(
       notes: inv.notes ?? null,
       is_listed: inv.is_listed,
       deleted_at: inv.deleted_at ?? null,
+      recovery_expires_at: inv.recovery_expires_at ?? null,
+      deletion_reason: inv.deletion_reason ?? null,
       created_at: inv.created_at,
       updated_at: inv.updated_at,
       stock_status: stockStatus,
@@ -220,5 +225,7 @@ export async function getEnrichedInventory(
   })
   if (error) throw error
 
-  return assembleEnrichedInventory((data ?? []) as InventorySnapshotRow[])
+  const snapshot = (data ?? []) as InventorySnapshotRow[]
+  return assembleEnrichedInventory(snapshot.filter((entry) =>
+    !entry.inventory.deleted_at || canRestoreInventory(entry.inventory)))
 }

@@ -19,6 +19,10 @@ import {
 } from 'lucide-react';
 import EditDrugModal from './EditDrugModal';
 import DeleteConfirmDialog from './DeleteConfirmDialog';
+import InventoryBulkActions from './InventoryBulkActions';
+import { canRestoreInventory, inventoryRecoveryDeadline } from '@/lib/inventory-recovery';
+import { toast } from 'sonner';
+import { withStaffSessionHeader } from '@/lib/staff-session-client';
 import AdjustStockModal from './AdjustStockModal';
 import { SpAuthorizationModal } from './SpAuthorizationModal';
 import {
@@ -122,6 +126,16 @@ function DrugImage({ drug, size = 'md' }: { drug: any; size?: 'sm' | 'md' }) {
   );
 }
 
+function RecoveryNotice({ drug }: { drug: any }) {
+  const deadline = inventoryRecoveryDeadline(drug);
+  return <p className="mt-1 text-xs text-ink-muted">
+    {deadline && canRestoreInventory(drug)
+      ? `Restore by ${new Date(deadline).toLocaleDateString('en-GB')}`
+      : 'Recovery window ended'}
+    {drug.deletion_reason ? ` · ${drug.deletion_reason}` : ''}
+  </p>;
+}
+
 export default function InventoryTable({
   drugs,
   viewMode = 'table',
@@ -132,6 +146,7 @@ export default function InventoryTable({
   const [adjustingDrug, setAdjustingDrug] = useState<any | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [restoreAuthorization, setRestoreAuthorization] = useState<any | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const queryClient = useQueryClient();
 
   const restoreMutation = useMutation({
@@ -139,7 +154,7 @@ export default function InventoryTable({
       setRestoringId(drugId);
       const response = await fetch(`/api/pharmacy/drugs/${drugId}/restore`, {
         method: 'PATCH',
-        headers: withSpAuthorizationHeader('restore_inventory', token),
+        headers: withStaffSessionHeader(withSpAuthorizationHeader('restore_inventory', token)),
       });
       if (!response.ok) {
         const data = await response.json();
@@ -165,13 +180,25 @@ export default function InventoryTable({
     } catch (error) {
       if (error instanceof Error && error.name === 'SP_AUTH_REQUIRED') {
         setRestoreAuthorization(drug);
+      } else {
+        toast.error(error instanceof Error ? error.message : 'The item could not be restored');
       }
     }
   };
 
+  const toggleSelected = (id: string, checked: boolean) => setSelectedIds((previous) => {
+    const next = new Set(previous);
+    if (checked) next.add(id); else next.delete(id);
+    return next;
+  });
+  const bulkActions = <InventoryBulkActions items={drugs} selectedIds={selectedIds}
+    onSelectAll={(checked) => setSelectedIds(new Set(checked ? drugs.map((drug) => drug.id) : []))}
+    onClear={() => setSelectedIds(new Set())} />;
+
   if (viewMode === 'grid') {
     return (
       <>
+        {bulkActions}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
           {drugs.map((drug) => {
             const isDelisted = !!drug.deleted_at;
@@ -190,13 +217,20 @@ export default function InventoryTable({
                 }`}
               >
                 <div className="p-5 space-y-4">
+                  <label className="flex items-center gap-2 text-xs text-ink-muted">
+                    <input type="checkbox" className="h-4 w-4 accent-primary" checked={selectedIds.has(drug.id)}
+                      onChange={(event) => toggleSelected(drug.id, event.target.checked)}
+                      aria-label={`Select ${drug.name || drug.brand_name || 'inventory item'}`} />
+                    Select item
+                  </label>
                   {/* Delisted badge */}
                   {isDelisted && (
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold text-warning bg-warning/10 border border-warning/20">
                       <ArchiveX className="w-3.5 h-3.5" />
-                      Delisted
+                      Recovery bin
                     </div>
                   )}
+                  {isDelisted && <RecoveryNotice drug={drug} />}
 
                   {/* Image & Main Info */}
                   <div className="flex gap-4">
@@ -258,7 +292,7 @@ export default function InventoryTable({
                       variant="outline"
                       size="sm"
                       onClick={() => void restoreDrug(drug)}
-                      disabled={restoringId === drug.id}
+                      disabled={restoringId === drug.id || !canRestoreInventory(drug)}
                       className="flex-1 text-xs text-primary hover:bg-primary/5 hover:text-primary hover:border-primary/20"
                     >
                       {restoringId === drug.id ? (
@@ -374,6 +408,7 @@ export default function InventoryTable({
 
   return (
     <>
+      {bulkActions}
       <div
         className="overflow-x-auto overscroll-x-contain bg-card rounded-card border border-border shadow-card lg:max-h-[calc(100dvh-16rem)] lg:overflow-auto [scrollbar-gutter:stable]"
         role="region"
@@ -383,6 +418,7 @@ export default function InventoryTable({
         <table className="w-full min-w-[1180px] text-left text-sm border-collapse">
           <thead className="bg-surface border-b border-border lg:sticky lg:top-0 lg:z-10">
             <tr>
+              <th className="px-4 py-4 text-xs font-semibold text-muted-foreground">Select</th>
               <th className="px-6 py-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Image
               </th>
@@ -421,6 +457,11 @@ export default function InventoryTable({
 
               return (
                 <tr key={drug.id} className={`hover:bg-surface/50 transition-colors ${isDelisted ? 'opacity-50 bg-warning/5' : ''}`}>
+                  <td className="px-4 py-4">
+                    <input type="checkbox" className="h-4 w-4 accent-primary" checked={selectedIds.has(drug.id)}
+                      onChange={(event) => toggleSelected(drug.id, event.target.checked)}
+                      aria-label={`Select ${drug.name || drug.brand_name || 'inventory item'}`} />
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <DrugImage drug={drug} size="sm" />
                   </td>
@@ -432,10 +473,11 @@ export default function InventoryTable({
                       {isDelisted && (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-warning bg-warning/10 border border-warning/20">
                           <ArchiveX className="w-2.5 h-2.5" />
-                          Delisted
+                          Recovery bin
                         </span>
                       )}
                     </div>
+                    {isDelisted && <RecoveryNotice drug={drug} />}
                     {drug.generic_name && drug.generic_name !== drug.name && (
                       <div className="text-xs text-muted-foreground mt-0.5">
                         {drug.generic_name}
@@ -488,7 +530,7 @@ export default function InventoryTable({
                           variant="ghost"
                           size="sm"
                           onClick={() => void restoreDrug(drug)}
-                          disabled={restoringId === drug.id}
+                          disabled={restoringId === drug.id || !canRestoreInventory(drug)}
                           className="text-xs text-primary hover:bg-primary/5 hover:text-primary"
                         >
                           {restoringId === drug.id ? (

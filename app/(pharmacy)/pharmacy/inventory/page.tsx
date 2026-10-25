@@ -122,27 +122,29 @@ export default function PharmacyInventory() {
   }
 
   const drugs = drugsData?.drugs || [];
+  const departmentTabItems = showDelisted ? drugs.filter((item: any) => item.deleted_at) : drugs;
   const departmentItems = department === 'all'
     ? drugs
     : drugs.filter((item: any) => item.item_type === department);
-  const totalProducts = departmentItems.length;
+  const activeItems = departmentItems.filter((item: any) => !item.deleted_at);
+  const totalProducts = activeItems.length;
 
   // Compute stat counts dynamically
   const today = new Date();
   const ninetyDaysFromNow = new Date();
   ninetyDaysFromNow.setDate(today.getDate() + 90);
 
-  const inStock = departmentItems.filter((d: any) => d.quantity_in_stock > (d.low_stock_threshold || 10)).length;
-  const lowStock = departmentItems.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= (d.low_stock_threshold || 10)).length;
-  const outOfStock = departmentItems.filter((d: any) => d.quantity_in_stock === 0).length;
+  const inStock = activeItems.filter((d: any) => d.quantity_in_stock > (d.low_stock_threshold || 10)).length;
+  const lowStock = activeItems.filter((d: any) => d.quantity_in_stock > 0 && d.quantity_in_stock <= (d.low_stock_threshold || 10)).length;
+  const outOfStock = activeItems.filter((d: any) => d.quantity_in_stock === 0).length;
 
-  const expiringSoon = departmentItems.filter((d: any) => {
+  const expiringSoon = activeItems.filter((d: any) => {
     if (!d.expiry_date) return false;
     const exp = new Date(d.expiry_date);
     return exp >= today && exp <= ninetyDaysFromNow;
   }).length;
 
-  const expired = departmentItems.filter((d: any) => {
+  const expired = activeItems.filter((d: any) => {
     if (!d.expiry_date) return false;
     const exp = new Date(d.expiry_date);
     return exp < today;
@@ -218,7 +220,7 @@ export default function PharmacyInventory() {
     { value: 'out_of_stock', label: 'Out of stock' },
     { value: 'expiring_soon', label: 'Expiring soon' },
     { value: 'expired', label: 'Expired' },
-    { value: 'delisted', label: `Delisted${delistedCount > 0 ? ` (${delistedCount})` : ''}` },
+    { value: 'delisted', label: `Recovery bin${delistedCount > 0 ? ` (${delistedCount})` : ''}` },
   ];
 
   return (
@@ -299,9 +301,9 @@ export default function PharmacyInventory() {
 
       <div className="mb-5 inline-flex rounded-md border border-border bg-white p-1 shadow-sm">
         {([
-          ['all', `All (${drugs.length})`],
-          ['medicine', `Medicines (${drugs.filter((item: any) => item.item_type === 'medicine').length})`],
-          ['store', `Store (${drugs.filter((item: any) => item.item_type === 'store').length})`],
+          ['all', `All (${departmentTabItems.length})`],
+          ['medicine', `Medicines (${departmentTabItems.filter((item: any) => item.item_type === 'medicine').length})`],
+          ['store', `Store (${departmentTabItems.filter((item: any) => item.item_type === 'store').length})`],
         ] as const).map(([value, label]) => (
           <Button
             key={value}
@@ -354,20 +356,23 @@ export default function PharmacyInventory() {
       </div>
 
       {/* Main Inventory Content */}
+      {showDelisted && <p className="mb-4 rounded-lg border border-border bg-surface px-4 py-3 text-sm text-ink-muted">
+        Removed items can be restored for 60 days. After that, they leave this bin and cannot be restored. Sales and stock history remain available in reports.
+      </p>}
       {filteredDrugs.length === 0 ? (
         <div className="border border-dashed border-border rounded-card-lg p-16 flex flex-col items-center justify-center text-center gap-2 bg-white">
           <div className="w-14 h-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-2">
             <Package className="h-6 w-6" strokeWidth={2} aria-hidden="true" />
           </div>
           <h3 className="text-[18px] font-medium text-ink">
-            {departmentItems.length === 0 ? `No ${department === 'all' ? 'inventory' : department} items yet` : 'No matching items'}
+            {showDelisted ? 'No recoverable items match' : departmentItems.length === 0 ? `No ${department === 'all' ? 'inventory' : department} items yet` : 'No matching items'}
           </h3>
           <p className="text-[14px] text-ink-muted max-w-[380px] leading-relaxed">
-            {departmentItems.length === 0
+            {showDelisted ? 'Removed items appear here for 60 days. Try adjusting your search or department filter.' : departmentItems.length === 0
               ? 'Add items individually or import an existing inventory file.'
               : 'Try adjusting your search query or filter selections above.'}
           </p>
-          {departmentItems.length === 0 && (
+          {!showDelisted && departmentItems.length === 0 && (
             <div className="flex gap-3 mt-5 flex-wrap justify-center">
               <Button
                 onClick={() => router.push('/pharmacy/inventory/import')}
@@ -403,6 +408,7 @@ export default function PharmacyInventory() {
             )}
           </div>
           <InventoryTable
+            key={`${filterStatus}:${department}:${currentInventoryPage}:${deferredSearchQuery}`}
             drugs={visibleDrugs}
             viewMode={viewMode}
             onMedicinePromoted={() => {

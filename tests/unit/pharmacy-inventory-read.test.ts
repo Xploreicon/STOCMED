@@ -103,6 +103,7 @@ describe('set-based pharmacy inventory read', () => {
       'category',
       'created_at',
       'deleted_at',
+      'deletion_reason',
       'display_image_url',
       'dosage_form',
       'expiry_date',
@@ -125,6 +126,7 @@ describe('set-based pharmacy inventory read', () => {
       'price',
       'product_id',
       'quantity_in_stock',
+      'recovery_expires_at',
       'requires_prescription',
       'reserved_quantity',
       'sellable_quantity',
@@ -195,5 +197,15 @@ describe('set-based pharmacy inventory read', () => {
       rows: [],
       stats: { total: 0, in_stock: 0, low_stock: 0, out_of_stock: 0, expiring_soon: 0 },
     })
+  })
+
+  it('omits expired recovery entries while preserving active and recoverable stock', async () => {
+    const rpc = vi.fn().mockResolvedValue({ data: [
+      snapshot[0],
+      { ...snapshot[0], inventory: { ...inventory, id: 'recoverable', deleted_at: '2020-01-01T00:00:00Z', recovery_expires_at: '2099-01-01T00:00:00Z' } },
+      { ...snapshot[0], inventory: { ...inventory, id: 'expired-recovery', deleted_at: '2020-01-01T00:00:00Z', recovery_expires_at: '2020-03-01T00:00:00Z' } },
+    ], error: null })
+    const result = await getEnrichedInventory({ rpc } as any, 'pharmacy-1', { showDelisted: true })
+    expect(result.rows.map((row) => row.id)).toEqual(['inventory-1', 'recoverable'])
   })
 })

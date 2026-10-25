@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ensurePharmacyRecord } from '@/lib/pharmacy'
 import { NextRequest, NextResponse } from 'next/server'
 import { SP_AUTH_REQUIRED_RESPONSE } from '@/lib/sp-authorization'
+import { checkStaffPermission } from '@/lib/staff-permissions'
 
 export async function PATCH(
   request: NextRequest,
@@ -28,6 +29,9 @@ export async function PATCH(
         { status: 404 }
       )
     }
+
+    const staff = await checkStaffPermission(supabase as any, pharmacy.id, request, 'can_adjust_stock')
+    if (!staff.allowed) return NextResponse.json({ error: staff.error, code: staff.code }, { status: 403 })
 
     // Verify drug belongs to this pharmacy and is actually delisted
     const { data: existingDrug, error: checkError } = await (supabase as any)

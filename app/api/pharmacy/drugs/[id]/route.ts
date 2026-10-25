@@ -219,6 +219,9 @@ export async function DELETE(
       )
     }
 
+    const staff = await checkStaffPermission(supabase as any, pharmacy.id, request, 'can_adjust_stock')
+    if (!staff.allowed) return NextResponse.json({ error: staff.error, code: staff.code }, { status: 403 })
+
     // Verify drug belongs to this pharmacy
     const { data: existingDrug, error: checkError } = await (supabase as any)
       .from('pharmacy_inventory')
@@ -268,8 +271,9 @@ export async function DELETE(
     }
 
     return NextResponse.json({
-      message: 'Drug removed from active inventory. Sales history and ledger records have been preserved.',
+      message: 'Moved to the recovery bin. You can restore it within 60 days. Sales history is preserved.',
       action: 'delisted',
+      recovery_expires_at: delistResult?.recovery_expires_at,
       id,
     })
   } catch (error) {

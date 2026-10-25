@@ -11,9 +11,10 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Trash2, Loader2, ArchiveX, Info } from 'lucide-react';
+import { AlertTriangle, Trash2, Loader2, Info } from 'lucide-react';
 import { SpAuthorizationModal } from '@/components/pharmacy/SpAuthorizationModal';
 import { clearCachedSpToken, getCachedSpToken, withSpAuthorizationHeader } from '@/lib/sp-authorization-client';
+import { withStaffSessionHeader } from '@/lib/staff-session-client';
 
 interface DeleteConfirmDialogProps {
   isOpen: boolean;
@@ -36,7 +37,7 @@ export default function DeleteConfirmDialog({
     mutationFn: async (token: string | null) => {
       const response = await fetch(`/api/pharmacy/drugs/${drug.id}`, {
         method: 'DELETE',
-        headers: withSpAuthorizationHeader('delist_inventory', token),
+        headers: withStaffSessionHeader(withSpAuthorizationHeader('delist_inventory', token)),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -88,55 +89,32 @@ export default function DeleteConfirmDialog({
 
   const drugName = drug?.name || drug?.brand_name || drug?.generic_name || 'this item';
 
-  // Determine if this item has trade history (heuristic: check if quantity differs from 0
-  // or if there are batches — the actual decision happens server-side, this is just for UI copy)
-  const hasTradeHistory = drug?.quantity_in_stock > 0 || (drug?.batches && drug.batches.length > 1);
-
   return (
     <>
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex items-center justify-center mb-4">
-            <div className={`rounded-full p-3 ${hasTradeHistory ? 'bg-warning/10' : 'bg-danger/10'}`}>
-              {hasTradeHistory ? (
-                <ArchiveX className="h-6 w-6 text-warning" />
-              ) : (
-                <Trash2 className="h-6 w-6 text-danger" />
-              )}
+            <div className="rounded-full p-3 bg-danger/10">
+              <Trash2 className="h-6 w-6 text-danger" />
             </div>
           </div>
           <DialogTitle className="text-center">
-            {hasTradeHistory ? 'Remove from Inventory' : 'Delete Drug'}
+            Move to recovery bin?
           </DialogTitle>
           <DialogDescription className="text-center">
-            {hasTradeHistory ? (
-              <>
-                Remove{' '}
-                <span className="font-semibold text-ink">{drugName}</span>{' '}
-                from your active inventory? It will no longer appear in patient
-                search or your inventory list.
-              </>
-            ) : (
-              <>
-                Permanently delete{' '}
-                <span className="font-semibold text-ink">{drugName}</span>?
-                This item has no trade history and will be fully removed.
-              </>
-            )}
+            Remove <span className="font-semibold text-ink">{drugName}</span> from active inventory and patient search?
           </DialogDescription>
         </DialogHeader>
 
         {/* Info note for delist */}
-        {hasTradeHistory && (
           <div className="mx-1 p-3 bg-surface border border-border rounded-lg flex items-start gap-2.5 text-xs text-ink-muted">
             <Info className="h-4 w-4 shrink-0 mt-0.5 text-primary" />
             <span>
               Sales history, ledger entries, and batch records will be preserved.
-              You can restore this item later from the &quot;Delisted&quot; filter.
+              You can restore this item from the recovery bin within 60 days.
             </span>
           </div>
-        )}
 
         {/* Error display */}
         {deleteDrugMutation.isError && (
@@ -164,22 +142,19 @@ export default function DeleteConfirmDialog({
           </Button>
           <Button
             type="button"
-            variant={hasTradeHistory ? 'default' : 'destructive'}
+            variant="destructive"
             onClick={handleConfirm}
             disabled={deleteDrugMutation.isPending || !!resultMessage}
-            className={hasTradeHistory ? 'bg-warning hover:bg-warning/90 text-white' : ''}
           >
             {deleteDrugMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {hasTradeHistory ? 'Removing...' : 'Deleting...'}
+                Removing...
               </>
             ) : resultMessage ? (
               'Done'
-            ) : hasTradeHistory ? (
-              'Delist'
             ) : (
-              'Delete Permanently'
+              'Move to recovery bin'
             )}
           </Button>
         </DialogFooter>
