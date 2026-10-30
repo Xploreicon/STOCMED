@@ -22,7 +22,7 @@ type Reports = {
   range: { from: string; to: string }
   daily_sales: Array<{ sale_date: string; transaction_count: number; item_count: number; total_sales: number; medicine_sales: number; store_sales: number; medicine_items: number; store_items: number; cash: number | null; bank_transfer: number | null; terminal: number | null; other: number | null }>
   stock_valuation: Array<{ inventory_id: string; department: 'medicine' | 'store'; generic_name: string; brand_name: string | null; strength: string; quantity: number; unit_cost: number; retail_price: number; cost_value: number; retail_value: number }>
-  margin_per_product: Array<{ inventory_id: string; department: 'medicine' | 'store'; generic_name: string; brand_name: string | null; strength: string; quantity_sold: number; revenue: number; cogs: number; margin: number }>
+  margin_per_product: Array<{ inventory_id: string; department: 'medicine' | 'store'; generic_name: string; brand_name: string | null; strength: string; quantity_sold: number; revenue: number; cogs: number; margin: number; cost_estimated?: boolean }>
   dead_stock: Array<{ inventory_id: string; department: 'medicine' | 'store'; generic_name: string; brand_name: string | null; strength: string; quantity: number; last_sale_at: string | null; capital_tied_up: number }>
   expiry_exposure: Array<{ days: number; department: 'medicine' | 'store'; cost_value: number; retail_value: number; units: number }>
 }
@@ -175,6 +175,7 @@ export default function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="margin" className="space-y-1">
+          {reports.margin_per_product.some(row => row.cost_estimated) && <p className="rounded border border-warning bg-warning/10 p-3 text-sm text-ink">Some older sale costs are estimated from the records available when cost history was introduced. New sales preserve their original cost.</p>}
           {reports.margin_per_product.map(row => <ReportRow key={row.inventory_id} department={row.department} title={label(row)} detail={`${row.quantity_sold} sold · revenue ${money(row.revenue)} · COGS ${money(row.cogs)}`} value={money(row.margin)} />)}
         </TabsContent>
 

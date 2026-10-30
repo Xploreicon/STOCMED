@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:procurement-db": "node scripts/db/test-procurement.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",

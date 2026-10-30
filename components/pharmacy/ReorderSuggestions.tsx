@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowRight, PackagePlus, TrendingUp } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { withStaffSessionHeader } from '@/lib/staff-session-client'
 import { Button } from '@/components/ui/button'
 
 type Suggestion = {
@@ -40,11 +41,11 @@ export function ReorderSuggestions() {
     try {
       const response = await fetch('/api/pharmacy/reorder', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: withStaffSessionHeader({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ product_id: productId }),
       })
       const result = await response.json()
-      if (!response.ok) throw new Error(result.error || 'Could not draft purchase order')
+      if (!response.ok) throw new Error(result.code?.startsWith('STAFF_') ? 'Choose an authorised staff member in Procurement before drafting an order.' : result.error || 'Could not draft purchase order')
       toast.success('Draft purchase order created')
       await refetch()
     } catch (error) {

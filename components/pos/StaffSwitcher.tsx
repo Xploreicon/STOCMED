@@ -17,7 +17,7 @@ type Staff = {
   is_active: boolean
 }
 
-export function StaffSwitcher({ value, onChange }: { value: StaffSession | null; onChange: (value: StaffSession | null) => void }) {
+export function StaffSwitcher({ value, onChange, permission = 'can_sell', purpose = 'selling' }: { value: StaffSession | null; onChange: (value: StaffSession | null) => void; permission?: keyof StaffSession['staff']['permissions']; purpose?: string }) {
   const [staff, setStaff] = useState<Staff[]>([])
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<Staff | null>(null)
@@ -31,7 +31,7 @@ export function StaffSwitcher({ value, onChange }: { value: StaffSession | null;
       void fetch('/api/pharmacy/staff/session', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: cached.token, permission: 'can_sell' }),
+        body: JSON.stringify({ token: cached.token, permission }),
       }).then(async response => {
         if (response.ok) onChange(cached)
         else {
@@ -43,7 +43,7 @@ export function StaffSwitcher({ value, onChange }: { value: StaffSession | null;
     void fetch('/api/pharmacy/staff').then(response => response.ok ? response.json() : null).then(body => {
       if (body?.staff) setStaff(body.staff.filter((item: Staff) => item.is_active))
     }).catch(() => undefined)
-  }, [onChange])
+  }, [onChange, permission])
 
   const signIn = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -89,14 +89,14 @@ export function StaffSwitcher({ value, onChange }: { value: StaffSession | null;
       {value && <Button type="button" onClick={signOut} aria-label="End staff session" className="h-9 w-9 border border-white/10 bg-white/5 p-0 text-white/60 hover:bg-white/10"><LogOut className="h-4 w-4" /></Button>}
     </div>
     {open && <div className="fixed inset-0 z-[75] flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--pos-panel)] p-5 shadow-2xl">
-        <div className="flex items-start justify-between"><div><h2 className="text-lg font-bold text-white">Who is selling?</h2><p className="mt-1 text-xs text-white/45">Choose your name and enter your PIN.</p></div><button type="button" onClick={() => setOpen(false)} className="p-2 text-white/50"><X className="h-5 w-5" /></button></div>
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+        <div className="flex items-start justify-between"><div><h2 className="text-lg font-bold text-white">Who is {purpose}?</h2><p className="mt-1 text-xs text-white/45">Choose your name and enter your PIN.</p></div><button type="button" onClick={() => setOpen(false)} className="p-2 text-white/50"><X className="h-5 w-5" /></button></div>
         {!selected ? <div className="mt-4 grid gap-2">{staff.length ? staff.map(item => <button type="button" key={item.id} onClick={() => { setSelected(item); setError('') }} className="min-h-14 rounded-xl border border-white/10 bg-white/5 px-4 text-left text-sm text-white hover:border-primary"><span className="block font-semibold">{item.name}</span><span className="mt-0.5 block text-[11px] capitalize text-white/40">{item.role}</span></button>) : <p className="rounded-xl bg-white/5 p-4 text-center text-xs text-white/50">No active staff accounts. Add one from Staff.</p>}</div> : <form onSubmit={signIn} className="mt-5">
           <button type="button" onClick={() => { setSelected(null); setPin(''); setError('') }} className="text-xs text-primary">← Choose another person</button>
           <p className="mt-4 text-sm font-semibold text-white">{selected.name}</p>
           <input autoFocus type="password" inputMode="numeric" autoComplete="one-time-code" value={pin} onChange={event => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} className="mt-3 h-16 w-full rounded-xl border border-white/15 bg-black/20 text-center text-3xl tracking-[0.4em] text-white outline-none focus:border-primary" aria-label="Staff PIN" />
           {error && <p className="mt-2 text-xs font-medium text-red-300" role="alert">{error}</p>}
-          <Button type="submit" disabled={loading || pin.length < 4} className="mt-4 h-11 w-full">{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Start selling</Button>
+          <Button type="submit" disabled={loading || pin.length < 4} className="mt-4 h-11 w-full">{loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Continue</Button>
         </form>}
       </div>
     </div>}

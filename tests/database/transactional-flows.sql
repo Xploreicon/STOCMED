@@ -58,6 +58,12 @@ BEGIN
   END IF;
 END $$;
 
+INSERT INTO public.suppliers(id, pharmacy_id, name)
+VALUES ('73000000-0000-4000-8000-000000000001',:'pharmacy_id'::uuid,'Transactional test supplier');
+INSERT INTO public.pharmacy_features(pharmacy_id,feature_key,is_enabled) VALUES
+ (:'pharmacy_id'::uuid,'purchase_orders_and_receiving',TRUE),(:'pharmacy_id'::uuid,'staff_accounts',FALSE)
+ON CONFLICT(pharmacy_id,feature_key) DO UPDATE SET is_enabled=EXCLUDED.is_enabled;
+
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub', :'pharmacy_user_id', true);
 SELECT set_config('request.jwt.claim.role', 'authenticated', true);
@@ -140,20 +146,13 @@ SELECT pg_temp.assert_true(
 );
 
 -- Receiving: one partial delivery creates receipt, batch, movement, and cost atomically.
-INSERT INTO public.suppliers(id, pharmacy_id, name)
-VALUES ('73000000-0000-4000-8000-000000000001',:'pharmacy_id'::uuid,'Transactional test supplier');
 
-SELECT public.create_purchase_order(
-  :'pharmacy_id'::uuid,
-  '73000000-0000-4000-8000-000000000001',
-  current_date + 7,
-  'transactional test',
-  jsonb_build_array(jsonb_build_object(
-    'product_id', :'product_id'::uuid,
-    'quantity_ordered', 5,
-    'unit_cost', 800
-  ))
-);
+
+SELECT public.write_procurement(:'pharmacy_id'::uuid,jsonb_build_object(
+  'action','po_create','supplier_id','73000000-0000-4000-8000-000000000001',
+  'expected_date',current_date+7,'notes','transactional test',
+  'items',jsonb_build_array(jsonb_build_object('product_id',:'product_id'::uuid,'quantity_ordered',5,'unit_cost',800))
+));
 
 DO $$
 DECLARE v_po uuid; v_item uuid; v_product uuid;
@@ -161,17 +160,12 @@ BEGIN
   SELECT po.id, poi.id, poi.product_id INTO v_po, v_item, v_product
   FROM public.purchase_orders po JOIN public.purchase_order_items poi ON poi.po_id=po.id
   WHERE po.supplier_id='73000000-0000-4000-8000-000000000001';
-  PERFORM public.receive_goods(
-    current_setting('test.pharmacy_id')::uuid,
-    '73000000-0000-4000-8000-000000000001',
-    v_po,
-    'partial',
-    jsonb_build_array(jsonb_build_object(
-      'product_id',v_product,'po_item_id',v_item,'quantity_received',2,
-      'unit_cost',850,'batch_number','ATOMIC-PARTIAL-1',
-      'expiry_date',(current_date + 365)::text,'short_dated_confirmed',false
-    ))
-  );
+  PERFORM public.write_procurement(current_setting('test.pharmacy_id')::uuid,jsonb_build_object('action','po_status','id',v_po,'status','sent'));
+  PERFORM public.write_procurement(current_setting('test.pharmacy_id')::uuid,jsonb_build_object(
+    'action','receive','supplier_id','73000000-0000-4000-8000-000000000001','po_id',v_po,'notes','partial','request_key',gen_random_uuid(),
+    'lines',jsonb_build_array(jsonb_build_object('product_id',v_product,'po_item_id',v_item,'quantity_received',2,
+      'unit_cost',850,'batch_number','ATOMIC-PARTIAL-1','expiry_date',(current_date+365)::TEXT,'short_dated_confirmed',FALSE))
+  ));
 END $$;
 
 SELECT pg_temp.assert_true(
@@ -196,16 +190,13 @@ BEGIN
   SELECT product_id INTO v_product FROM public.pharmacy_inventory
   WHERE id='40000000-0000-4000-8000-000000000001';
   BEGIN
-    PERFORM public.receive_goods(
-      current_setting('test.pharmacy_id')::uuid,
-      '73000000-0000-4000-8000-000000000001',
-      NULL,
-      'must roll back',
-      jsonb_build_array(
-        jsonb_build_object('product_id',v_product,'quantity_received',1,'unit_cost',700,'batch_number','ATOMIC-ROLLBACK-1','expiry_date',(current_date+365)::text,'short_dated_confirmed',false),
-        jsonb_build_object('product_id',v_product,'quantity_received',0,'unit_cost',700,'batch_number','ATOMIC-ROLLBACK-2','expiry_date',(current_date+365)::text,'short_dated_confirmed',false)
+    PERFORM public.write_procurement(current_setting('test.pharmacy_id')::uuid,jsonb_build_object(
+      'action','receive','supplier_id','73000000-0000-4000-8000-000000000001','notes','must roll back','request_key',gen_random_uuid(),
+      'lines',jsonb_build_array(
+        jsonb_build_object('product_id',v_product,'quantity_received',1,'unit_cost',700,'batch_number','ATOMIC-ROLLBACK-1','expiry_date',(current_date+365)::TEXT),
+        jsonb_build_object('product_id',v_product,'quantity_received',0,'unit_cost',700,'batch_number','ATOMIC-ROLLBACK-2','expiry_date',(current_date+365)::TEXT)
       )
-    );
+    ));
     RAISE EXCEPTION 'invalid receiving call unexpectedly succeeded';
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM = 'invalid receiving call unexpectedly succeeded' THEN RAISE; END IF;

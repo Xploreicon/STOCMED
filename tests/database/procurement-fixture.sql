@@ -1,0 +1,33 @@
+-- Minimal disposable schema for the real receiving, recovery and staff RPCs.
+CREATE SCHEMA auth;
+CREATE SCHEMA extensions;
+CREATE EXTENSION pgcrypto WITH SCHEMA extensions;
+CREATE FUNCTION auth.uid() RETURNS UUID LANGUAGE sql AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub',TRUE),'')::UUID $$;
+CREATE TABLE auth.users(id UUID PRIMARY KEY);
+CREATE TABLE public.pharmacies(id UUID PRIMARY KEY,user_id UUID);
+CREATE FUNCTION public.authenticated_pharmacy_id() RETURNS UUID LANGUAGE sql AS $$ SELECT id FROM public.pharmacies WHERE user_id=auth.uid() $$;
+CREATE TABLE public.pharmacy_features(pharmacy_id UUID,feature_key TEXT,is_enabled BOOLEAN);
+CREATE FUNCTION public.verify_gated_sp_action(UUID,TEXT,TEXT,TEXT) RETURNS BOOLEAN LANGUAGE sql AS $$ SELECT COALESCE($2='approved-'||$3,FALSE) $$;
+CREATE TYPE public.inventory_item_type AS ENUM('medicine','store');
+CREATE TABLE public.suppliers(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),pharmacy_id UUID,name TEXT,contact_person TEXT,phone TEXT,email TEXT,address TEXT,payment_terms TEXT,notes TEXT,is_active BOOLEAN DEFAULT TRUE,UNIQUE(pharmacy_id,name));
+CREATE TABLE public.products(id UUID PRIMARY KEY,generic_name TEXT,brand_name TEXT,strength TEXT);
+CREATE TABLE public.pharmacy_inventory(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),pharmacy_id UUID,product_id UUID,item_type public.inventory_item_type,tracks_expiry BOOLEAN,price NUMERIC(14,2),unit_cost NUMERIC(14,2),quantity_in_stock INTEGER DEFAULT 0,is_listed BOOLEAN DEFAULT TRUE,deleted_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW(),base_unit_name TEXT DEFAULT 'unit',item_name TEXT,brand TEXT,unit_description TEXT,barcode TEXT,UNIQUE(pharmacy_id,product_id));
+CREATE TABLE public.purchase_orders(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),pharmacy_id UUID,supplier_id UUID,po_number TEXT,expected_date DATE,subtotal NUMERIC(14,2),notes TEXT,created_by UUID,status TEXT DEFAULT 'draft',updated_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE public.purchase_order_items(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),po_id UUID,product_id UUID,inventory_id UUID,quantity_ordered INTEGER,quantity_received INTEGER DEFAULT 0,unit_cost NUMERIC(14,2),line_total NUMERIC(14,2),UNIQUE(po_id,product_id),UNIQUE(po_id,inventory_id));
+CREATE TABLE public.goods_receipts(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),pharmacy_id UUID,supplier_id UUID,po_id UUID,receipt_number TEXT,notes TEXT,received_by UUID,received_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE public.batches(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),inventory_id UUID NOT NULL,batch_number TEXT,expiry_date DATE,quantity_received INTEGER,cost_price NUMERIC(14,2),supplier_id UUID,purchase_order_id UUID,purchase_order_item_id UUID,received_at TIMESTAMPTZ,created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE public.goods_receipt_items(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),receipt_id UUID,po_item_id UUID,product_id UUID,inventory_id UUID NOT NULL,batch_id UUID,quantity_received INTEGER,unit_cost NUMERIC(14,2),line_total NUMERIC(14,2));
+CREATE TABLE public.stock_movements(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),inventory_id UUID NOT NULL,batch_id UUID,type TEXT,quantity INTEGER,reason TEXT,reference TEXT,created_by UUID,created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE public.sales(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),pharmacy_id UUID,status TEXT DEFAULT 'completed',total NUMERIC,subtotal NUMERIC,payment_method TEXT DEFAULT 'cash',created_at TIMESTAMPTZ DEFAULT NOW());
+CREATE TABLE public.sale_items(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),sale_id UUID,inventory_id UUID,batch_id UUID,quantity INTEGER,line_total NUMERIC);
+CREATE TABLE public.reservations(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),inventory_id UUID,status TEXT,expires_at TIMESTAMPTZ);
+CREATE FUNCTION public.sync_inventory_stock() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN
+ UPDATE public.pharmacy_inventory SET quantity_in_stock=(SELECT COALESCE(sum(quantity),0) FROM public.stock_movements WHERE inventory_id=NEW.inventory_id),updated_at=NOW() WHERE id=NEW.inventory_id;
+ RETURN NULL; END; $$;
+CREATE TRIGGER sync_inventory_stock AFTER INSERT ON public.stock_movements FOR EACH ROW EXECUTE FUNCTION public.sync_inventory_stock();
+CREATE FUNCTION public.receive_goods(UUID,UUID,UUID,TEXT,JSONB) RETURNS JSONB LANGUAGE sql AS $$ SELECT '{}'::JSONB $$;
+CREATE FUNCTION public.receive_goods_t2_internal(UUID,UUID,UUID,TEXT,JSONB) RETURNS JSONB LANGUAGE sql AS $$ SELECT '{}'::JSONB $$;
+INSERT INTO public.pharmacies VALUES('10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001'),('10000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000002');
+INSERT INTO public.suppliers(id,pharmacy_id,name) VALUES('30000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','Fixture supplier');
+INSERT INTO public.products(id,generic_name) VALUES('40000000-0000-4000-8000-000000000001','Medicine A'),('40000000-0000-4000-8000-000000000002','Medicine B'),('40000000-0000-4000-8000-000000000003','Medicine C');
+INSERT INTO public.pharmacy_features VALUES('10000000-0000-4000-8000-000000000001','purchase_orders_and_receiving',TRUE),('10000000-0000-4000-8000-000000000001','staff_accounts',TRUE);

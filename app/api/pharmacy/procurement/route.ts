@@ -30,48 +30,57 @@ export async function GET(request: NextRequest) {
   }
 
   if (view === 'products') {
-    const query = request.nextUrl.searchParams.get('q')?.trim() || ''
+    const query = (request.nextUrl.searchParams.get('q') || '').trim().slice(0,120).replace(/[,%()]/g, ' ')
+    const page = Math.max(0, Math.min(10000, Number(request.nextUrl.searchParams.get('page')) || 0))
+    const offset = Math.floor(page) * 25
     let builder = supabase.from('products')
       .select('id,generic_name,brand_name,strength,dosage_form,pack_size,barcode')
-      .order('generic_name').limit(100)
-    if (query) builder = builder.or(`generic_name.ilike.%${query}%,brand_name.ilike.%${query}%,barcode.eq.${query}`)
+      .order('generic_name').order('id').range(offset, offset + 25)
+    if (query) builder = builder.or(`generic_name.ilike.%${query}%,brand_name.ilike.%${query}%,strength.ilike.%${query}%,barcode.eq.${query}`)
     let storeBuilder = supabase.from('pharmacy_inventory')
-      .select('id,item_name,brand,barcode,unit_description,store_category,tracks_expiry')
-      .eq('pharmacy_id', pharmacy.id).eq('item_type', 'store').is('deleted_at', null).limit(100)
+      .select('id,item_name,brand,barcode,unit_description,store_category,tracks_expiry,price,base_unit_name,deleted_at,recovery_expires_at')
+      .eq('pharmacy_id', pharmacy.id).eq('item_type', 'store')
+      .order('item_name').order('id').range(offset, offset + 25)
     if (query) storeBuilder = storeBuilder.or(`item_name.ilike.%${query}%,brand.ilike.%${query}%,barcode.eq.${query}`)
     const [catalogueResult, storeResult] = await Promise.all([builder, storeBuilder])
-    if (catalogueResult.error || storeResult.error) {
-      return NextResponse.json({ error: catalogueResult.error?.message || storeResult.error?.message }, { status: 500 })
-    }
+    if (catalogueResult.error || storeResult.error) return NextResponse.json({ error: 'Could not search inventory' }, { status: 500 })
+    const catalogue = (catalogueResult.data || []).slice(0,25)
+    const ids = catalogue.map((item: any) => item.id)
+    const owned = ids.length ? await supabase.from('pharmacy_inventory')
+      .select('product_id,price,base_unit_name,deleted_at,recovery_expires_at').eq('pharmacy_id',pharmacy.id).in('product_id',ids) : { data: [], error: null }
+    if (owned.error) return NextResponse.json({ error: 'Could not load inventory details' }, { status: 500 })
     const products = [
-      ...(catalogueResult.data || []).map((product: any) => ({
-        ...product, target_type: 'medicine', product_id: product.id,
-        inventory_id: null, tracks_expiry: true,
-      })),
-      ...(storeResult.data || []).map((item: any) => ({
+      ...catalogue.map((product: any) => {
+        const inventory = owned.data?.find((item: any) => item.product_id === product.id)
+        return { ...product, target_type: 'medicine', product_id: product.id, inventory_id: null, tracks_expiry: true,
+          is_new: !inventory, base_unit_name: inventory?.base_unit_name, selling_price: inventory?.price, deleted_at: inventory?.deleted_at, recovery_expires_at: inventory?.recovery_expires_at }
+      }),
+      ...(storeResult.data || []).slice(0,25).map((item: any) => ({
         id: item.id, target_type: 'store', product_id: null, inventory_id: item.id,
         generic_name: item.item_name, brand_name: item.brand,
         strength: item.unit_description || '', dosage_form: item.store_category,
         pack_size: item.unit_description, barcode: item.barcode,
-        tracks_expiry: item.tracks_expiry,
+        tracks_expiry: item.tracks_expiry, base_unit_name: item.base_unit_name, selling_price: item.price, is_new: false,
+        deleted_at: item.deleted_at, recovery_expires_at: item.recovery_expires_at,
       })),
     ]
-    return NextResponse.json({ products })
+    return NextResponse.json({ products, has_more: (catalogueResult.data?.length || 0) > 25 || (storeResult.data?.length || 0) > 25 })
   }
 
   if (view === 'orders') {
     const { data, error } = await supabase.from('purchase_orders').select(`
-      *, suppliers(id,name,phone,email),
+      *, suppliers(id,name,phone,email), goods_receipts(reversed_at,goods_receipt_items(line_total)),
       purchase_order_items(
         *,
         products(id,generic_name,brand_name,strength,dosage_form,pack_size,barcode),
         pharmacy_inventory:inventory_id(id,item_name,brand,barcode,unit_description,store_category,tracks_expiry)
       )
     `).eq('pharmacy_id', pharmacy.id).order('created_at', { ascending: false })
-    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ orders: data || [] })
+    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ orders: (data || []).map((order: any) => ({ ...order, received_total: order.goods_receipts.filter((receipt: any) => !receipt.reversed_at).reduce((total: number, receipt: any) => total + receipt.goods_receipt_items.reduce((sum: number, item: any) => sum + Number(item.line_total), 0), 0) })) })
   }
 
   if (view === 'receipts') {
+    const page = Math.floor(Math.max(0,Math.min(10000,Number(request.nextUrl.searchParams.get('page')) || 0)))
     const { data, error } = await supabase.from('goods_receipts').select(`
       *, suppliers(id,name), purchase_orders(id,po_number),
       goods_receipt_items(
@@ -80,8 +89,8 @@ export async function GET(request: NextRequest) {
         pharmacy_inventory:inventory_id(id,item_name,brand,unit_description,store_category,tracks_expiry),
         batches(id,batch_number,expiry_date)
       )
-    `).eq('pharmacy_id', pharmacy.id).order('received_at', { ascending: false }).limit(50)
-    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ receipts: data || [] })
+    `).eq('pharmacy_id', pharmacy.id).order('received_at', { ascending: false }).order('id').range(page * 50, page * 50 + 50)
+    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ receipts: (data || []).slice(0,50), has_more: (data?.length || 0) > 50 })
   }
 
   if (view === 'trace') {
@@ -116,87 +125,32 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const context = await getContext()
   if ('error' in context) return NextResponse.json({ error: context.error }, { status: context.status })
-  const { supabase, pharmacy } = context
-
   try {
     const body = await request.json()
-    const action = body.action
-
-    if (action === 'supplier_create') {
-      if (typeof body.name !== 'string' || !body.name.trim()) {
-        return NextResponse.json({ error: 'Supplier name is required' }, { status: 400 })
-      }
-      const { data, error } = await supabase.from('suppliers').insert({
-        pharmacy_id: pharmacy.id,
-        name: body.name.trim(),
-        contact_person: body.contact_person?.trim() || null,
-        phone: body.phone?.trim() || null,
-        email: body.email?.trim() || null,
-        address: body.address?.trim() || null,
-        payment_terms: body.payment_terms?.trim() || null,
-        notes: body.notes?.trim() || null,
-      }).select('*').single()
-      return error ? NextResponse.json({ error: error.message }, { status: 409 }) : NextResponse.json({ supplier: data }, { status: 201 })
+    if (!body || typeof body !== 'object' || Array.isArray(body) || !['supplier_create','supplier_update','po_create','po_update','po_status','receive','receipt_reverse'].includes(body.action)) {
+      return NextResponse.json({ error: 'Invalid procurement action' }, { status: 400 })
     }
-
-    if (action === 'supplier_update') {
-      if (typeof body.id !== 'string') return NextResponse.json({ error: 'Supplier ID is required' }, { status: 400 })
-      const allowed = ['name', 'contact_person', 'phone', 'email', 'address', 'payment_terms', 'notes', 'is_active']
-      const updates = Object.fromEntries(allowed.filter(key => key in body).map(key => [key, body[key]]))
-      const { data, error } = await supabase.from('suppliers').update(updates)
-        .eq('id', body.id).eq('pharmacy_id', pharmacy.id).select('*').single()
-      return error ? NextResponse.json({ error: error.message }, { status: 400 }) : NextResponse.json({ supplier: data })
+    const { authorization, ...command } = body
+    const tokens = Object.fromEntries(['price_change','restore_inventory','stock_adjustment'].map(key => [key,
+      typeof authorization?.[key] === 'string' ? authorization[key] : null]))
+    const { data, error } = await context.supabase.rpc('write_procurement', {
+      p_pharmacy_id: context.pharmacy.id, p_command: command,
+      p_staff_token: request.headers.get('x-staff-session'), p_sp_tokens: tokens,
+    })
+    if (error) {
+      const action = ['price_change','restore_inventory'].includes(error.hint) ? error.hint : null
+      const needsSp = action && /[Ss]uperintendent/.test(error.message)
+      const duplicate = error.code === '23505'
+      return NextResponse.json({
+        error: duplicate ? 'This supplier invoice or record already exists. Check receipt history before retrying.' : error.message,
+        code: needsSp ? 'SP_AUTH_REQUIRED' : error.code,
+        ...(needsSp ? { action } : {}),
+      }, { status: needsSp || error.code === '42501' ? 403 : 409 })
     }
-
-    if (action === 'po_create') {
-      if (typeof body.supplier_id !== 'string' || !Array.isArray(body.items) || body.items.length === 0) {
-        return NextResponse.json({ error: 'Supplier and at least one catalogue item are required' }, { status: 400 })
-      }
-      const { data, error } = await supabase.rpc('create_purchase_order', {
-        p_pharmacy_id: pharmacy.id,
-        p_supplier_id: body.supplier_id,
-        p_expected_date: body.expected_date || null,
-        p_notes: body.notes || '',
-        p_items: body.items,
-      })
-      return error ? NextResponse.json({ error: error.message }, { status: 400 }) : NextResponse.json({ purchase_order_id: data }, { status: 201 })
-    }
-
-    if (action === 'po_status') {
-      if (!['sent', 'cancelled'].includes(body.status)) {
-        return NextResponse.json({ error: 'Invalid purchase order status transition' }, { status: 400 })
-      }
-      let builder = supabase.from('purchase_orders').update({ status: body.status, updated_at: new Date().toISOString() })
-        .eq('id', body.id).eq('pharmacy_id', pharmacy.id)
-      builder = body.status === 'sent' ? builder.eq('status', 'draft') : builder.in('status', ['draft', 'sent'])
-      const { data, error } = await builder.select('id,status').single()
-      return error ? NextResponse.json({ error: error.message }, { status: 409 }) : NextResponse.json({ order: data })
-    }
-
-    if (action === 'receive') {
-      if (typeof body.supplier_id !== 'string' || !Array.isArray(body.lines) || body.lines.length === 0) {
-        return NextResponse.json({ error: 'Supplier and receiving lines are required' }, { status: 400 })
-      }
-      const { data, error } = await supabase.rpc('receive_goods', {
-        p_pharmacy_id: pharmacy.id,
-        p_supplier_id: body.supplier_id,
-        p_po_id: body.po_id || null,
-        p_notes: body.notes || '',
-        p_lines: body.lines,
-      })
-      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-      const rpcFailure = getStructuredRpcFailure(data, 'Goods receiving was rejected')
-      if (rpcFailure) {
-        return NextResponse.json(
-          { error: rpcFailure.error, ...(rpcFailure.code ? { code: rpcFailure.code } : {}) },
-          { status: rpcFailure.code === 'SP_AUTH_REQUIRED' ? 403 : 409 },
-        )
-      }
-      return NextResponse.json(data, { status: 201 })
-    }
-
-    return NextResponse.json({ error: 'Unknown procurement action' }, { status: 400 })
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Procurement request failed' }, { status: 500 })
+    const failure = getStructuredRpcFailure(data, 'Procurement action rejected')
+    if (failure) return NextResponse.json(data, { status: failure.code?.startsWith('STAFF_') || failure.code === 'SP_AUTH_REQUIRED' ? 403 : 409 })
+    return NextResponse.json(data, { status: 200 })
+  } catch {
+    return NextResponse.json({ error: 'Invalid procurement request' }, { status: 400 })
   }
 }

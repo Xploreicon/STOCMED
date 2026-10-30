@@ -60,19 +60,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Receive this product from a supplier once before auto-drafting a PO' }, { status: 409 })
   }
 
-  const { data, error } = await current.supabase.rpc('create_purchase_order', {
+  const { data, error } = await current.supabase.rpc('write_procurement', {
     p_pharmacy_id: current.pharmacy.id,
-    p_supplier_id: suggestion.supplier_id,
-    p_expected_date: null,
-    p_notes: 'Smart reorder draft from sales velocity and unmet demand',
-    p_items: [{
-      product_id: suggestion.product_id,
-      quantity_ordered: suggestion.suggested_quantity,
-      unit_cost: suggestion.unit_cost,
-    }],
+    p_staff_token: request.headers.get('x-staff-session'),
+    p_command: {
+      action: 'po_create', supplier_id: suggestion.supplier_id,
+      notes: 'Smart reorder draft from sales velocity and unmet demand',
+      items: [{ product_id: suggestion.product_id, quantity_ordered: suggestion.suggested_quantity, unit_cost: suggestion.unit_cost }],
+    },
   })
-
-  return error
-    ? NextResponse.json({ error: error.message }, { status: 409 })
-    : NextResponse.json({ purchase_order_id: data }, { status: 201 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+  if (data?.success === false) return NextResponse.json(data, { status: 403 })
+  return NextResponse.json(data, { status: 201 })
 }
