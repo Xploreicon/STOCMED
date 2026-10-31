@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({
       or: (filter: string) => { query.filters.push(filter); return builder },
       then: (resolve: (value: unknown) => void) => resolve({
         error: fixtures.failure ? { message: 'Database unavailable' } : null,
-        data: query.selection.startsWith('product_id,') ? [{ product_id: 'medicine-0', price: 300, deleted_at: '2026-10-01', recovery_expires_at: '2026-12-01', base_unit_name: 'tablet' }]
+        data: table === 'purchase_orders' ? [{ id: 'order', purchase_order_items: [{ id: 'line', product_id: 'medicine-0', products: { generic_name: 'Medicine' } }], goods_receipts: [{ reversed_at: null, goods_receipt_items: [{ line_total: 300 }] }, { reversed_at: '2026-10-31', goods_receipt_items: [{ line_total: 100 }] }] }] : query.selection.startsWith('product_id,') ? [{ product_id: 'medicine-0', price: 300, deleted_at: '2026-10-01', recovery_expires_at: '2026-12-01', base_unit_name: 'tablet' }]
           : Array.from({ length: 26 }, (_, index) => ({ id: `${table === 'products' ? 'medicine' : 'store'}-${index}`, generic_name: 'Medicine', item_name: 'Store item' })),
       }),
     }
@@ -42,6 +42,13 @@ describe('procurement API contract', () => {
     expect(fixtures.queries[0].ranges).toEqual([[100,125]])
     expect(fixtures.queries[1].ranges).toEqual([[100,125]])
     expect(fixtures.queries[0].filters[0]).toContain('amoxicillin')
+  })
+  it('shows the actual inventory base unit and excludes reversed receipt costs from order totals', async () => {
+    const response = await GET(new NextRequest('https://example.test/api/pharmacy/procurement?view=orders'))
+    const body = await response.json()
+    expect(response.status).toBe(200)
+    expect(body.orders[0].received_total).toBe(300)
+    expect(body.orders[0].purchase_order_items[0].products).toMatchObject({ base_unit_name: 'tablet', is_new: false, selling_price: 300 })
   })
   it('returns a load failure rather than pretending inventory is empty', async () => {
     fixtures.failure = true

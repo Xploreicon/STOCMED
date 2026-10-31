@@ -28,7 +28,7 @@ try {
   await client.query(extract(staff,'authorize_staff_permission'))
   await client.query(extract(await read('supabase/migrations/20260724010000_two_department_inventory.sql'),'create_purchase_order'))
   await client.query(await read('supabase/migrations/20261025132235_inventory_recovery_bin.sql'))
-  await client.query(await read('supabase/migrations/20261031010000_procurement_flow_fixes.sql'))
+  await client.query(await read('supabase/migrations/20261031010347_procurement_flow_fixes.sql'))
   await client.query(await read('tests/database/procurement-flows.sql'))
   // Two independent connections submit the same delivery at once.
   await client.query(`INSERT INTO pharmacy_staff(id,pharmacy_id,name,role,pin_hash,permissions)
