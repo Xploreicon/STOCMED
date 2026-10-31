@@ -73,10 +73,24 @@ export async function GET(request: NextRequest) {
       purchase_order_items(
         *,
         products(id,generic_name,brand_name,strength,dosage_form,pack_size,barcode),
-        pharmacy_inventory:inventory_id(id,item_name,brand,barcode,unit_description,store_category,tracks_expiry)
+        pharmacy_inventory:inventory_id(id,item_name,brand,barcode,unit_description,store_category,tracks_expiry,base_unit_name)
       )
     `).eq('pharmacy_id', pharmacy.id).order('created_at', { ascending: false })
-    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ orders: (data || []).map((order: any) => ({ ...order, received_total: order.goods_receipts.filter((receipt: any) => !receipt.reversed_at).reduce((total: number, receipt: any) => total + receipt.goods_receipt_items.reduce((sum: number, item: any) => sum + Number(item.line_total), 0), 0) })) })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const medicineIds = [...new Set((data || []).flatMap((order: any) => order.purchase_order_items.map((item: any) => item.product_id).filter(Boolean)))]
+    const owned = medicineIds.length ? await supabase.from('pharmacy_inventory')
+      .select('product_id,price,base_unit_name,deleted_at,recovery_expires_at').eq('pharmacy_id',pharmacy.id).in('product_id',medicineIds) : { data: [], error: null }
+    if (owned.error) return NextResponse.json({ error: 'Could not load order inventory details' }, { status: 500 })
+    return NextResponse.json({ orders: (data || []).map((order: any) => ({
+      ...order,
+      purchase_order_items: order.purchase_order_items.map((item: any) => {
+        const inventory = owned.data?.find((row: any) => row.product_id === item.product_id)
+        return { ...item, products: item.products ? { ...item.products, base_unit_name: inventory?.base_unit_name,
+          is_new: !inventory, selling_price: inventory?.price, deleted_at: inventory?.deleted_at, recovery_expires_at: inventory?.recovery_expires_at } : null }
+      }),
+      received_total: order.goods_receipts.filter((receipt: any) => !receipt.reversed_at).reduce((total: number, receipt: any) =>
+        total + receipt.goods_receipt_items.reduce((sum: number, item: any) => sum + Number(item.line_total), 0), 0),
+    })) })
   }
 
   if (view === 'receipts') {

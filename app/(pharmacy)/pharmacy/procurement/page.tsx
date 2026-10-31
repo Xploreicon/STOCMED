@@ -34,7 +34,7 @@ type POItem = {
   unit_cost: number; line_total: number; products: Product | null
   pharmacy_inventory: {
     id: string; item_name: string; brand: string | null; barcode: string | null
-    unit_description: string | null; store_category: string | null; tracks_expiry: boolean
+    unit_description: string | null; store_category: string | null; tracks_expiry: boolean; base_unit_name?: string
   } | null
 }
 type PurchaseOrder = {
@@ -66,6 +66,7 @@ const poItemProduct = (item: POItem): Product => item.products
       pack_size: item.pharmacy_inventory!.unit_description,
       barcode: item.pharmacy_inventory!.barcode,
       tracks_expiry: item.pharmacy_inventory!.tracks_expiry,
+      base_unit_name: item.pharmacy_inventory!.base_unit_name,
     }
 
 async function readProcurement(view: string) {
