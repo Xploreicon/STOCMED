@@ -9,12 +9,12 @@ const privateIdentifiers = /(?:SUPABASE_SERVICE_ROLE|ANTHROPIC_|TERMII_|RESEND_|
 const forbiddenImport = /^(?:server-only|next\/headers|@supabase\/ssr|@anthropic-ai\/|@sentry\/)|(?:supabase\/(?:admin|server|request)|SymptomIntakeForm|IntakeStatusTracker|PrescriptionUpload|PharmacyFeaturesProvider|PharmacyReservationsBar|ProductTour)/;
 const forbiddenClientModule = /(?:\/node_modules\/(?:@supabase\/ssr|@anthropic-ai\/[^/|]+|@sentry\/[^/|]+)(?:\/|[|?]|$)|\/lib\/supabase\/(?:admin|server|request)(?:\.[cm]?[jt]sx?|\/|[|?]|$)|\/(?:components|lib|hooks|store|stores)\/(?:pharmacy|admin|pos|insights)(?:\/|[|?]|$)|\/app\/(?:\(pharmacy\)|\(admin\)|pharmacy|admin|pos|insights)(?:\/|[|?]|$)|\/(?:SymptomIntakeForm|IntakeStatusTracker|PrescriptionUpload|PharmacyFeaturesProvider|PharmacyReservationsBar|ProductTour)(?:\.[cm]?[jt]sx?|\/|[|?]|$))/;
 
-function walk(dir, generatedWebAssets) {
+function walk(dir, ignoredPaths = []) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     if (['node_modules', '.next', 'out', '.git'].includes(entry.name)) return [];
     const filename = path.join(dir, entry.name);
-    if (filename === generatedWebAssets) return [];
-    return entry.isDirectory() ? walk(filename, generatedWebAssets) : [filename];
+    if (ignoredPaths.includes(filename)) return [];
+    return entry.isDirectory() ? walk(filename, ignoredPaths) : [filename];
   });
 }
 function contained(root, filename) {
@@ -37,8 +37,9 @@ export function verifyClientModuleInventory(identifiers) {
 /** Read-only complete source/output scan, also usable with temporary fixtures. */
 export function verifyBoundary(childDirectory = childRoot) {
   const child = realpathSync(childDirectory), failures = [], advisoryStrings = [];
-  // The iOS sync duplicates the audited export inside the Xcode project.
-  const source = walk(child, path.join(child, 'ios/App/App/public')).filter(filename => /\.(?:tsx?|jsx?|mjs|cjs)$/.test(filename) && !filename.includes('/tests/') && !filename.includes('/scripts/'));
+  // Capacitor sync and Xcode build both duplicate the audited export.
+  const generatedIosPaths = ['ios/App/App/public', 'ios/DerivedData'].map(dir => path.join(child, dir));
+  const source = walk(child, generatedIosPaths).filter(filename => /\.(?:tsx?|jsx?|mjs|cjs)$/.test(filename) && !filename.includes('/tests/') && !filename.includes('/scripts/'));
   for (const filename of source) {
     if (!contained(child, realpathSync(filename))) { failures.push(filename + ': source symlink leaves package'); continue; }
     const text = readFileSync(filename, 'utf8');

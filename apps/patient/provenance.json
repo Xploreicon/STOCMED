@@ -409,7 +409,7 @@
   },
   {
     "source": "components/landing/PublicHeader.tsx",
-    "sourceSha256": "72bd46acf29bda499366d6b8d2c12b8366463de60bc59040742c6664cc4fcfcb",
+    "sourceSha256": "aebdcaa3f7bac40fe593ad84b67166cb6e4f56cb2bb87d5fa85fb60ea34b19b2",
     "targets": [
       "components/landing/PublicHeader.tsx"
     ],

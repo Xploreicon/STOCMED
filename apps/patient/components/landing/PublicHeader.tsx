@@ -14,7 +14,7 @@ const links = [
 
 export function PublicHeader() {
   const [open, setOpen] = useState(false);
-  return <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur-md">
+  return <header className="sticky top-0 z-40 border-b border-border bg-white/95 backdrop-blur-md pt-[env(safe-area-inset-top)]">
     <div className="mx-auto flex min-h-20 max-w-[1200px] items-center justify-between gap-6 px-5 sm:px-6">
       <Logo size={38} wordSize={23} />
       <nav aria-label="Main navigation" className="hidden items-center gap-8 lg:flex">
