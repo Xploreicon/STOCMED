@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import WebKit
 
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
@@ -27,26 +28,72 @@ private final class PatientBridgeViewController: CAPBridgeViewController {
     override func router() -> Router {
         StaticExportRouter()
     }
+
+    override func webViewConfiguration(for instanceConfiguration: InstanceConfiguration) -> WKWebViewConfiguration {
+        let original = super.webViewConfiguration(for: instanceConfiguration)
+        let configuration = BundleOnlyWebViewConfiguration()
+        configuration.websiteDataStore = original.websiteDataStore
+        configuration.preferences = original.preferences
+        configuration.defaultWebpagePreferences = original.defaultWebpagePreferences
+        configuration.allowsInlineMediaPlayback = original.allowsInlineMediaPlayback
+        configuration.suppressesIncrementalRendering = original.suppressesIncrementalRendering
+        configuration.allowsAirPlayForMediaPlayback = original.allowsAirPlayForMediaPlayback
+        configuration.mediaTypesRequiringUserActionForPlayback = original.mediaTypesRequiringUserActionForPlayback
+        configuration.limitsNavigationsToAppBoundDomains = original.limitsNavigationsToAppBoundDomains
+        configuration.applicationNameForUserAgent = original.applicationNameForUserAgent
+        return configuration
+    }
+}
+
+private final class BundleOnlyWebViewConfiguration: WKWebViewConfiguration {
+    override func setURLSchemeHandler(_ handler: WKURLSchemeHandler?, forURLScheme scheme: String) {
+        if scheme == "capacitor", let handler {
+            super.setURLSchemeHandler(BundleOnlySchemeHandler(original: handler), forURLScheme: scheme)
+        } else {
+            super.setURLSchemeHandler(handler, forURLScheme: scheme)
+        }
+    }
 }
 
 private struct StaticExportRouter: Router {
-    private var fallback = CapacitorRouter()
-
-    var basePath: String {
-        get { fallback.basePath }
-        set { fallback.basePath = newValue }
-    }
+    var basePath = ""
 
     func route(for path: String) -> String {
-        if URL(fileURLWithPath: path).pathExtension.isEmpty {
-            let root = URL(fileURLWithPath: basePath, isDirectory: true).standardizedFileURL
-            let relative = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            let index = root.appendingPathComponent(relative, isDirectory: true)
-                .appendingPathComponent("index.html").standardizedFileURL
-            if index.path.hasPrefix(root.path + "/"), FileManager.default.fileExists(atPath: index.path) {
-                return index.path
-            }
+        let directory = Bundle.main.bundleURL.appendingPathComponent("public", isDirectory: true)
+        guard let relative = BundleAssetPath.relativeRequestPath(path),
+              let file = BundleAssetPath.resolve(relative, in: directory) else {
+            // A directory cannot be returned as file content by the asset handler.
+            return directory.path
         }
-        return fallback.route(for: path)
+        return file.path
+    }
+}
+
+private final class BundleOnlySchemeHandler: NSObject, WKURLSchemeHandler {
+    private let original: WKURLSchemeHandler
+
+    init(original: WKURLSchemeHandler) {
+        self.original = original
+    }
+
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        let directory = Bundle.main.bundleURL.appendingPathComponent("public", isDirectory: true)
+        guard let url = task.request.url,
+              let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.scheme == "capacitor", components.host == "localhost",
+              components.port == nil, components.user == nil, components.password == nil,
+              let relative = BundleAssetPath.relativeRequestPath(components.percentEncodedPath),
+              let handlerRelative = BundleAssetPath.relativeRequestPath(url.path),
+              relative == handlerRelative,
+              BundleAssetPath.resolve(relative, in: directory) != nil else {
+            task.didFailWithError(URLError(.resourceUnavailable))
+            return
+        }
+
+        original.webView(webView, start: task)
+    }
+
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {
+        original.webView(webView, stop: task)
     }
 }
