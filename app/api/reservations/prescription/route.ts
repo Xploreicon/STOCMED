@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { createRequestClient, withNativeTransport, nativeOptions } from '@/lib/supabase/request'
 import { POM_MOLECULES_LIST } from '@/lib/triage/keyword-lists'
 
 export const dynamic = 'force-dynamic'
@@ -41,8 +41,8 @@ const requestSchema = z.object({
   quantity: z.coerce.number().int().min(1).max(10),
 })
 
-export async function GET() {
-  const supabase = await createClient()
+async function handleGET(request: NextRequest) {
+  const supabase = await createRequestClient(request)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to view prescription requests' }, { status: 401 })
 
@@ -62,14 +62,14 @@ export async function GET() {
   return NextResponse.json({ submissions: data ?? [] }, { headers: { 'Cache-Control': 'no-store' } })
 }
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   const rateLimit = checkRateLimit(request, 'prescription-reservation', 5, 60_000)
   if (!rateLimit.success && rateLimit.response) return rateLimit.response
 
   const globallyEnabled = process.env.STAFFED_SAFETY_FLOWS_ENABLED === 'true'
     && process.env.RX_RESERVATIONS_ENABLED === 'true'
 
-  const supabase = await createClient()
+  const supabase = await createRequestClient(request)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in before uploading a prescription' }, { status: 401 })
 
@@ -260,3 +260,7 @@ export async function POST(request: NextRequest) {
     headers: { 'Cache-Control': 'no-store' },
   })
 }
+
+export const GET = withNativeTransport(handleGET)
+export const POST = withNativeTransport(handlePOST)
+export const OPTIONS = nativeOptions

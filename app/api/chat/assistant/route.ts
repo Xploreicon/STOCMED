@@ -1,3 +1,4 @@
+import { withNativeTransport, nativeOptions } from '@/lib/supabase/request'
 import { NextRequest, NextResponse } from 'next/server'
 import {
   ClaudeRequestError,
@@ -106,7 +107,7 @@ function assistantFailureMessage(error: ClaudeRequestError): string {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   const rateLimit = checkRateLimit(request, 'chat-assistant', 15, 60_000)
   if (!rateLimit.success && rateLimit.response) {
     return rateLimit.response
@@ -355,3 +356,6 @@ export async function POST(request: NextRequest) {
     )
   }
 }
+
+export const POST = withNativeTransport(handlePOST)
+export const OPTIONS = nativeOptions

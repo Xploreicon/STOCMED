@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { createClient } from '@/lib/supabase/server';
+import { createRequestClient, withNativeTransport, nativeOptions } from '@/lib/supabase/request';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { triageQuery } from '@/lib/triage/classifier';
 import { normalizeQuery } from '@/lib/triage/deterministic-classifier';
@@ -12,7 +12,7 @@ const triagePayloadSchema = z.object({
   thread_id: z.string().optional().nullable(),
 });
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   const rateLimit = checkRateLimit(request, 'triage', 20, 60_000);
   if (!rateLimit.success && rateLimit.response) {
     return rateLimit.response;
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     // Run the orchestrator triage engine
     const triageResult = await triageQuery(query);
 
-    const supabase = await createClient();
+    const supabase = await createRequestClient(request);
     if (triageResult.intent === 'NAMED_OTC' || triageResult.intent === 'NAMED_POM') {
       const { data: matches } = await (supabase.rpc as any)('match_catalogue_product', {
         search_query: query,
@@ -93,3 +93,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export const POST = withNativeTransport(handlePOST)
+export const OPTIONS = nativeOptions

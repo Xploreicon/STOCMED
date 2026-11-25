@@ -3,8 +3,27 @@ import { updateSession } from '@/lib/supabase/middleware'
 import { getNativeRestrictedRedirect, isStocMedAppUserAgent } from '@/lib/native-app'
 import { handleNativePatientRequest } from '@/lib/native-patient-middleware'
 import { shouldCompleteOAuthProfile } from '@/lib/auth/google-oauth-policy'
+import { hasBearerAuthorization, isAllowedNativeOrigin, nativeMethodsFor, nativeOptions } from '@/lib/native-transport'
 
 export async function middleware(request: NextRequest) {
+  const methods = nativeMethodsFor(request.nextUrl.pathname)
+  const origin = request.headers.get('origin')
+  if (methods && (methods.includes(request.method) || request.method === 'OPTIONS')) {
+    if (hasBearerAuthorization(request)) {
+      // Do not let a cookie identity or redirect mask an untrusted bearer origin.
+      if (!isAllowedNativeOrigin(origin)) {
+        return NextResponse.json({ error: 'native_origin_forbidden' }, { status: 403 })
+      }
+      if (request.method === 'OPTIONS') return nativeOptions(request)
+      // The handler validates the token and applies the existing role-less rule.
+      // Native requests do not use or refresh the web cookie session.
+      return NextResponse.next()
+    }
+    if (request.method === 'OPTIONS' && isAllowedNativeOrigin(origin)) {
+      return nativeOptions(request)
+    }
+  }
+
   const session = await updateSession(request)
   const { supabaseResponse, user, supabase, getSupabaseResponse } = session
 

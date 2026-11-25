@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRequestClient, withNativeTransport, nativeOptions } from '@/lib/supabase/request'
 
 const schema = z.object({
   product_email_opt_in: z.boolean(),
@@ -11,8 +11,8 @@ const schema = z.object({
   patient_push_consent: z.boolean(),
 })
 
-export async function GET() {
-  const supabase = await createClient()
+async function handleGET(request: NextRequest) {
+  const supabase = await createRequestClient(request)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { data, error } = await (supabase.from('notification_preferences') as any)
@@ -32,10 +32,10 @@ export async function GET() {
   })
 }
 
-export async function PUT(request: NextRequest) {
+async function handlePUT(request: NextRequest) {
   const body = schema.safeParse(await request.json().catch(() => null))
   if (!body.success) return NextResponse.json({ error: 'Invalid notification preferences' }, { status: 400 })
-  const supabase = await createClient()
+  const supabase = await createRequestClient(request)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -45,3 +45,7 @@ export async function PUT(request: NextRequest) {
   if (error) return NextResponse.json({ error: 'Could not save notification preferences' }, { status: 500 })
   return NextResponse.json({ preferences: data })
 }
+
+export const GET = withNativeTransport(handleGET)
+export const PUT = withNativeTransport(handlePUT)
+export const OPTIONS = nativeOptions

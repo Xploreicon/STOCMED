@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createRequestClient, withNativeTransport, nativeOptions } from '@/lib/supabase/request'
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -53,9 +53,9 @@ function interpretQuery(query: string) {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as unknown as SupabaseClient<SearchDatabase>
+    const supabase = (await createRequestClient(request)) as unknown as SupabaseClient<SearchDatabase>
 
     // Get user if authenticated (optional for searches)
     const {
@@ -131,9 +131,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   try {
-    const supabase = (await createClient()) as unknown as SupabaseClient<SearchDatabase>
+    const supabase = (await createRequestClient(request)) as unknown as SupabaseClient<SearchDatabase>
 
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser()
@@ -177,3 +177,7 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+export const GET = withNativeTransport(handleGET)
+export const POST = withNativeTransport(handlePOST)
+export const OPTIONS = nativeOptions

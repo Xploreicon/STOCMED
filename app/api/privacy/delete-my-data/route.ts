@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
+import { createRequestClient, withNativeTransport, nativeOptions } from '@/lib/supabase/request'
 
-export async function DELETE() {
-  const supabase = (await createClient()) as any
+async function handleDELETE(request: NextRequest) {
+  const supabase = (await createRequestClient(request)) as any
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -57,3 +57,6 @@ export async function DELETE() {
     private_files_queued: queued > 0,
   }, { status: queued > 0 ? 202 : 200 })
 }
+
+export const DELETE = withNativeTransport(handleDELETE)
+export const OPTIONS = nativeOptions

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createRequestClient, withNativeTransport, nativeOptions } from '@/lib/supabase/request'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { sendReservationNotifications } from '@/lib/notifications/reservations'
 
@@ -11,8 +11,8 @@ const createReservationSchema = z.object({
   patient_phone: z.string().min(7).max(32).optional(),
 })
 
-export async function GET() {
-  const supabase = await createClient()
+async function handleGET(request: NextRequest) {
+  const supabase = await createRequestClient(request)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to view your holds' }, { status: 401 })
 
@@ -25,14 +25,14 @@ export async function GET() {
   return NextResponse.json({ reservations: data ?? [] })
 }
 
-export async function POST(request: NextRequest) {
+async function handlePOST(request: NextRequest) {
   const rateLimit = checkRateLimit(request, 'create-reservation', 10, 60_000)
   if (!rateLimit.success && rateLimit.response) return rateLimit.response
 
   const payload = createReservationSchema.safeParse(await request.json())
   if (!payload.success) return NextResponse.json({ error: 'Invalid reservation request', details: payload.error.flatten() }, { status: 400 })
 
-  const supabase = await createClient()
+  const supabase = await createRequestClient(request)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Sign in to reserve medication' }, { status: 401 })
   const { data, error } = await (supabase.rpc as any)('create_reservation', {
@@ -54,10 +54,10 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ reservation: data }, { status: 201 })
 }
 
-export async function PATCH(request: NextRequest) {
+async function handlePATCH(request: NextRequest) {
   const body = z.object({ id: z.string().uuid(), reason: z.string().max(300).optional() }).safeParse(await request.json())
   if (!body.success) return NextResponse.json({ error: 'Invalid cancellation request' }, { status: 400 })
-  const supabase = await createClient()
+  const supabase = await createRequestClient(request)
   const { data, error } = await (supabase.rpc as any)('cancel_reservation', {
     p_reservation_id: body.data.id,
     p_reason: body.data.reason ?? null,
@@ -65,3 +65,8 @@ export async function PATCH(request: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 409 })
   return NextResponse.json({ reservation: data })
 }
+
+export const GET = withNativeTransport(handleGET)
+export const POST = withNativeTransport(handlePOST)
+export const PATCH = withNativeTransport(handlePATCH)
+export const OPTIONS = nativeOptions

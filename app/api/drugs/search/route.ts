@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createRequestClient, withNativeTransport, nativeOptions } from '@/lib/supabase/request'
 import { getAdminClient } from '@/lib/supabase/admin'
 import { checkRateLimit } from '@/lib/rate-limit'
 import { POM_MOLECULES_LIST } from '@/lib/triage/keyword-lists'
@@ -46,7 +46,7 @@ function isPharmacyVisible(pharmacy: Record<string, any> | null) {
   return !Number.isNaN(deadline.getTime()) && deadline.getTime() > Date.now()
 }
 
-export async function GET(request: NextRequest) {
+async function handleGET(request: NextRequest) {
   const rateLimit = checkRateLimit(request, 'drug-search', 60, 60_000)
   if (!rateLimit.success && rateLimit.response) {
     return rateLimit.response
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
-    const supabase = await createClient()
+    const supabase = await createRequestClient(request)
 
     // Query pharmacy_inventory joined with products and pharmacies
     let queryBuilder = supabase
@@ -414,3 +414,9 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+export const GET = withNativeTransport(handleGET)
+// Match Next's former automatic 405 while validating native bearer requests and
+// returning the same native CORS policy as the other requested methods.
+export const POST = withNativeTransport(async (_request: NextRequest) => new Response(null, { status: 405 }))
+export const OPTIONS = nativeOptions
