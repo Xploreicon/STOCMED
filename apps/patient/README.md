@@ -15,7 +15,24 @@ PATIENT_PROVENANCE_REF=origin/main npm run check:drift
 
 After building with the test public URL `https://patient-test.supabase.co` and a placeholder anon key, run `npm run test:e2e` for intercepted browser smoke tests. Use `PATIENT_BROWSER_CHANNEL=chrome npm run test:e2e` to use installed Chrome instead of downloading Playwright's Chromium. The static test server listens only on loopback.
 
-`out/` contains the static application. The child Capacitor config points there and has no remote `server.url`. Run any future iOS Capacitor commands from this directory. An iOS platform, signing configuration, and Apple capability changes have not been generated in I2.
+`out/` contains the static application. The child Capacitor config points there and has no remote `server.url`. Run any future iOS Capacitor commands from this directory. The iOS target is managed with Swift Package Manager. It registers the custom URL scheme used by the patient OAuth callback. The project has no signing team or provisioning profile.
+
+### Local iOS simulator
+
+Use Xcode 26 or newer with an iOS simulator runtime. From this package, build with the fixture public configuration and sync the export:
+
+```sh
+NEXT_PUBLIC_SUPABASE_URL=https://patient-test.supabase.co NEXT_PUBLIC_SUPABASE_ANON_KEY=fixture-anon-key npm run build
+npx cap sync ios
+xcrun simctl list devices booted
+xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath ios/DerivedData \
+  CODE_SIGNING_ALLOWED=NO build
+xcrun simctl install booted ios/DerivedData/Build/Products/Debug-iphonesimulator/App.app
+xcrun simctl launch booted com.askstocmed.patient
+```
+
+Boot one simulator before installing. With the fixture build, check a cold launch to the packaged landing page, sign-in navigation, and the signed-out dashboard guard. The fixture configuration is for local UI smoke tests.
 
 The Supabase client uses PKCE and a dedicated WebView localStorage key. This is not a Keychain implementation. Persisted `public.users.role` drives the patient guard; existing RLS, RPCs, and trusted server checks still enforce authorization. Trusted requests use the fixed canonical HTTPS API origin with a fresh session bearer token and `credentials: 'omit'`. No provider or service keys belong in this package.
 

@@ -9,11 +9,12 @@ const privateIdentifiers = /(?:SUPABASE_SERVICE_ROLE|ANTHROPIC_|TERMII_|RESEND_|
 const forbiddenImport = /^(?:server-only|next\/headers|@supabase\/ssr|@anthropic-ai\/|@sentry\/)|(?:supabase\/(?:admin|server|request)|SymptomIntakeForm|IntakeStatusTracker|PrescriptionUpload|PharmacyFeaturesProvider|PharmacyReservationsBar|ProductTour)/;
 const forbiddenClientModule = /(?:\/node_modules\/(?:@supabase\/ssr|@anthropic-ai\/[^/|]+|@sentry\/[^/|]+)(?:\/|[|?]|$)|\/lib\/supabase\/(?:admin|server|request)(?:\.[cm]?[jt]sx?|\/|[|?]|$)|\/(?:components|lib|hooks|store|stores)\/(?:pharmacy|admin|pos|insights)(?:\/|[|?]|$)|\/app\/(?:\(pharmacy\)|\(admin\)|pharmacy|admin|pos|insights)(?:\/|[|?]|$)|\/(?:SymptomIntakeForm|IntakeStatusTracker|PrescriptionUpload|PharmacyFeaturesProvider|PharmacyReservationsBar|ProductTour)(?:\.[cm]?[jt]sx?|\/|[|?]|$))/;
 
-function walk(dir) {
+function walk(dir, generatedWebAssets) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
     if (['node_modules', '.next', 'out', '.git'].includes(entry.name)) return [];
     const filename = path.join(dir, entry.name);
-    return entry.isDirectory() ? walk(filename) : [filename];
+    if (filename === generatedWebAssets) return [];
+    return entry.isDirectory() ? walk(filename, generatedWebAssets) : [filename];
   });
 }
 function contained(root, filename) {
@@ -36,7 +37,8 @@ export function verifyClientModuleInventory(identifiers) {
 /** Read-only complete source/output scan, also usable with temporary fixtures. */
 export function verifyBoundary(childDirectory = childRoot) {
   const child = realpathSync(childDirectory), failures = [], advisoryStrings = [];
-  const source = walk(child).filter(filename => /\.(?:tsx?|jsx?|mjs|cjs)$/.test(filename) && !filename.includes('/tests/') && !filename.includes('/scripts/'));
+  // The iOS sync duplicates the audited export inside the Xcode project.
+  const source = walk(child, path.join(child, 'ios/App/App/public')).filter(filename => /\.(?:tsx?|jsx?|mjs|cjs)$/.test(filename) && !filename.includes('/tests/') && !filename.includes('/scripts/'));
   for (const filename of source) {
     if (!contained(child, realpathSync(filename))) { failures.push(filename + ': source symlink leaves package'); continue; }
     const text = readFileSync(filename, 'utf8');
@@ -60,7 +62,7 @@ export function verifyBoundary(childDirectory = childRoot) {
   const routes = walk(path.join(child, 'app')).filter(filename => /\/page\.tsx$/.test(filename)).map(filename => '/' + path.relative(path.join(child, 'app'), path.dirname(filename)).split(path.sep).filter(part => part && !/^\(.*\)$/.test(part)).join('/')).sort();
   if (JSON.stringify(routes) !== JSON.stringify(expectedRoutes)) failures.push('Unexpected routes: ' + routes.join(', '));
   const native = JSON.parse(readFileSync(path.join(child, 'capacitor.config.json'), 'utf8'));
-  if (native.server?.url || native.webDir !== 'out' || native.ios?.appendUserAgent !== 'StocMedApp/1.0' || existsSync(path.join(child, 'ios'))) failures.push('Unexpected native packaging configuration');
+  if (native.server?.url || native.webDir !== 'out' || native.ios?.appendUserAgent !== 'StocMedApp/1.0') failures.push('Unexpected native packaging configuration');
   const inventoryPath = path.join(child, '.next/client-module-inventory.json');
   let inventoryCount = null;
   if (existsSync(inventoryPath)) {
