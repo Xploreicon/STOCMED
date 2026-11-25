@@ -1,0 +1,301 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* StocMed Figma palette, with readable foregrounds on every surface. */
+    --background: #FFFFFF;
+    --foreground: #262626;
+
+    --card: #FFFFFF;
+    --card-foreground: #262626;
+
+    --popover: #FFFFFF;
+    --popover-foreground: #262626;
+
+    --primary: #2A4EB6;
+    --primary-foreground: #FFFFFF;
+
+    --secondary: #ECEFFA;
+    --secondary-foreground: #1D3780;
+
+    --muted: #F2F9FF;
+    --muted-foreground: #525866;
+
+    --accent: #2A4EB6;
+    --accent-foreground: #FFFFFF;
+
+    --destructive: #B42318;
+    --destructive-foreground: #FFFFFF;
+
+    --success: #0E7A42;
+    --success-foreground: #FFFFFF;
+
+    --warning: #7A6000;
+    --warning-foreground: #FFFFFF;
+
+    --danger: #B42318;
+    --danger-foreground: #FFFFFF;
+
+    --border: #E4E7EC;
+    --input: #CDD2DB;
+    --ring: #2A4EB6;
+
+    --surface: #F2F9FF;
+    --surface-alt: #ECEFFA;
+    --white: #FFFFFF;
+    --ink: #262626;
+    --ink-muted: #525866;
+    --ink-light: #646B78;
+    --navy: #1D3780;
+    --navy-light: #294A9C;
+    --primary-hover: #1D3780;
+    --primary-dark: #192F6D;
+    --primary-deep: #142653;
+    --primary-soft: #ECEFFA;
+    --primary-pale: #C3CFF1;
+    --primary-light: #88A0E4;
+    --cyan: #06B6D4;
+    --pos-bg: #F2F9FF;
+    --pos-panel: #FFFFFF;
+    --pos-control: #ECEFFA;
+    --pos-accent: #2A4EB6;
+    --pos-success: #0E7A42;
+    --pos-warning: #7A6000;
+    --pos-danger: #B42318;
+    --ios-danger: #FF3B30;
+    --ios-warning: #FF9500;
+    --legacy-success: #00A859;
+    --legacy-success-hover: #008F4C;
+    --receipt-border: #C9DCEF;
+    --muted-blue: #4A79A8;
+    --primary-mid: #4C70D6;
+    --primary-faint: #F2F9FF;
+    --primary-wash: #ECEFFA;
+    --success-bright: #2DB88A;
+
+    /* RGB companions enable opacity utilities in current and older WebViews. */
+    --primary-rgb: 42 78 182;
+    --primary-foreground-rgb: 255 255 255;
+    --surface-rgb: 242 249 255;
+    --primary-soft-rgb: 236 239 250;
+    --primary-pale-rgb: 195 207 241;
+    --primary-light-rgb: 136 160 228;
+    --pos-accent-rgb: 42 78 182;
+    --primary-mid-rgb: 76 112 214;
+    --primary-hover-rgb: 29 55 128;
+    --primary-dark-rgb: 25 47 109;
+    --primary-deep-rgb: 20 38 83;
+    --navy-rgb: 29 55 128;
+    --border-rgb: 228 231 236;
+    --input-rgb: 205 210 219;
+    --ring-rgb: 42 78 182;
+    --background-rgb: 255 255 255;
+    --foreground-rgb: 38 38 38;
+    --secondary-rgb: 236 239 250;
+    --secondary-foreground-rgb: 29 55 128;
+    --destructive-rgb: 180 35 24;
+    --destructive-foreground-rgb: 255 255 255;
+    --muted-rgb: 242 249 255;
+    --muted-foreground-rgb: 82 88 102;
+    --accent-rgb: 42 78 182;
+    --accent-foreground-rgb: 255 255 255;
+    --popover-rgb: 255 255 255;
+    --popover-foreground-rgb: 38 38 38;
+    --card-rgb: 255 255 255;
+    --card-foreground-rgb: 38 38 38;
+    --success-rgb: 14 122 66;
+    --success-foreground-rgb: 255 255 255;
+    --warning-rgb: 122 96 0;
+    --warning-foreground-rgb: 255 255 255;
+    --danger-rgb: 180 35 24;
+    --danger-foreground-rgb: 255 255 255;
+    --ink-rgb: 38 38 38;
+    --ink-muted-rgb: 82 88 102;
+    --ink-light-rgb: 100 107 120;
+    --navy-light-rgb: 41 74 156;
+    --success-tint-rgb: 232 248 239;
+    --warning-tint-rgb: 255 248 220;
+    --danger-tint-rgb: 253 236 238;
+
+    /* Paired surfaces: foregrounds belong to their surfaces. */
+    --surface-page: var(--background);
+    --on-surface-page: var(--foreground);
+    --surface-card: var(--card);
+    --on-surface-card: var(--card-foreground);
+    --surface-subtle: var(--surface);
+    --on-surface-subtle: var(--ink);
+    --surface-brand: var(--primary);
+    --on-surface-brand: var(--primary-foreground);
+    --surface-brand-deep: var(--navy);
+    --on-surface-brand-deep: var(--primary-foreground);
+    --surface-disabled: var(--surface);
+    --on-surface-disabled: var(--ink-muted);
+
+    --success-tint: #E8F8EF;
+    --warning-tint: #FFF8DC;
+    --danger-tint: #FDECEE;
+
+    --radius-lg: 16px;
+    --radius-md: 8px;
+    --radius-sm: 6px;
+
+    /* Navy-tinted shadow scale (0 8px 24px rgba(4,44,83,0.08) is the design elevated card) */
+    --shadow-xs: 0 1px 2px 0 rgba(4, 44, 83, 0.05);
+    --shadow-sm: 0 1px 3px 0 rgba(4, 44, 83, 0.06), 0 1px 2px -1px rgba(4, 44, 83, 0.05);
+    --shadow-md: 0 4px 12px -2px rgba(4, 44, 83, 0.08), 0 2px 4px -2px rgba(4, 44, 83, 0.05);
+    --shadow-lg: 0 8px 24px rgba(4, 44, 83, 0.08);
+    --shadow-xl: 0 16px 40px -4px rgba(4, 44, 83, 0.12), 0 8px 16px -6px rgba(4, 44, 83, 0.07);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    line-height: 1.5;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-medium tracking-tight;
+    color: inherit;
+  }
+
+  /* Global interactive transition baseline */
+  a, button, input, select, textarea {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+
+  ::selection {
+    background: var(--primary-pale);
+    color: var(--navy);
+  }
+}
+
+@layer components {
+  /* ─── Tabular numbers ─── */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ─── Card surface utility ─── */
+  .card-surface {
+    @apply bg-card text-card-foreground border border-border rounded-card;
+    box-shadow: var(--shadow-sm);
+  }
+  .card-surface:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  /* ─── Elevated card (hero widgets, featured sections) ─── */
+  .card-elevated {
+    @apply bg-card text-card-foreground border border-border rounded-card;
+    box-shadow: var(--shadow-lg);
+    transition: box-shadow 200ms ease, transform 200ms ease;
+  }
+  .card-elevated:hover {
+    box-shadow: var(--shadow-xl);
+    transform: translateY(-2px);
+  }
+
+  /* ─── Brand gradient wash (light) — hero backgrounds ─── */
+  .bg-brand-gradient {
+    background: linear-gradient(135deg, var(--primary-faint) 0%, var(--primary-wash) 40%, var(--surface) 100%);
+    color: var(--on-surface-subtle);
+  }
+  .bg-brand-gradient-strong {
+    background: linear-gradient(135deg, var(--primary-wash) 0%, var(--primary-pale) 30%, var(--primary-faint) 70%, var(--surface) 100%);
+    color: var(--on-surface-subtle);
+  }
+
+  /* ─── Deep navy section (pharmacy pitch, CTAs) — #042C53 per design ─── */
+  .bg-deep-navy {
+    background-color: var(--surface-brand-deep);
+    color: var(--on-surface-brand-deep);
+  }
+  .bg-deep-navy-gradient {
+    background: linear-gradient(160deg, var(--surface-brand-deep) 0%, var(--navy-light) 50%, var(--surface-brand-deep) 100%);
+    color: var(--on-surface-brand-deep);
+  }
+
+  /* ─── Brand gradient: blue→navy (auth panels, CTA) — NEVER to black ─── */
+  .bg-brand-panel {
+    background: linear-gradient(160deg, var(--surface-brand) 0%, var(--surface-brand-deep) 100%);
+    color: var(--on-surface-brand);
+  }
+
+  /* ─── Soft page gradient wash (auth pages, hero) ─── */
+  .bg-page-wash {
+    background: linear-gradient(180deg, var(--surface-subtle) 0%, var(--surface-page) 60%);
+    color: var(--on-surface-page);
+  }
+
+  /* ─── Energetic gradient: blue→cyan ─── */
+  .bg-brand-energetic {
+    background: linear-gradient(135deg, var(--surface-brand) 0%, var(--cyan) 100%);
+    color: var(--on-surface-brand);
+  }
+
+  /* ─── Status pills — warm tints from design (text 500 weight, no border) ─── */
+  .badge-success {
+    @apply text-success font-medium text-xs;
+    background-color: var(--success-tint);
+  }
+  .badge-warning {
+    @apply text-warning font-medium text-xs;
+    background-color: var(--warning-tint);
+  }
+  .badge-danger {
+    @apply text-danger font-medium text-xs;
+    background-color: var(--danger-tint);
+  }
+  .badge-info {
+    @apply text-primary font-medium text-xs;
+    background-color: var(--surface);
+  }
+  .badge-neutral {
+    @apply bg-surface text-muted-foreground font-medium text-xs;
+  }
+
+  /* ─── Scroll fade-up animation (landing page only) ─── */
+  .animate-fade-up {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 500ms ease-out, transform 500ms ease-out;
+  }
+  .animate-fade-up.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* ─── Dot pattern overlay for brand panels ─── */
+  .pattern-dots {
+    background-image: radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  /* ─── Gradient icon circle (how-it-works steps) ─── */
+  .icon-circle-gradient {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--cyan) 100%);
+    @apply text-white shadow-md;
+    box-shadow: 0 4px 14px -2px rgba(0, 102, 204, 0.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-fade-up { opacity: 1; transform: none; }
+}

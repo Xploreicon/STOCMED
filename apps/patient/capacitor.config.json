@@ -1,0 +1,9 @@
+{
+  "appId": "com.askstocmed.patient",
+  "appName": "StocMed",
+  "webDir": "out",
+  "ios": { "appendUserAgent": "StocMedApp/1.0" },
+  "plugins": {
+    "SplashScreen": { "launchShowDuration": 1500, "backgroundColor": "#ffffff" }
+  }
+}

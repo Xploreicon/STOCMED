@@ -1,0 +1,903 @@
+[
+  {
+    "source": "app/(auth)/complete-profile/page.tsx",
+    "sourceSha256": "6e6ebad85c4ee4fd267348345a715700c2cd9cfb5f11ca67bff2b4501225ae78",
+    "targets": [
+      "app/(auth)/complete-profile/complete-profile-form.tsx",
+      "app/(auth)/complete-profile/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Copied UI and authenticated complete_oauth_profile RPC; persisted-role restriction, checked session refresh, no foreign navigation.",
+      "Static route entry with Suspense around client auth form."
+    ]
+  },
+  {
+    "source": "app/(auth)/forgot-password/page.tsx",
+    "sourceSha256": "ca7a6304c130b5c615d594d91e4ff4f0167baaddc797567ce501ed48a3fc00c1",
+    "targets": [
+      "app/(auth)/forgot-password/forgot-password-form.tsx",
+      "app/(auth)/forgot-password/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Static route entry with Suspense around client auth form.",
+      "The packaged form requests and verifies a recovery code in the same route to match the hosted reset email."
+    ]
+  },
+  {
+    "source": "app/(auth)/layout.tsx",
+    "sourceSha256": "d3e448fa57bb2b2839158bce5afd4268ebb354ff039fd18258c025611647d2e8",
+    "targets": [
+      "app/(auth)/layout.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Static auth group wrapper; no server dynamic declaration."
+    ]
+  },
+  {
+    "source": "app/(auth)/login/page.tsx",
+    "sourceSha256": "d9bb061a8d07af0554fcaf11cb44ad57099fa203b0a2f4642a121d928e5c2fb7",
+    "targets": [
+      "app/(auth)/login/login-form.tsx",
+      "app/(auth)/login/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Copied UI into client form; authoritative persisted-role check, patient destinations only, no force-dynamic.",
+      "Static route entry with Suspense around client auth form."
+    ]
+  },
+  {
+    "source": "app/(auth)/signup/page.tsx",
+    "sourceSha256": "0f15f01024b1c10926a9222ea07fd643795c1ba69114465e93ad86223b2879bb",
+    "targets": [
+      "app/(auth)/signup/page.tsx",
+      "app/(auth)/signup/signup-form.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Copied patient form design; removed role selection/foreign fields, added native-aware confirmation helper and authoritative profile read-back.",
+      "Static route entry with Suspense around the patient-only signup form."
+    ]
+  },
+  {
+    "source": "app/(auth)/update-password/page.tsx",
+    "sourceSha256": "5424750d28aa2029514205f734ccfdaec6fc2ce2b002e233a0fddb38aecea9cb",
+    "targets": [
+      "app/(auth)/update-password/page.tsx",
+      "app/(auth)/update-password/update-password-form.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Copied UI; requires foundation recovery session, uses recovery helper, signs out after successful password update.",
+      "Static route entry with Suspense around client auth form.",
+      "The packaged form requires the Supabase PASSWORD_RECOVERY event before updating the password."
+    ]
+  },
+  {
+    "source": "app/(patient)/chat/page.tsx",
+    "sourceSha256": "14c04c4a5ec4f07412d0d2653fa7db433665804aaf50b7fe20c75ddce3534a60",
+    "targets": [
+      "app/(patient)/chat/page-content.tsx",
+      "app/(patient)/chat/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "app/(patient)/dashboard/page.tsx",
+    "sourceSha256": "35201ce365f4d84d053a3bf280a43685092fbee5597cfb50cbdb5af30bde7a8d",
+    "targets": [
+      "app/(patient)/dashboard/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "app/(patient)/history/history-utils.ts",
+    "sourceSha256": "cafebf66f72d7850b564f06db735fb2238f93492d38e5c7fe28594a7f7af13f1",
+    "targets": [
+      "app/(patient)/history/history-utils.ts"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "app/(patient)/history/page.tsx",
+    "sourceSha256": "f686277b14a14462b7b3a949b680ce44c33cf36dbc4c501d4220b9ed3314d3e2",
+    "targets": [
+      "app/(patient)/history/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary",
+      "Keeps query and area filtering, recorded match counts and the repeat-search destination. Current stock comes from a new search."
+    ]
+  },
+  {
+    "source": "app/(patient)/layout.tsx",
+    "sourceSha256": "28af011e41be7762b372ab183db6bbb276275b04d288da6a112f0fe67f9fb1a8",
+    "targets": [
+      "app/(patient)/layout.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "app/(patient)/profile/page.tsx",
+    "sourceSha256": "a486f9c977d1130d1eba4c19eb8e4fcddc2525c6e81e37f1f032a01fde6521a3",
+    "targets": [
+      "app/(patient)/profile/page-content.tsx",
+      "app/(patient)/profile/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "app/(patient)/reservations/page.tsx",
+    "sourceSha256": "4f8e6db5ef23bb0155b4dbacee6a32aca193330e860659f16fd1112597b82a5c",
+    "targets": [
+      "app/(patient)/reservations/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "app/(patient)/search-context.ts",
+    "sourceSha256": "e1f03977944f049fe637e17e9efc9cccabfa62edf71c72b146119740a3e6c740",
+    "targets": [
+      "app/(patient)/search-context.ts"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "app/(patient)/search-results/page.tsx",
+    "sourceSha256": "739f46bd6934ea260117ea2a80b0ed08e5bbbd59bba40e77f361e032ba644754",
+    "targets": [
+      "app/(patient)/search-results/page-content.tsx",
+      "app/(patient)/search-results/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary",
+      "Named matches precede same-ingredient listings. Keeps mapped locations, nearby results, pickup holds and prescription handling."
+    ]
+  },
+  {
+    "source": "app/(patient)/settings/page.tsx",
+    "sourceSha256": "ed4cd8864173cb35513db97682564c679b340acabffd10b69335c85f36f968d7",
+    "targets": [
+      "app/(patient)/settings/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "app/about/page.tsx",
+    "sourceSha256": "3140dad29548a967f3f727b979bf858e8172bf296c8e05e7a33ca298dfbf419b",
+    "targets": [
+      "app/about/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Static copied company content; patient-only header/footer and patient contact copy."
+    ]
+  },
+  {
+    "source": "app/account/delete/page.tsx",
+    "sourceSha256": "29e7b53ca624c7d06dc3d2c41636095939b4a4e386d1fbd381f5417855d5bf46",
+    "targets": [
+      "app/account/delete/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Copied design; explicitly separates linked-data erasure from profile/Auth account closure and retention delay."
+    ]
+  },
+  {
+    "source": "app/globals.css",
+    "sourceSha256": "10b61ad32c5eab8c2b3f5c7423b2b6f1ffe4d5a85fb994ce40766f0965075141",
+    "targets": [
+      "app/globals.css"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy",
+      "The packaged theme uses Plus Jakarta Sans and patient-only layout styles."
+    ]
+  },
+  {
+    "source": "app/page.tsx",
+    "sourceSha256": "15e5f6d2efeb48a63833bca281f38fff98dd895d787a89efe8dbadf8c1878a8a",
+    "targets": [
+      "app/page.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Copied native patient presentation, client persisted-profile redirect, removed pharmacy branches and symptom-intake marketing."
+    ]
+  },
+  {
+    "source": "app/privacy/page.tsx",
+    "sourceSha256": "0961c0a2237f72c409bda1f1b87ba2cab6b4c166e05b8f93bb084c7c029e5d9e",
+    "targets": [
+      "app/privacy/page.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "Copied existing presentation/content into independent child."
+    ]
+  },
+  {
+    "source": "app/terms/page.tsx",
+    "sourceSha256": "260706908e2492a3a97816f2181f1672c3005c972bc2e56c0e94f86824395ed0",
+    "targets": [
+      "app/terms/page.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "Copied existing presentation/content into independent child."
+    ]
+  },
+  {
+    "source": "components/auth/AuthShell.tsx",
+    "sourceSha256": "f86207e8d654997721659ad35d37d66c40cd8c4e40a332e456ab99c009ff05da",
+    "targets": [
+      "components/auth/AuthShell.tsx"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copy",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "components/auth/GoogleOAuthButton.tsx",
+    "sourceSha256": "2e17b4b80831c3a4a3f0f49452721a75e603acc7fa6d3c46d4834e008961bb4f",
+    "targets": [
+      "components/auth/GoogleOAuthButton.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Client-only isolated adaptation; source file is unchanged."
+    ]
+  },
+  {
+    "source": "components/auth/NativeOAuthBridge.tsx",
+    "sourceSha256": "fbe79a2ad7ed7ae6482b7bb286e4fc83896743eca4fa92942bc02ff0f21e0aa9",
+    "targets": [
+      "components/auth/NativeOAuthBridge.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Client-only isolated adaptation; source file is unchanged."
+    ]
+  },
+  {
+    "source": "components/auth/PasswordField.tsx",
+    "sourceSha256": "6702a02590398dd8898840cb56508c0fb0029c2ce19cf5a9b3c45c400b5ff14c",
+    "targets": [
+      "components/auth/PasswordField.tsx"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copy",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "components/auth/PasswordRecoveryForm.tsx",
+    "sourceSha256": "6af6d873274b299af8ba407dbc6dd4ee243fc4bbbf059c2094510facc9ef3fe8",
+    "targets": [
+      "app/(auth)/forgot-password/forgot-password-form.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Reference for Supabase recovery OTP verification."
+    ]
+  },
+  {
+    "source": "components/brand/Logo.tsx",
+    "sourceSha256": "3aaec7b81aadea3b26fcc39ee56a031e8a18e6bf7a8d022ed84c7a45a064dff0",
+    "targets": [
+      "components/brand/Logo.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/chat/ChatMarkdown.tsx",
+    "sourceSha256": "3500d8e68a1e5cc02720f814d0acd7deff6a3065247c147cac3cfdf92b669c1f",
+    "targets": [
+      "components/chat/ChatMarkdown.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/chat/ConsentPrompt.tsx",
+    "sourceSha256": "eef177445968dd5bc5c3ed0bbf79a4a497635e0b80860859aa1f32f105ebdc85",
+    "targets": [
+      "components/chat/ConsentPrompt.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary",
+      "The packaged prompt checks patient ownership and verifies the saved choice and text version."
+    ]
+  },
+  {
+    "source": "components/chat/CrisisScreen.tsx",
+    "sourceSha256": "994e96f30ddfb2d290ec4c51f756ef851f453e7f2d4ef46d766b321caa97823a",
+    "targets": [
+      "components/chat/CrisisScreen.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/chat/EmergencyScreen.tsx",
+    "sourceSha256": "f6ae3697ee867697020c1b712e0e789603d674757fd1f525225323d11d8a6966",
+    "targets": [
+      "components/chat/EmergencyScreen.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/chat/RestrictedScreen.tsx",
+    "sourceSha256": "04bcdc8a5fe14e764afb8786f15c8e65a9d5953a7327b6a66731feb211b6005d",
+    "targets": [
+      "components/chat/RestrictedScreen.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/landing/PatientFaqSection.tsx",
+    "sourceSha256": "7077558a865d96226b0f2c86223d78575239d92211fac0f1d1708275fa76fbd7",
+    "targets": [
+      "components/landing/PatientFaqSection.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "Copied existing presentation/content into independent child."
+    ]
+  },
+  {
+    "source": "components/landing/PublicFooter.tsx",
+    "sourceSha256": "3be7eaaa0ec091b71873127ff0aaf9054264d413e9fe785250ffd78bf59b2519",
+    "targets": [
+      "components/landing/PublicFooter.tsx"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "Patient/company links only; pharmacy column removed from source.",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "components/landing/PublicHeader.tsx",
+    "sourceSha256": "72bd46acf29bda499366d6b8d2c12b8366463de60bc59040742c6664cc4fcfcb",
+    "targets": [
+      "components/landing/PublicHeader.tsx"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "Patient links only; account-type/pharmacy branch removed from source.",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "components/layout/MainLayout.tsx",
+    "sourceSha256": "87d38a70b6ddf084886bb55c3762af22d667ced493a4e998d02ff027d0fed7b1",
+    "targets": [
+      "components/layout/PatientShell.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/layout/MobileNav.tsx",
+    "sourceSha256": "18eeb2e100eacf238dec2850281ae9df6cbb533b3dd5eadd782de36148d4fc00",
+    "targets": [
+      "components/layout/PatientMobileNav.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/layout/Navbar.tsx",
+    "sourceSha256": "f9ee960c21bd2c6991c841823e1200a1fc0d036fe1703a1c733c9f079bcd0294",
+    "targets": [
+      "components/layout/PatientNavbar.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/layout/Sidebar.tsx",
+    "sourceSha256": "edce670bcde8d85a1350b00c151ba7d9ad92f89bdeba74895ca9add59158a4ab",
+    "targets": [
+      "components/layout/PatientSidebar.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/notifications/NotificationInbox.tsx",
+    "sourceSha256": "c9aaa2682d3d0b3db154953dc5a247a7beae9551fd716d75f012bd1ca2c55444",
+    "targets": [
+      "components/notifications/NotificationInbox.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "components/patient/NotificationPreferencesCard.tsx",
+    "sourceSha256": "508008a2eee955cf484101fb89806c8c24fe7d0f34495611850a4dd60c973695",
+    "targets": [
+      "components/patient/NotificationPreferencesCard.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary",
+      "Requires a complete server snapshot for saves, including the Web Push consent flag. Web Push registration stays on the website."
+    ]
+  },
+  {
+    "source": "components/providers/ReactQueryProvider.tsx",
+    "sourceSha256": "e32d340aaeebf2a4d3c218606a1e65b652a0a1af9b0922c4b758e6d3a162d4a0",
+    "targets": [
+      "components/providers/ReactQueryProvider.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Client-only isolated adaptation; source file is unchanged."
+    ]
+  },
+  {
+    "source": "components/ui/button.tsx",
+    "sourceSha256": "047f89d68034ebafad64ab2aacd71f2cbf43c7d60685572cde72ad3c85cf5d3a",
+    "targets": [
+      "components/ui/button.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/card.tsx",
+    "sourceSha256": "9fb5ab16cfb62b2e8acff608d6897f5222b83a335d0e97dcda28cd5c148a2032",
+    "targets": [
+      "components/ui/card.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/checkbox.tsx",
+    "sourceSha256": "4ca83cb79b2844d150a3a3f0e928e155f396f64909d746cba4e6128616396671",
+    "targets": [
+      "components/ui/checkbox.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/dialog.tsx",
+    "sourceSha256": "894eb0cca69170bdd5f8bc15e73d99f6876447777a4fa8fb0d1cacb21f055b37",
+    "targets": [
+      "components/ui/dialog.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/dropdown-menu.tsx",
+    "sourceSha256": "cabdff49d04793d92ef97e5b726cee589dfd9891b823fd1478add6242781b1f1",
+    "targets": [
+      "components/ui/dropdown-menu.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/input.tsx",
+    "sourceSha256": "4d200e1818d680e507080e285cd2c77c52860d641fabbd6c60a8da4bd7fa7505",
+    "targets": [
+      "components/ui/input.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/label.tsx",
+    "sourceSha256": "74f1e9e6203820be4bdec39e097182cb5e5a591b0e52fcf281fc75b181f1f513",
+    "targets": [
+      "components/ui/label.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/select.tsx",
+    "sourceSha256": "188f08501088882c06ab48c7fdf4e1f933ec1dbe37d126f84158bc98c6d7c4c4",
+    "targets": [
+      "components/ui/select.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/tabs.tsx",
+    "sourceSha256": "ee57b0d71efa799d64e18670a6208a75a9195ce88647825e83055176388d9f33",
+    "targets": [
+      "components/ui/tabs.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/textarea.tsx",
+    "sourceSha256": "279582596a83cefd1cbd46b6b7f6ac139ded09cae1a2a2ab9260e56c9d5f6c82",
+    "targets": [
+      "components/ui/textarea.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "components/ui/toast.tsx",
+    "sourceSha256": "55309f403a32559c051516ca88be07b19fa89da99f90e720142d722cf09d8f2a",
+    "targets": [
+      "components/ui/toast.tsx"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "hooks/useUser.ts",
+    "sourceSha256": "2734fb36336ac3388efe284cb5b09ae142b7b838365e81bab356c8cb5a044f46",
+    "targets": [
+      "hooks/useUser.ts"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Client-only isolated adaptation; source file is unchanged."
+    ]
+  },
+  {
+    "source": "lib/auth/native-oauth.ts",
+    "sourceSha256": "48fb91c8f6e8be63e1a2f8b98958bc5701e3c25c24e0c011a79724d76e01422c",
+    "targets": [
+      "lib/auth/native-oauth.ts"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Client-only isolated adaptation; source file is unchanged."
+    ]
+  },
+  {
+    "source": "lib/auth/password-recovery.ts",
+    "sourceSha256": "a27d84430d0f123c545a9135ddd6e1301833fcf302c21e78c134382ef71ee908",
+    "targets": [
+      "lib/auth/recovery.ts"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "Reference for recovery code format."
+    ]
+  },
+  {
+    "source": "lib/chat-stream.ts",
+    "sourceSha256": "98f932ee5928da04968a478ea3409c83783cd73e7eb4b55bbeb8672da8698f35",
+    "targets": [
+      "lib/chat-stream.ts"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "lib/design-tokens.ts",
+    "sourceSha256": "bc7fd9c75947acb9bbb21fafc41c0a9522d85d65a9933d880774d175b54df821",
+    "targets": [
+      "lib/design-tokens.ts"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copy",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "lib/navigation.ts",
+    "sourceSha256": "a1fe3d20077646eb191987700becd8b4cd13efb87558f81af3770da0ac095853",
+    "targets": [
+      "lib/navigation.ts"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "lib/notifications/in-app.ts",
+    "sourceSha256": "162e88872d208fa1e3a182d614c4bcefc26e1f1a881d68e6d09f1d9af48b5fc2",
+    "targets": [
+      "lib/notifications/in-app.ts"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "lib/triage/deterministic-safety-redirect.ts",
+    "sourceSha256": "8f7de35f7d07c419da4dc0cdddd69274aff25aa1169ef0696e27a4aa829ef47d",
+    "targets": [
+      "lib/triage/types.ts"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "lib/triage/patient-safety-action.ts",
+    "sourceSha256": "7d6b3c044576ba45021e59c5fb373c8c1a319a469621bac98b13d8087840aa2a",
+    "targets": [
+      "lib/triage/patient-safety-action.ts"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "lib/triage/safe-responses.ts",
+    "sourceSha256": "1b09c11f753f3c6c7af0bf9b4b2269e6b0c9679119def12db0c4c20895625f95",
+    "targets": [
+      "lib/triage/safe-responses.ts"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "lib/triage/types.ts",
+    "sourceSha256": "9323e3e7caf26cbbebfcea27e3a485486e58d1d3bd5307fc1b275d2160eb96ab",
+    "targets": [
+      "lib/triage/types.ts"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "copied or adapted locally; no runtime import across app boundary"
+    ]
+  },
+  {
+    "source": "lib/utils.ts",
+    "sourceSha256": "7c8c3dfc0cdd370d44932828eb067ef771c8fe7996693221d5d4b90af6d54f2d",
+    "targets": [
+      "lib/utils.ts"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "postcss.config.js",
+    "sourceSha256": "251ecddd4672c9cf467547e3dc535de00ad2129df26e7e7ae728fa4e5ac45fc5",
+    "targets": [
+      "postcss.config.js"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "public/apple-touch-icon.png",
+    "sourceSha256": "d021c8d43490ddb146bfe8e6a2c967aa4f7b71c8858228603d7fbbf81f5f500f",
+    "targets": [
+      "public/apple-touch-icon.png"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "public/favicon.png",
+    "sourceSha256": "20b9e632d8b9d169f54978862d14da4778ce0a5d055e867b6596df26bc9c1816",
+    "targets": [
+      "public/favicon.png"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "public/fonts/PlusJakartaSans-Bold.ttf",
+    "sourceSha256": "32971ad7976930539a11c79ce91ce84092df7f25c5be716b594601842f10a7ae",
+    "targets": [
+      "public/fonts/PlusJakartaSans-Bold.ttf"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copy",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "public/fonts/PlusJakartaSans-LICENSE.txt",
+    "sourceSha256": "995c7199cab65954f545996326755daee7b63cc6b42b06c13da1f9502ab08a99",
+    "targets": [
+      "public/fonts/PlusJakartaSans-LICENSE.txt"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copy",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "public/fonts/PlusJakartaSans-Medium.ttf",
+    "sourceSha256": "b4fc14ec283d54236fd302cdb92546f98ae0ff061ca5ee23453a02bdf4628791",
+    "targets": [
+      "public/fonts/PlusJakartaSans-Medium.ttf"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copy",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "public/fonts/PlusJakartaSans-Regular.ttf",
+    "sourceSha256": "076831b98043f50f829b6c91db3be4a844641f1c95bccff5c886ed87c661a852",
+    "targets": [
+      "public/fonts/PlusJakartaSans-Regular.ttf"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copy",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "public/fonts/PlusJakartaSans-SemiBold.ttf",
+    "sourceSha256": "50357df108c5d297ec4ece76aeddf49561f3794f67af077cfc2c711b7a75b439",
+    "targets": [
+      "public/fonts/PlusJakartaSans-SemiBold.ttf"
+    ],
+    "mode": "package-owned",
+    "notes": [
+      "copy",
+      "Retained in the patient package from the I2 source snapshot. Absent from main at c3c6b75."
+    ]
+  },
+  {
+    "source": "public/icon-192.png",
+    "sourceSha256": "ce6fdb215d2241c98637653ba15c56296579a06e30ea90c9feab4c47c201a3a5",
+    "targets": [
+      "public/icon-192.png"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "public/logo.png",
+    "sourceSha256": "38e9397b2c1fa4a9ce48603b80854e4d1bb6af6d14fbf935b1d4a9046f4a8f11",
+    "targets": [
+      "public/logo.png"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "supabase/templates/recovery.html",
+    "sourceSha256": "8e4e3ad6e595412623f06a6839f3d482c92ee07d22f8011eb1218854d11474ee",
+    "targets": [
+      "app/(auth)/forgot-password/forgot-password-form.tsx"
+    ],
+    "mode": "adapted",
+    "notes": [
+      "The repository template and read-only hosted template check both showed a Token-based code."
+    ]
+  },
+  {
+    "source": "tailwind.config.js",
+    "sourceSha256": "4089de02e66b8ae94f340bb4ce20e38ef61539cc381b1e9d2fe65e9dfafb00aa",
+    "targets": [
+      "tailwind.config.js"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  },
+  {
+    "source": "types/supabase.ts",
+    "sourceSha256": "b4aef469a539996e4771463b78787616bf7a1261e21e5dfb6c2c55fdd26257b0",
+    "targets": [
+      "types/supabase.ts"
+    ],
+    "mode": "copied",
+    "notes": [
+      "copy"
+    ]
+  }
+]
