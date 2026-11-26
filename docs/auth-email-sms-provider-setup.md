@@ -4,7 +4,7 @@ The repository work is complete, but the provider-console and DNS steps below
 must be completed by an owner. Do not put any provider secret in a
 `NEXT_PUBLIC_` variable.
 
-## 1. Google and the branded Supabase Auth domain
+## 1. Google and Supabase Auth
 
 1. In Google Cloud / Google Auth Platform, configure the OAuth consent screen:
    - App name: `StocMed`
@@ -13,26 +13,17 @@ must be completed by an owner. Do not put any provider secret in a
    - Square StocMed logo, support email, and developer contact email
    - Scopes only: `openid`, `email`, `profile`
    - Publish to production and submit verification
-2. In Supabase General Settings → Custom Domains, provision
-   `auth.askstocmed.com`.
-3. Add the CNAME and certificate-validation TXT record Supabase displays.
-   Wait for DNS and TLS validation before activation.
-4. Before activating, add both callbacks to the Google OAuth client:
-   - Existing project callback (temporary rollback path)
-   - `https://auth.askstocmed.com/auth/v1/callback`
-5. In Supabase Auth → URL Configuration:
-   - Site URL: `https://askstocmed.com`
-   - Redirect URL: `https://askstocmed.com/auth-callback`
-6. Enable Google in Supabase Auth with the verified Google client ID/secret.
-   Supabase automatic identity linking must remain enabled. It links a verified
-   Google identity to an existing same-email password account.
-7. Set the production application variables:
-   - `NEXT_PUBLIC_SUPABASE_URL=https://auth.askstocmed.com`
+2. Keep the production Supabase project URL in the application configuration:
+   - `NEXT_PUBLIC_SUPABASE_URL=https://iesbktqljjseiryeqbjn.supabase.co`
    - `NEXT_PUBLIC_SITE_URL=https://askstocmed.com`
-
-Activation changes the Auth callback advertised by Supabase immediately. Test
-login, signup, password reset, and session refresh before removing the old
-Google callback.
+3. In the Google Web application OAuth client, authorize the production
+   Supabase callback `https://iesbktqljjseiryeqbjn.supabase.co/auth/v1/callback`.
+4. In Supabase Auth → URL Configuration:
+   - Site URL: `https://askstocmed.com`
+   - Web redirect URL: `https://askstocmed.com/auth-callback`
+5. Enable Google in Supabase Auth with the verified Google client ID and
+   secret. Keep automatic identity linking enabled so that verified Google
+   identities can link to an existing account with the same email.
 
 ## 2. Resend
 
@@ -45,10 +36,9 @@ Google callback.
    - Username: `resend`
    - Password: a restricted Resend API key
    - Sender name: `StocMed`
-   - Sender email: an address on the verified domain, such as
-     `no-reply@auth.askstocmed.com`
-3. Keep Auth templates short and transactional. Their links should use the
-   custom Auth domain.
+   - Sender email: an address on the domain verified in Resend
+3. Keep Auth templates short and transactional. Use the production Supabase
+   Auth configuration for authentication links.
 4. For product email, create a separate API key and sender such as
    `StocMed <updates@askstocmed.com>`, then set all `RESEND_*` server variables
    listed in `.env.example`.
@@ -103,8 +93,8 @@ Google callback.
 
 ## 6. Acceptance checks
 
-- Google shows StocMed and the OAuth URL/callback stays on
-  `askstocmed.com` / `auth.askstocmed.com`.
+- Google shows StocMed. Google returns to the Supabase project callback, and
+  Supabase redirects web users back to the StocMed site.
 - A new Google account is sent to `/complete-profile`; repeated or linked
   sign-in does not create a second `public.users` row.
 - A new Google account can complete patient onboarding only. A direct attempt
@@ -112,7 +102,7 @@ Google callback.
   pharmacy row is written, then the user is directed to email/password signup.
 - An existing pharmacy account with a linked Google identity retains its
   persisted pharmacy role and signs in normally.
-- Supabase Auth email arrives from the configured Auth subdomain and passes SPF,
+- Supabase Auth email arrives from the configured and verified sender and passes SPF,
   DKIM, and DMARC alignment checks.
 - A product-email duplicate with the same idempotency key sends once and every
   product template has a signed unsubscribe path.
@@ -130,3 +120,12 @@ Google callback.
   test push through the shared outbox, and open the safe same-origin path when
   the notification is clicked.
 - Confirm provider keys are absent from browser bundles and source control.
+
+## 7. Future migration to a custom Supabase Auth domain
+
+A separate migration can introduce `auth.askstocmed.com`. Provision it in
+Supabase Custom Domains, verify the supplied DNS records and TLS, and
+authorize the new callback in Google while retaining the existing callback
+for rollback. After activation and the application URL switch, verify web
+and native sign-in, signup, password recovery, and session refresh before
+retiring the old callback.
