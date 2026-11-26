@@ -2,9 +2,10 @@
 
 import { Button } from '@/components/ui/button';
 
-import { useCallback, useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useState, useEffect, type FormEvent } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { PrescriptionAttachmentPreview, usePrescriptionAttachment } from '@/components/patient/prescription-attachment';
 import { BadgeCheck, Lightbulb, Loader2, Phone, Truck, WifiOff, RefreshCw } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import EmergencyScreen from '@/components/chat/EmergencyScreen';
@@ -81,9 +82,9 @@ export default function SearchResults() {
   const [reservationQuantity, setReservationQuantity] = useState(1);
   const [reservationMessage, setReservationMessage] = useState<string | null>(null);
   const [reservationMessageKind, setReservationMessageKind] = useState<'success' | 'error'>('success');
-  const [prescriptionFile, setPrescriptionFile] = useState<File | null>(null);
+  const { file: prescriptionFile, inputRef: prescriptionInputRef, previewUrl, preparing, error: attachmentError,
+    select: selectPrescription, reset: resetPrescription } = usePrescriptionAttachment();
   const [safetyRedirect, setSafetyRedirect] = useState<DeterministicSafetyRedirect | null>(null);
-  const prescriptionInputRef = useRef<HTMLInputElement>(null);
 
   const fetchResults = useCallback(async () => {
     setLoading(true);
@@ -153,8 +154,7 @@ export default function SearchResults() {
     setReservationQuantity(1);
     setReservationMessage(null);
     setReservationMessageKind('success');
-    setPrescriptionFile(null);
-    if (prescriptionInputRef.current) prescriptionInputRef.current.value = '';
+    resetPrescription();
     setIsDetailOpen(true);
   };
 
@@ -199,38 +199,14 @@ export default function SearchResults() {
     }
   };
 
-  const handlePrescriptionFileChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0] ?? null;
-    setReservationMessage(null);
-
-    if (!file) {
-      setPrescriptionFile(null);
-      return;
-    }
-
-    const allowedTypes = new Set(['image/jpeg', 'image/png', 'application/pdf']);
-    if (!allowedTypes.has(file.type)) {
-      event.currentTarget.value = '';
-      setPrescriptionFile(null);
-      setReservationMessageKind('error');
-      setReservationMessage('Upload a JPEG, PNG, or PDF prescription.');
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      event.currentTarget.value = '';
-      setPrescriptionFile(null);
-      setReservationMessageKind('error');
-      setReservationMessage('The prescription file must be 5 MB or smaller.');
-      return;
-    }
-
-    setPrescriptionFile(file);
+  const handleDetailOpenChange = (open: boolean) => {
+    if (!open) resetPrescription();
+    setIsDetailOpen(open);
   };
 
   const handlePrescriptionReservation = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!selectedItem?.requires_prescription) return;
+    if (!selectedItem?.requires_prescription || preparing || submittingPrescription) return;
 
     const maximumQuantity = Math.min(10, selectedItem.quantity_in_stock);
     if (!selectedItem.pharmacies.digital_prescription_reservations_enabled || maximumQuantity < 1) {
@@ -268,8 +244,7 @@ export default function SearchResults() {
       setReservationMessage(
         `Prescription submitted for licensed pharmacist pre-review for ${selectedItem.pharmacies.pharmacy_name}. If a hold is authorized, a pickup code will be created; the pharmacy makes the final dispensing decision.`,
       );
-      setPrescriptionFile(null);
-      if (prescriptionInputRef.current) prescriptionInputRef.current.value = '';
+      resetPrescription();
     } catch (err) {
       setReservationMessageKind('error');
       setReservationMessage(err instanceof Error ? err.message : 'We could not submit this reservation. Please try again.');
@@ -515,7 +490,7 @@ export default function SearchResults() {
       </div>
 
       {/* Detail Modal Dialog */}
-      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+      <Dialog open={isDetailOpen} onOpenChange={handleDetailOpenChange}>
         <DialogContent className="max-w-[440px] p-7 rounded-card-lg bg-white border border-border">
           {selectedItem && (
             <div className="space-y-6">
@@ -619,12 +594,16 @@ export default function SearchResults() {
                             type="file"
                             accept="image/jpeg,image/png,application/pdf"
                             required
-                            onChange={handlePrescriptionFileChange}
+                            disabled={submittingPrescription}
+                            onChange={(event) => {
+                              setReservationMessage(null);
+                              void selectPrescription(event.currentTarget.files?.[0] ?? null);
+                            }}
                             aria-describedby="prescription-guidance prescription-format-help"
                             className="min-w-0 rounded-button border border-border bg-white px-3 py-2 text-xs text-ink file:mr-3 file:rounded-button file:border-0 file:bg-surface file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                           />
                           <span id="prescription-format-help" className="text-xs font-normal text-ink-light">
-                            JPEG, PNG, or PDF · 5 MB maximum
+                            JPEG or PNG photos are reduced before upload. PDFs can be up to 5 MB.
                           </span>
                         </label>
 
@@ -643,6 +622,8 @@ export default function SearchResults() {
                           />
                         </label>
                       </div>
+
+                      <PrescriptionAttachmentPreview url={previewUrl} preparing={preparing} error={attachmentError} />
 
                       <div className="grid grid-cols-2 gap-3">
                         {selectedItem.pharmacies.phone ? (
@@ -667,7 +648,7 @@ export default function SearchResults() {
                         )}
                         <Button
                           type="submit"
-                          disabled={submittingPrescription}
+                          disabled={preparing || submittingPrescription}
                           className="h-12 rounded-button bg-primary px-3 text-[14px] font-medium text-white transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-60"
                         >
                           {submittingPrescription ? (
