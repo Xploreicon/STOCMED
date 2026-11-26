@@ -134,7 +134,17 @@ export default function PrivacyPage() {
                 <li>Chat messages are retained for [RETENTION PERIOD] and then deleted.</li>
                 <li>Account information is kept while your account is active.</li>
               </ul>
-              <p>You can delete your data at any time (see &ldquo;Your rights&rdquo;).</p>
+              <p>
+                We keep prescription images you submit through StocMed for 1,830 days from submission. We retain the
+                images for pharmacy record-keeping under Regulations 30 and 31 of the Electronic Pharmacy Regulations
+                2026 and apply the data-minimisation and storage-limitation principles in section 24 of the Nigeria
+                Data Protection Act 2023.
+              </p>
+              <p>
+                After the retention period, a scheduled purge securely deletes the prescription image from private
+                storage and removes its submission record. You can request deletion of your other data at any time.
+                A deletion request does not shorten the required prescription retention period.
+              </p>
             </section>
 
             <section className="space-y-3">

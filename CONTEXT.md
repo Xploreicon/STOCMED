@@ -46,6 +46,12 @@
 - The upload keystore must be backed up outside the repository before release signing.
 - Record its path, alias, and passwords in the secrets vault. Never commit the keystore or its credentials.
 
+## Prescription image retention
+
+- StocMed retains prescription images submitted through the web and native patient flows for 1,830 days from submission. The approved basis is the Electronic Pharmacy Regulations 2026, regulations 30–31, and the Nigeria Data Protection Act 2023, section 24.
+- Keep images in the private prescriptions bucket during this period. Account or data erasure requests do not shorten the retention period.
+- The scheduled prescription purge deletes the image from private storage and removes the submission record after its deadline. Do not archive expired prescription images.
+
 ## Deployment discipline
 
 - Native work does not authorize schema changes.
